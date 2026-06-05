@@ -1,13 +1,10 @@
 import type { MotionFrame } from '@lvk/motion-protocol'
 
-export type AvatarMotion = {
-  position: [number, number, number]
-  rotation: [number, number, number]
-  eyes: [number, number]
-  gaze: [number, number]
-  mouth: [number, number]
-}
+const clamp = (value: number) => Math.max(-1, Math.min(1, value))
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
-
-export function mapMotionFrameTo
+export function mapMotionFrameToAvatar(frame: MotionFrame) {
+  return {
+    position: [clamp(frame.face.position.x), clamp(frame.face.position.y), 0] as [number, number, number],
+    rotation: [frame.face.rotation.pitch, frame.face.rotation.yaw, frame.face.rotation.roll] as [number, number, number],
+    eyes: [frame.eyes.leftOpen, frame.eyes.rightOpen] as [number, number],
+    gaze: [clamp(frame.eyes.gaze.x), clamp(frame.eyes.gaze.y)]
