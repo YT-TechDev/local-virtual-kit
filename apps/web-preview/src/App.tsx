@@ -1,20 +1,5 @@
-import { useEffect } from 'react'
-import './App.css'
-import { AvatarPreview } from './components/AvatarPreview'
-import { getPreviewModeFromSearch } from './preview/previewMode'
-
-function App() {
-  const previewMode = getPreviewModeFromSearch(window.location.search)
-
-  useEffect(() => {
-    document.documentElement.dataset.previewMode = previewMode
-
-    return () => {
-      delete document.documentElement.dataset.previewMode
-    }
-  }, [previewMode])
-
-  return <AvatarPreview mode={previewMode} />
-}
-
-export default App
+import'./App.css'
+import{AvatarPreview}from'./components/AvatarPreview'
+import{getPreviewModeFromSearch as m}from'./preview/previewMode'
+import{getPreviewSourceFromSearch as s}from'./preview/previewSource'
+export default function App(){const q=location.search,mode=m(q),source=s(q);document.documentElement.dataset.previewMode=mode;return <AvatarPreview mode={mode} source={source}/>}
