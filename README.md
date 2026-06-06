@@ -32,6 +32,8 @@ Electron Desktop App and OBS Browser Source workflow
 apps/
   desktop/        Electron desktop shell
   web-preview/    React / Three.js / R3F preview
+native/
+  tracker-core/   C++ / CMake native tracker skeleton
 packages/
   motion-protocol/ MotionFrame types and dummy frame helpers
 ```
@@ -73,6 +75,19 @@ http://localhost:5173/?mode=obs
 ```
 
 This currently renders the dummy MotionFrame avatar preview with a clean viewport and transparent-friendly background for capture.
+
+Build the native tracker skeleton:
+
+```bash
+cmake -S native/tracker-core -B native/tracker-core/build
+cmake --build native/tracker-core/build
+```
+
+Run the native tracker skeleton:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core
+```
 
 Build all packages:
 
