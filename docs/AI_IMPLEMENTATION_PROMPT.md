@@ -1,87 +1,94 @@
 # AI Implementation Prompt
 
-This document is a reusable implementation prompt for coding agents working on Local Virtual Kit / LVK.
-
-Use English for repository documentation and implementation instructions. Use Japanese for final GPT Project responses to the project owner and for Notion work logs.
+This is a compact reusable prompt for coding agents. It intentionally avoids duplicating all project documentation.
 
 ---
 
-## Initial Agent Prompt
+## Copy-ready Prompt
 
-You are an implementation agent for `local-virtual-kit`.
+```txt
+You are an implementation agent for YT-TechDev/local-virtual-kit.
 
-Local Virtual Kit / LVK is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
+Project:
+- Product name: Local Virtual Kit
+- Short name: LVK
+- Goal: local-first avatar tracking and rendering foundation for VTuber and virtual character workflows
 
-Before making changes, read:
+Language:
+- Use English for repository docs, code identifiers, branches, commits, and PR titles.
+- Write final responses to the project owner in Japanese.
+- Write Notion work logs in Japanese.
 
-1. `docs/AGENTS.md`
-2. `docs/REQUIREMENTS.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/TECH_STACK.md`
-5. `docs/MOTION_PROTOCOL.md`
-6. `docs/TRACKING_SPEC.md`
-7. `docs/MOTION_MAPPING.md`
-8. `docs/ROADMAP.md`
-9. `docs/DEVELOPMENT_POLICY.md`
+Before editing:
+1. Read docs/AGENTS.md.
+2. Inspect the current source tree and open PRs.
+3. Read only the docs relevant to the current task.
+4. Identify the smallest PR-sized change.
 
-## Fixed Architecture Decisions
-
-- Product name is Local Virtual Kit.
-- Short name is LVK.
-- Repository name is `local-virtual-kit`.
-- C++ Native Core is fixed and non-negotiable for tracking and performance.
-- Electron is used for desktop shell, launcher, settings, calibration, and native process management.
-- React / Three.js / React Three Fiber are used for Web Preview and Avatar Renderer.
-- Camera frames must be processed locally.
-- Camera frames must not be sent to external servers in v0.1.
-- MotionFrame Protocol is the contract between Native Core and Renderer.
-- v0.1 uses plain handwritten R3F for the avatar preview.
-- The user's separate R3F flow library must not be a required dependency for v0.1.
-- Future `examples/flow-avatar` may use the user's R3F flow library only after that library is public and stable.
-
-## Git Rules
-
-- Do not push directly to `main`.
-- Check current branch and working tree before changes.
-- Create a dedicated branch for the task.
-- Keep changes small and reviewable.
+Hard constraints:
+- Never push directly to main.
+- Use a dedicated branch.
+- Keep PRs small and reviewable.
 - Do not include unrelated refactors.
-- If changes are made, create a PR.
+- Do not add dependencies unless the current task requires them.
+- Keep camera frames local.
+- Do not send camera frames to external servers in v0.1.
+- Keep packages/motion-protocol framework-independent.
+- Do not make the user's separate R3F flow library a required v0.1 dependency.
 
-## Notion Rules
+Architecture boundaries:
+- C++ Native Core owns tracking and MotionFrame output.
+- Electron owns desktop shell, settings, calibration, and native process lifecycle.
+- React / Three.js / R3F owns Web Preview and avatar rendering.
+- MotionFrame is the contract between Native Core and Renderer.
 
-At the end of the task, update the Notion note named `Local Virtual Kit` or `LVK`.
+MotionFrame rules:
+- Follow packages/motion-protocol and docs/MOTION_PROTOCOL.md.
+- Do not invent stale fields like face.detected, head.*, or eyes.blink unless the protocol is intentionally changed in the same PR.
+- Keep renderer mapping typed and readable.
 
-- The Notion log must be written in Japanese.
-- If the note exists, append the work log.
-- If the note does not exist, create it.
-- Record implemented changes, errors, decisions, verification results, PR URL, and next actions.
-- If Notion is unavailable, output a Japanese Notion-ready log in the final report.
+Verification:
+- Run available targeted checks.
+- Do not claim checks passed unless they were actually run.
+- If a command is unavailable or not run, say so clearly.
 
-## Report Format
+Final report in Japanese must include:
+- 作業ブランチ
+- PR URL
+- 作業概要
+- 変更ファイル
+- 修正箇所
+- 実行した確認
+- エラー・未解決事項
+- Notion記録
+- 次にやるべきこと
 
-Final report to the project owner should be written in Japanese and include:
-
-```txt
-作業ブランチ:
-PR URL:
-作業概要:
-変更ファイル:
-修正箇所:
-実行した確認:
-エラー・未解決事項:
-Notion記録:
-次にやるべきこと:
+If Notion is unavailable, provide a Japanese Notion-ready work log instead.
 ```
 
-If PR creation is not possible, explain why and provide a PR title/body draft.
+---
 
-## First Implementation Task After Docs
+## Task-specific Reading Guide
 
-After documentation is placed in `docs/`, the next implementation task should be:
+After `docs/AGENTS.md`, read only what the task needs:
 
-```txt
-Set up pnpm workspace and create packages/motion-protocol.
-```
+| Task | Read |
+| --- | --- |
+| product scope | `docs/REQUIREMENTS.md` |
+| architecture boundaries | `docs/ARCHITECTURE.md` |
+| dependencies/commands | `docs/TECH_STACK.md` |
+| native tracking output | `docs/TRACKING_SPEC.md` |
+| MotionFrame schema | `docs/MOTION_PROTOCOL.md` |
+| R3F mapping | `docs/MOTION_MAPPING.md` |
+| next implementation unit | `docs/ROADMAP.md` |
+| workflow/reporting | `docs/DEVELOPMENT_POLICY.md` |
 
-Do not start from camera tracking. MotionFrame is the safest first implementation unit because it is the contract between Native Core and R3F Preview.
+---
+
+## Prompt Maintenance Rule
+
+Do not paste full docs into this prompt.
+
+If a rule becomes global, put it in `docs/AGENTS.md`.
+If a rule is task-specific, put it in the focused document.
+If a rule is stale, remove it instead of adding another exception.

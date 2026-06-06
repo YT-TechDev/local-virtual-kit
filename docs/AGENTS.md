@@ -1,202 +1,118 @@
 # AGENTS
 
-Project name: **Local Virtual Kit**  
-Short name: **LVK**  
-Repository name: `local-virtual-kit`  
-Package namespace candidate: `@lvk/*`
+Project: **Local Virtual Kit / LVK**  
+Repository: `local-virtual-kit`  
+Package namespace: `@lvk/*`
 
-This document is the primary instruction file for AI/coding agents working on LVK.
-
-The project-level `README.md` is intentionally not managed by this documentation package. The product README should be created and maintained separately by the project owner.
+This file is the lightweight source of truth for AI and coding agents. Keep it short. Put detailed product, architecture, protocol, and workflow information in the focused documents listed below.
 
 ---
 
-## 1. Language Policy
+## 1. Default Operating Rule
 
-All agent-facing documentation under `docs/*.md` should be written in English for implementation accuracy and consistency.
+Always start by reading this file.
 
-However:
+Then read only the documents required for the current task. Do **not** load every `docs/*.md` file by default.
 
-- ChatGPT/GPT Project responses to the project owner should be written in Japanese by default.
-- Notion knowledge-base work logs must be written in Japanese.
-- Code, filenames, package names, commands, branch names, PR titles, commit messages, and technical identifiers may remain in English.
+Use this map:
+
+| Task type | Read next |
+| --- | --- |
+| Product scope, MVP, non-goals | `docs/REQUIREMENTS.md` |
+| App/process boundaries | `docs/ARCHITECTURE.md` |
+| Dependencies, package layout, commands | `docs/TECH_STACK.md` |
+| Native tracking values | `docs/TRACKING_SPEC.md` |
+| MotionFrame schema/compatibility | `docs/MOTION_PROTOCOL.md` |
+| Renderer mapping from MotionFrame | `docs/MOTION_MAPPING.md` |
+| Planning the next implementation unit | `docs/ROADMAP.md` |
+| Git, checks, PR, reporting | `docs/DEVELOPMENT_POLICY.md` |
+| Copy-ready coding-agent prompt | `docs/AI_IMPLEMENTATION_PROMPT.md` |
+
+If documents conflict, prefer this order:
+
+1. Current source code on the target branch
+2. `docs/AGENTS.md`
+3. The task-specific focused document
+4. Older planning notes
 
 ---
 
-## 2. Project Identity
+## 2. Language Policy
 
-Local Virtual Kit / LVK is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
-
-The first goal is not to build a full VTuber production suite. The first goal is to establish a stable, understandable, and extensible architecture where a local C++ tracking core emits normalized motion data consumed by a web-based R3F avatar preview.
+- Repository docs and agent-facing implementation prompts should be written in English.
+- Final responses to the project owner should be written in Japanese by default.
+- Notion work logs must be written in Japanese.
+- Code, commands, identifiers, branch names, commit messages, and PR titles may remain in English.
 
 ---
 
-## 3. Fixed Architecture Decisions
+## 3. Hard Constraints
 
-These decisions are fixed unless the project owner explicitly changes them.
+These are fixed unless the project owner explicitly changes them:
 
-- C++ Native Core is fixed and non-negotiable for tracking and performance.
-- Electron is used for the desktop app shell, launcher, settings UI, calibration UI, and Native Core process management.
-- React / Three.js / React Three Fiber are used for Web Preview, Avatar Renderer, and OBS Browser Source style preview.
-- Camera frames must be processed locally.
-- Camera frames must not be sent to external servers in v0.1.
-- MotionFrame Protocol is the contract between Native Core and Renderer.
-- v0.1 uses plain handwritten R3F for the avatar preview.
-- The user's separate R3F flow library is not a required dependency for v0.1.
-- Future `examples/flow-avatar` may use the user's R3F flow library only after that library becomes public and stable.
+- Keep LVK local-first.
+- Camera frames must stay local and must not be sent to external servers in v0.1.
+- C++ Native Core is the tracking/performance layer.
+- Electron is the desktop shell, settings, calibration, and native process manager.
+- React / Three.js / React Three Fiber are the Web Preview and avatar renderer layer.
+- `MotionFrame` is the contract between Native Core and Renderer.
+- v0.1 uses plain handwritten R3F.
+- The user's separate R3F flow library must not be a required v0.1 dependency.
+- `packages/motion-protocol` must stay framework-independent.
 
 ---
 
 ## 4. Responsibility Boundaries
 
-### C++ Native Core
-
-Responsible for:
-
-- Webcam access
-- Frame processing
-- Face detection
-- Face landmark extraction
-- Head pose estimation
-- Eye/mouth/expression value estimation
-- Tracking lost detection
-- Basic smoothing
-- MotionFrame generation
-- Local transport output
-
-Must not handle:
-
-- React UI
-- Electron settings UI
-- Avatar rendering
-- R3F scene implementation
-- Cloud sync
-- Account/payment logic
-
-### MotionFrame Protocol
-
-Responsible for:
-
-- Shared tracking output contract
-- TypeScript MotionFrame definition
-- C++ structure draft
-- Normalized value rules
-- Dummy frame support
-- Future compatibility policy
-
-Must not depend on:
-
-- React
-- Three.js
-- React Three Fiber
-- Electron
-- OpenCV
-- MediaPipe
-- Native platform APIs
-
-### R3F Web Preview / Avatar Renderer
-
-Responsible for:
-
-- Receiving MotionFrame data
-- Rendering the avatar
-- Mapping head/eye/mouth/expression values to avatar motion
-- Providing OBS-friendly preview route
-- Supporting dummy MotionFrame mode
-
-Must not handle:
-
-- Native tracking implementation
-- Camera frame processing in v0.1
-- Native process lifecycle management
-- Desktop settings persistence
-
-### Electron Desktop App
-
-Responsible for:
-
-- App shell
-- Native Core process launch/stop
-- Settings UI
-- Calibration UI
-- Preview URL management
-- Local configuration management
-
-Must not handle:
-
-- Reimplementing tracking
-- Deep avatar rendering internals
-- Camera frame upload
-- Server-side processing
+| Area | Owns | Must not own |
+| --- | --- | --- |
+| Native Core | camera access, tracking, smoothing, MotionFrame output | React UI, avatar rendering, cloud sync |
+| Motion Protocol | shared types, dummy frames, schema compatibility | React, Three.js, Electron, OpenCV runtime logic |
+| Web Preview | MotionFrame consumption, mapping, R3F rendering, OBS-friendly preview | native tracking, camera frame processing, desktop settings |
+| Electron App | app shell, settings, calibration UI, native process lifecycle | tracking algorithms, deep renderer internals, camera upload |
 
 ---
 
-## 5. Expected Documentation Layout
-
-```txt
-docs/
-├─ AGENTS.md
-├─ REQUIREMENTS.md
-├─ ARCHITECTURE.md
-├─ TECH_STACK.md
-├─ TRACKING_SPEC.md
-├─ MOTION_PROTOCOL.md
-├─ MOTION_MAPPING.md
-├─ ROADMAP.md
-├─ DEVELOPMENT_POLICY.md
-└─ AI_IMPLEMENTATION_PROMPT.md
-```
-
-The project root `README.md` is intentionally separate.
-
----
-
-## 6. Documentation Reading Order
-
-Agents should read documents in this order:
-
-1. `docs/AGENTS.md`
-2. `docs/REQUIREMENTS.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/TECH_STACK.md`
-5. `docs/MOTION_PROTOCOL.md`
-6. `docs/TRACKING_SPEC.md`
-7. `docs/MOTION_MAPPING.md`
-8. `docs/ROADMAP.md`
-9. `docs/DEVELOPMENT_POLICY.md`
-10. `docs/AI_IMPLEMENTATION_PROMPT.md`
-
----
-
-## 7. Git and PR Policy
+## 5. Git and Change Policy
 
 - Never push directly to `main`.
-- Always create a dedicated branch for changes.
-- Keep each PR small and reviewable.
+- Use a dedicated branch for each task.
+- Keep PRs small and reviewable.
 - Do not include unrelated refactors.
+- Do not claim that checks passed unless they were actually run.
 - If changes are made, create a PR.
-- After creating a PR, output the PR URL, summary, changed files, modified areas, verification results, known issues, and next steps.
 
 ---
 
-## 8. Notion Knowledge Policy
+## 6. Documentation Maintenance Policy
 
-At the end of each implementation task, update the Notion note named `Local Virtual Kit` or `LVK`.
+Avoid duplicated instructions.
 
-- The Notion work log must be written in Japanese.
-- If the note exists, append the work log.
-- If the note does not exist, create it.
-- Record implemented changes, errors, decisions, verification results, PR URL, and next actions.
-- If Notion is unavailable, output a Japanese Notion-ready work log in the final report.
+- Keep global agent rules here.
+- Keep product scope in `REQUIREMENTS.md`.
+- Keep architecture in `ARCHITECTURE.md`.
+- Keep MotionFrame schema in `MOTION_PROTOCOL.md`.
+- Keep task flow in `ROADMAP.md`.
+- Keep workflow/checks/reporting in `DEVELOPMENT_POLICY.md`.
+
+Do not add a fixed "next task" to this file. Before proposing the next task, inspect the current repository state.
 
 ---
 
-## 9. First Implementation Direction
+## 7. Final Report Requirements
 
-After documentation is placed in `docs/`, the first implementation task should be:
+Final project-owner responses should include:
 
 ```txt
-Set up pnpm workspace and create packages/motion-protocol.
+作業ブランチ:
+PR URL:
+作業概要:
+変更ファイル:
+修正箇所:
+実行した確認:
+エラー・未解決事項:
+Notion記録:
+次にやるべきこと:
 ```
 
-Do not start from camera tracking. The safest first implementation unit is MotionFrame because it is the contract between Native Core and R3F Preview.
+If Notion is unavailable, provide a Japanese Notion-ready work log instead of claiming it was updated.
