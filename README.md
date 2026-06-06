@@ -64,6 +64,16 @@ Run the web preview:
 pnpm dev:web
 ```
 
+Open the normal preview at the Vite dev server root URL.
+
+For an OBS Browser Source friendly preview, use the same local URL with `?mode=obs`:
+
+```txt
+http://localhost:5173/?mode=obs
+```
+
+This currently renders the dummy MotionFrame avatar preview with a clean viewport and transparent-friendly background for capture.
+
 Build all packages:
 
 ```bash

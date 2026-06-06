@@ -9,13 +9,26 @@
   text-align: initial;
 }
 
+:root[data-preview-mode='obs'],
+:root[data-preview-mode='obs'] body,
+:root[data-preview-mode='obs'] #root {
+  background: transparent;
+}
+
 .preview-shell {
   width: 100vw;
   height: 100svh;
   display: grid;
   place-items: center;
   overflow: hidden;
+}
+
+.preview-shell--default {
   background: radial-gradient(circle at center, #1f2937 0%, #020617 70%);
+}
+
+.preview-shell--obs {
+  background: transparent;
 }
 
 .preview-panel {
@@ -23,6 +36,15 @@
   height: min(100svh, 720px);
 }
 
+.preview-panel--obs {
+  width: 100vw;
+  height: 100svh;
+}
+
 .preview-panel canvas {
   display: block;
+}
+
+.preview-panel--obs canvas {
+  background: transparent;
 }

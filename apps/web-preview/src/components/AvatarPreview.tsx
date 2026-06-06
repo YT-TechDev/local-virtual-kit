@@ -3,6 +3,11 @@ import { useState } from 'react'
 import { DummyAvatar } from './DummyAvatar'
 import { useDummyMotionFrame } from '../hooks/useDummyMotionFrame'
 import { mapMotionFrameToAvatar } from '../motion/mapMotionFrameToAvatar'
+import type { PreviewMode } from '../preview/previewMode'
+
+type AvatarPreviewProps = {
+  mode: PreviewMode
+}
 
 function AvatarScene() {
   const [timestampMs, setTimestampMs] = useState(0)
@@ -23,11 +28,15 @@ function AvatarScene() {
   )
 }
 
-export function AvatarPreview() {
+export function AvatarPreview({ mode }: AvatarPreviewProps) {
+  const isObsMode = mode === 'obs'
+  const shellClassName = `preview-shell preview-shell--${mode}`
+  const panelClassName = `preview-panel preview-panel--${mode}`
+
   return (
-    <main className="preview-shell">
-      <section className="preview-panel" aria-label="Dummy MotionFrame avatar preview">
-        <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
+    <main className={shellClassName}>
+      <section className={panelClassName} aria-label="Dummy MotionFrame avatar preview">
+        <Canvas camera={{ position: [0, 0, 5], fov: 45 }} gl={{ alpha: isObsMode }}>
           <AvatarScene />
         </Canvas>
       </section>
