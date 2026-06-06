@@ -1,5 +1,9 @@
 # Development Policy
 
+This document defines workflow, verification, reporting, and documentation maintenance rules.
+
+---
+
 ## 1. Core Principles
 
 - Design before implementation.
@@ -9,18 +13,22 @@
 - Make debugging easy.
 - Keep camera processing local.
 - Do not over-engineer v0.1.
+- Do not repeat completed setup work.
+
+---
 
 ## 2. Git Policy
 
 - Never push directly to `main`.
 - Use a dedicated branch for each task.
 - Create a PR for changes.
-- Report PR URL, changes, modified areas, verification, and next steps.
+- Keep PRs small and reviewable.
+- Do not mix docs cleanup, dependency changes, and feature work unless required.
 
-## 3. Branch Examples
+Branch examples:
 
 ```txt
-docs/update-project-instructions
+docs/streamline-agent-instructions
 chore/setup-workspace
 feat/motion-protocol
 feat/basic-r3f-preview
@@ -28,11 +36,32 @@ feat/native-tracker-skeleton
 feat/electron-shell
 ```
 
+---
+
+## 3. Change Policy
+
+Before editing:
+
+1. inspect the current branch and target branch state
+2. read `docs/AGENTS.md`
+3. read only task-relevant docs
+4. identify the smallest useful change
+
+During editing:
+
+- preserve architecture boundaries
+- avoid unrelated refactors
+- avoid compressed unreadable implementation
+- keep shared types explicit
+- do not add dependencies unless needed for the current task
+
+---
+
 ## 4. Verification Policy
 
 Run available checks only. Do not claim success for commands that were not run.
 
-Frontend/workspace:
+Common workspace checks:
 
 ```bash
 pnpm install
@@ -42,7 +71,16 @@ pnpm test
 pnpm lint
 ```
 
-Native later:
+Targeted examples:
+
+```bash
+pnpm --filter @lvk/motion-protocol build
+pnpm --filter @lvk/motion-protocol typecheck
+pnpm --filter @lvk/web-preview build
+pnpm --filter @lvk/web-preview typecheck
+```
+
+Native checks later:
 
 ```bash
 cmake -S native/tracker-core -B native/tracker-core/build
@@ -51,27 +89,102 @@ cmake --build native/tracker-core/build
 
 If a script does not exist, say so clearly.
 
-## 5. Notion Policy
+---
 
-At the end of each implementation task, update the Notion note named `Local Virtual Kit` or `LVK`.
+## 5. Documentation Policy
+
+Use documentation as source-of-truth, not as a prompt dump.
+
+Rules:
+
+- Keep `docs/AGENTS.md` short and global.
+- Put product scope only in `REQUIREMENTS.md`.
+- Put system boundaries only in `ARCHITECTURE.md`.
+- Put technology/package/dependency rules only in `TECH_STACK.md`.
+- Put native tracking output intent only in `TRACKING_SPEC.md`.
+- Put MotionFrame schema only in `MOTION_PROTOCOL.md`.
+- Put renderer mapping rules only in `MOTION_MAPPING.md`.
+- Put sequencing only in `ROADMAP.md`.
+- Put workflow/reporting/checks only in this file.
+- Put reusable copy-ready prompts only in `AI_IMPLEMENTATION_PROMPT.md`.
+
+Avoid:
+
+- fixed stale "next task" instructions
+- duplicating the same architecture paragraph in every file
+- telling agents to read every document for every task
+- embedding long coding prompts inside design docs
+- adding fields to docs that do not exist in current code
+
+---
+
+## 6. PR Body Policy
+
+A PR body should include:
+
+```txt
+## Summary
+- ...
+
+## Changes
+- ...
+
+## Verification
+- [ ] command — result or reason not run
+
+## Notes
+- ...
+
+## Notion
+- updated, or Notion-ready log provided
+```
+
+---
+
+## 7. Final Report Format
+
+Final responses to the project owner should be written in Japanese and include:
+
+```txt
+作業ブランチ:
+PR URL:
+作業概要:
+変更ファイル:
+修正箇所:
+実行した確認:
+エラー・未解決事項:
+Notion記録:
+次にやるべきこと:
+```
+
+---
+
+## 8. Notion Policy
+
+At the end of each implementation task, update the Notion note named `Local Virtual Kit` or `LVK` when available.
 
 The Notion log must be written in Japanese.
 
+Record:
+
+- implemented changes
+- errors
+- decisions
+- verification results
+- PR URL
+- next actions
+
 If Notion is unavailable, output a Japanese Notion-ready work log in the final report.
 
-## 6. Documentation Policy
+---
 
-All `docs/*.md` agent/project documentation should be written in English for implementation accuracy.
-
-Project-owner-facing GPT responses should be in Japanese by default.
-
-## 7. Definition of Done
+## 9. Definition of Done
 
 A task is done when:
 
 - requested files are changed
 - unrelated files are not changed
-- available checks are run
+- available checks are run or honestly marked as not run
 - limitations are documented
 - PR is created when changes exist
 - Notion work log is updated or provided
