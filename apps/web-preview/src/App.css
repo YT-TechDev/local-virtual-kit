@@ -9,6 +9,12 @@
   text-align: initial;
 }
 
+:root[data-preview-mode='obs'],
+:root[data-preview-mode='obs'] body,
+:root[data-preview-mode='obs'] #root {
+  background: transparent;
+}
+
 .preview-shell {
   width: 100vw;
   height: 100svh;
