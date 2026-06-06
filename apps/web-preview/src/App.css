@@ -1,1 +1,22 @@
-#root{width:100vw;height:100vh}.preview{width:100vw;height:100vh;background:radial-gradient(circle,#2a2f4a,#111827)}canvas{display:block}
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+.preview-shell {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #1f2937 0%, #020617 70%);
+}
+
+.preview-panel {
+  width: min(100vw, 1280px);
+  height: min(100vh, 720px);
+}
+
+.preview-panel canvas {
+  display: block;
+}
