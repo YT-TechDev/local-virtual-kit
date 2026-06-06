@@ -4,8 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @lvk/motion-protocol build",
     "dev": "vite",
+    "prebuild": "pnpm --filter @lvk/motion-protocol build",
     "build": "tsc -b && vite build",
+    "pretypecheck": "pnpm --filter @lvk/motion-protocol build",
+    "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview"
   },
