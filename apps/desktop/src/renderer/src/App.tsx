@@ -2,20 +2,48 @@ import { useEffect, useState } from 'react'
 
 type RuntimeStatus = Awaited<ReturnType<Window['lvk']['getRuntimeStatus']>>
 
-type StatusTone = 'neutral' | 'warning'
+type NativeTrackerStatus = RuntimeStatus['nativeTrackerStatus']
+type MotionBridgeStatus = RuntimeStatus['motionBridgeStatus']
+type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 
 const developmentCommands = [
   'pnpm dev:web',
-  'pnpm dev:motion-bridge',
-  './native/tracker-core/build/lvk-tracker-core --frames 600 | pnpm dev:motion-bridge'
+  'cmake -S native/tracker-core -B native/tracker-core/build',
+  'cmake --build native/tracker-core/build'
 ]
 
 const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
-  not_started: 'Not started'
+  not_started: 'Not started',
+  starting: 'Starting',
+  running: 'Running',
+  stopping: 'Stopping',
+  exited: 'Exited',
+  error: 'Error'
 }
 
 const bridgeLabels: Record<RuntimeStatus['motionBridgeStatus'], string> = {
-  manual_dev_tool: 'Manual dev tool'
+  manual_dev_tool: 'Manual dev tool',
+  starting: 'Starting',
+  running: 'Running',
+  stopping: 'Stopping',
+  exited: 'Exited',
+  error: 'Error'
+}
+
+const getStatusTone = (status: NativeTrackerStatus | MotionBridgeStatus): StatusTone => {
+  if (status === 'running') {
+    return 'success'
+  }
+
+  if (status === 'starting' || status === 'stopping') {
+    return 'warning'
+  }
+
+  if (status === 'error') {
+    return 'danger'
+  }
+
+  return 'neutral'
 }
 
 function StatusPill({
@@ -32,6 +60,17 @@ function App(): React.JSX.Element {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
+  const [pipelineError, setPipelineError] = useState<string | null>(null)
+
+  const refreshRuntimeStatus = async (): Promise<void> => {
+    setLoadError(null)
+
+    try {
+      setRuntimeStatus(await window.lvk.getRuntimeStatus())
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Failed to load runtime status.')
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -63,6 +102,35 @@ function App(): React.JSX.Element {
       setOpenError(error instanceof Error ? error.message : 'Failed to open preview URL.')
     }
   }
+
+  const startNativePipeline = async (): Promise<void> => {
+    setPipelineError(null)
+
+    try {
+      setRuntimeStatus(await window.lvk.startNativePipeline())
+    } catch (error) {
+      setPipelineError(error instanceof Error ? error.message : 'Failed to start native pipeline.')
+    }
+  }
+
+  const stopNativePipeline = async (): Promise<void> => {
+    setPipelineError(null)
+
+    try {
+      setRuntimeStatus(await window.lvk.stopNativePipeline())
+    } catch (error) {
+      setPipelineError(error instanceof Error ? error.message : 'Failed to stop native pipeline.')
+    }
+  }
+
+  const canStartNativePipeline = runtimeStatus
+    ? !['starting', 'running', 'stopping'].includes(runtimeStatus.nativeTrackerStatus) &&
+      !['starting', 'running', 'stopping'].includes(runtimeStatus.motionBridgeStatus)
+    : false
+  const canStopNativePipeline = runtimeStatus
+    ? ['starting', 'running'].includes(runtimeStatus.nativeTrackerStatus) ||
+      ['starting', 'running'].includes(runtimeStatus.motionBridgeStatus)
+    : false
 
   return (
     <main className="desktop-shell">
@@ -133,17 +201,40 @@ function App(): React.JSX.Element {
                 <dd>
                   <StatusPill
                     label={statusLabels[runtimeStatus.nativeTrackerStatus]}
-                    tone="warning"
+                    tone={getStatusTone(runtimeStatus.nativeTrackerStatus)}
                   />
                 </dd>
               </div>
               <div>
                 <dt>Motion bridge status</dt>
                 <dd>
-                  <StatusPill label={bridgeLabels[runtimeStatus.motionBridgeStatus]} />
+                  <StatusPill
+                    label={bridgeLabels[runtimeStatus.motionBridgeStatus]}
+                    tone={getStatusTone(runtimeStatus.motionBridgeStatus)}
+                  />
                 </dd>
               </div>
             </dl>
+
+            <div className="button-row" aria-label="Development native pipeline controls">
+              <button type="button" onClick={startNativePipeline} disabled={!canStartNativePipeline}>
+                Start native pipeline
+              </button>
+              <button type="button" onClick={stopNativePipeline} disabled={!canStopNativePipeline}>
+                Stop native pipeline
+              </button>
+              <button type="button" onClick={refreshRuntimeStatus}>
+                Refresh status
+              </button>
+            </div>
+
+            {runtimeStatus.lastError ? (
+              <p className="error-message compact">{runtimeStatus.lastError}</p>
+            ) : null}
+            {pipelineError ? <p className="error-message compact">{pipelineError}</p> : null}
+            {runtimeStatus.lastMessage ? (
+              <p className="runtime-message">{runtimeStatus.lastMessage}</p>
+            ) : null}
           </section>
 
           <section className="card card--wide" aria-labelledby="commands-heading">
@@ -163,8 +254,9 @@ function App(): React.JSX.Element {
             </ol>
 
             <p className="note">
-              This shell only displays preview/status information. Native process lifecycle is
-              intentionally left for a follow-up PR.
+              This shell can start the development native dummy MotionFrame pipeline after the
+              native tracker has been built. Real camera tracking and the final production native
+              transport are still out of scope for this development control surface.
             </p>
           </section>
         </div>
