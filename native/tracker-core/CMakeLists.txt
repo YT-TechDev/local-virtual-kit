@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 
 project(lvk_tracker_core LANGUAGES CXX)
 
-add_executable(lvk-tracker-core src/main.cpp)
+add_executable(lvk-tracker-core
+  src/camera_source.cpp
+  src/main.cpp
+)
 
 target_compile_features(lvk-tracker-core PRIVATE cxx_std_17)
 
