@@ -93,7 +93,9 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     isMountedRef.current = true
-    void loadRuntimeStatus()
+    const initialStatusLoadTimeoutId = window.setTimeout(() => {
+      void loadRuntimeStatus()
+    }, 0)
 
     const statusPollIntervalId = window.setInterval(() => {
       void loadRuntimeStatus()
@@ -101,6 +103,7 @@ function App(): React.JSX.Element {
 
     return () => {
       isMountedRef.current = false
+      window.clearTimeout(initialStatusLoadTimeoutId)
       window.clearInterval(statusPollIntervalId)
     }
   }, [loadRuntimeStatus])
