@@ -9,7 +9,8 @@ type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 const developmentCommands = [
   'pnpm dev:web',
   'cmake -S native/tracker-core -B native/tracker-core/build',
-  'cmake --build native/tracker-core/build'
+  'cmake --build native/tracker-core/build',
+  './native/tracker-core/build/lvk-tracker-core --frames 600 --realtime | node tools/motion-ws-bridge.mjs'
 ]
 
 const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
@@ -258,9 +259,10 @@ function App(): React.JSX.Element {
             </ol>
 
             <p className="note">
-              This shell can start the development native dummy MotionFrame pipeline after the
-              native tracker has been built. Real camera tracking and the final production native
-              transport are still out of scope for this development control surface.
+              This shell can start the development native dummy MotionFrame pipeline with realtime
+              paced output after the native tracker has been built. Real camera tracking and the
+              final production native transport are still out of scope for this development control
+              surface.
             </p>
           </section>
         </div>

@@ -137,11 +137,15 @@ export class NativePipelineManager {
       })
       this.attachProcessHandlers('bridge', this.bridgeProcess)
 
-      this.trackerProcess = spawn(trackerExecutablePath, ['--frames', TRACKER_FRAME_COUNT], {
-        cwd: repoRoot,
-        shell: false,
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
+      this.trackerProcess = spawn(
+        trackerExecutablePath,
+        ['--frames', TRACKER_FRAME_COUNT, '--realtime'],
+        {
+          cwd: repoRoot,
+          shell: false,
+          stdio: ['pipe', 'pipe', 'pipe']
+        }
+      )
       this.attachProcessHandlers('tracker', this.trackerProcess)
 
       this.trackerProcess.stdout.pipe(this.bridgeProcess.stdin, { end: true })
@@ -159,7 +163,7 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'running',
         motionBridgeStatus: 'running',
-        lastMessage: `Development native pipeline started. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
+        lastMessage: `Development native pipeline started with realtime dummy output. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
       }
     } catch (error) {
       this.status = {
