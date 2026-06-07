@@ -1,11 +1,13 @@
 #include "camera_source.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -40,21 +42,22 @@ struct MotionFrameSample {
   double mouthSmile;
 };
 
+struct TrackerOptions {
+  int frameCount = kDefaultFrameCount;
+  bool realtime = false;
+};
+
 double clamp(double value, double minValue, double maxValue) {
   return std::max(minValue, std::min(value, maxValue));
 }
 
-double wave(
-    double base,
-    double amplitude,
-    double speed,
-    double seconds,
-    double phase = 0.0) {
+double wave(double base, double amplitude, double speed, double seconds,
+            double phase = 0.0) {
   return base + std::sin((seconds * speed) + phase) * amplitude;
 }
 
-bool parseFrameCount(const std::string& value, int& frameCount) {
-  char* end = nullptr;
+bool parseFrameCount(const std::string &value, int &frameCount) {
+  char *end = nullptr;
   const long parsed = std::strtol(value.c_str(), &end, 10);
 
   if (end == value.c_str() || *end != '\0') {
@@ -69,25 +72,63 @@ bool parseFrameCount(const std::string& value, int& frameCount) {
   return true;
 }
 
-int resolveFrameCount(int argc, char* argv[]) {
-  if (argc == 1) {
-    return kDefaultFrameCount;
-  }
-
-  if (argc == 3 && std::string(argv[1]) == "--frames") {
-    int frameCount = 0;
-    if (parseFrameCount(argv[2], frameCount)) {
-      return frameCount;
-    }
-  }
-
-  std::cerr << "Usage: lvk-tracker-core [--frames N]\n";
-  std::cerr << "N must be an integer between 0 and " << kMaxFrameCount << ".\n";
-  return -1;
+void printUsage(std::ostream &output) {
+  output << "Usage: lvk-tracker-core [--frames N] [--realtime]\n";
+  output << "N must be an integer between 0 and " << kMaxFrameCount << ".\n";
+  output << "--realtime emits frames at the dummy camera nominal FPS.\n";
 }
 
-MotionFrameSample createDummySample(
-    const lvk::tracker::CameraFrame& cameraFrame) {
+bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
+  for (int argIndex = 1; argIndex < argc; ++argIndex) {
+    const std::string argument = argv[argIndex];
+
+    if (argument == "--realtime") {
+      options.realtime = true;
+      continue;
+    }
+
+    if (argument == "--frames") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --frames.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int frameCount = 0;
+      if (!parseFrameCount(argv[argIndex + 1], frameCount)) {
+        std::cerr << "Invalid value for --frames: " << argv[argIndex + 1]
+                  << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.frameCount = frameCount;
+      ++argIndex;
+      continue;
+    }
+
+    std::cerr << "Unknown argument: " << argument << "\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
+  return true;
+}
+
+void paceNextFrame(std::chrono::steady_clock::time_point &nextFrameTime,
+                   const lvk::tracker::CameraFrame &cameraFrame) {
+  if (cameraFrame.nominalFps <= 0.0) {
+    return;
+  }
+
+  nextFrameTime +=
+      std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+          std::chrono::duration<double>(1.0 / cameraFrame.nominalFps));
+  std::this_thread::sleep_until(nextFrameTime);
+}
+
+MotionFrameSample
+createDummySample(const lvk::tracker::CameraFrame &cameraFrame) {
   const auto timestampMs = cameraFrame.timestampMs;
   const double seconds = static_cast<double>(timestampMs) / 1000.0;
 
@@ -114,7 +155,8 @@ MotionFrameSample createDummySample(
   };
 }
 
-void writeMotionFrameJson(std::ostream& output, const MotionFrameSample& sample) {
+void writeMotionFrameJson(std::ostream &output,
+                          const MotionFrameSample &sample) {
   output << std::fixed << std::setprecision(6);
   output << "{"
          << "\"schemaVersion\":1,"
@@ -141,11 +183,17 @@ void writeMotionFrameJson(std::ostream& output, const MotionFrameSample& sample)
          << "\"smile\":" << sample.mouthSmile << "}}\n";
 }
 
-}  // namespace
+} // namespace
 
-int main(int argc, char* argv[]) {
-  const int frameCount = resolveFrameCount(argc, argv);
-  if (frameCount < 0) {
+int main(int argc, char *argv[]) {
+  if (argc == 2 &&
+      (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+    printUsage(std::cout);
+    return 0;
+  }
+
+  TrackerOptions options;
+  if (!parseTrackerOptions(argc, argv, options)) {
     return 1;
   }
 
@@ -155,16 +203,26 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+  auto nextFrameTime = std::chrono::steady_clock::now();
+
+  for (int frameIndex = 0; frameIndex < options.frameCount; ++frameIndex) {
     lvk::tracker::CameraFrame cameraFrame{};
     if (!cameraSource.nextFrame(cameraFrame)) {
-      std::cerr
-          << "Local dummy camera source stopped before all frames were emitted.\n";
+      std::cerr << "Local dummy camera source stopped before all frames were "
+                   "emitted.\n";
       cameraSource.stop();
       return 1;
     }
 
     writeMotionFrameJson(std::cout, createDummySample(cameraFrame));
+
+    if (options.realtime) {
+      std::cout.flush();
+
+      if (frameIndex + 1 < options.frameCount) {
+        paceNextFrame(nextFrameTime, cameraFrame);
+      }
+    }
   }
 
   cameraSource.stop();
