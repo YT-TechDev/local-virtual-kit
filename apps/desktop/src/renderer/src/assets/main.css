@@ -20,7 +20,12 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
   border-color: rgba(148, 163, 184, 0.52);
   background: rgba(148, 163, 184, 0.2);
 }
@@ -192,10 +197,39 @@ dd {
   font-weight: 800;
 }
 
+.status-pill--success {
+  border-color: rgba(74, 222, 128, 0.28);
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.24);
+}
+
 .status-pill--warning {
   border-color: rgba(251, 191, 36, 0.3);
   color: #fde68a;
   background: rgba(146, 64, 14, 0.26);
+}
+
+.status-pill--danger {
+  border-color: rgba(248, 113, 113, 0.36);
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.28);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.runtime-message {
+  margin-top: 14px;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #bfdbfe;
+  background: rgba(14, 116, 144, 0.14);
+  font-weight: 700;
 }
 
 .command-list {

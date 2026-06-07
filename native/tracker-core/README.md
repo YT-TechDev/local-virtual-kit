@@ -37,6 +37,12 @@ cmake --build native/tracker-core/build
 
 The bridge binds only to `ws://127.0.0.1:45731/motion`, accepts newline-delimited MotionFrame JSON from stdin, and broadcasts valid native frames to connected browser previews. It is temporary development tooling, not the final production native transport.
 
+## Desktop Shell development pipeline
+
+After the native tracker has been built, the LVK Desktop Shell can start and stop the current development dummy pipeline from Electron Main Process. The shell runs the built tracker with `--frames 600`, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
+
+This Desktop Shell control is development-only and still does not add camera capture, real tracking, or the final production native transport.
+
 ## Output policy
 
 - Emits one JSON object per line.
@@ -52,5 +58,5 @@ The bridge binds only to `ws://127.0.0.1:45731/motion`, accepts newline-delimite
 - Face detection or landmark extraction.
 - OpenCV, MediaPipe, ONNX Runtime, or other heavy tracking dependencies.
 - Production native WebSocket or localhost transport.
-- Electron process lifecycle integration.
+- Production Electron/native transport packaging.
 - Remote processing, telemetry, analytics, or cloud upload.

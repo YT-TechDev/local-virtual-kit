@@ -1,16 +1,11 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { NativePipelineManager } from './nativePipeline'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { LVK_IPC_CHANNELS, type LvkRuntimeStatus } from '../preload/api'
+import { LVK_IPC_CHANNELS } from '../preload/api'
 
-const runtimeStatus: LvkRuntimeStatus = {
-  previewDummyUrl: 'http://localhost:5173/?source=dummy',
-  previewNativeUrl: 'http://localhost:5173/?source=native',
-  motionEndpoint: 'ws://127.0.0.1:45731/motion',
-  nativeTrackerStatus: 'not_started',
-  motionBridgeStatus: 'manual_dev_tool'
-}
+const nativePipeline = new NativePipelineManager()
 
 const allowedPreviewUrls = new Set([
   'http://localhost:5173/?source=dummy',
@@ -28,7 +23,9 @@ function isSafeLocalPreviewUrl(url: string): boolean {
 }
 
 function registerLvkIpcHandlers(): void {
-  ipcMain.handle(LVK_IPC_CHANNELS.getRuntimeStatus, () => runtimeStatus)
+  ipcMain.handle(LVK_IPC_CHANNELS.getRuntimeStatus, () => nativePipeline.getStatus())
+  ipcMain.handle(LVK_IPC_CHANNELS.startNativePipeline, () => nativePipeline.start())
+  ipcMain.handle(LVK_IPC_CHANNELS.stopNativePipeline, () => nativePipeline.stop())
   ipcMain.handle(LVK_IPC_CHANNELS.openExternalUrl, async (_event, url: unknown) => {
     if (typeof url !== 'string' || !isSafeLocalPreviewUrl(url)) {
       throw new Error('Only local LVK preview URLs can be opened from the desktop shell.')
@@ -85,6 +82,10 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('before-quit', () => {
+  nativePipeline.cleanupOnQuit()
 })
 
 app.on('window-all-closed', () => {
