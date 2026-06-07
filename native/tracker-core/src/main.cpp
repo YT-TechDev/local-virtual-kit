@@ -1,3 +1,5 @@
+#include "camera_source.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -8,7 +10,6 @@
 namespace {
 
 constexpr int kDefaultFrameCount = 120;
-constexpr double kFrameIntervalMs = 1000.0 / 60.0;
 constexpr int kMaxFrameCount = 100000;
 
 struct Vector2 {
@@ -85,9 +86,9 @@ int resolveFrameCount(int argc, char* argv[]) {
   return -1;
 }
 
-MotionFrameSample createDummySample(int frameIndex) {
-  const auto timestampMs = static_cast<long long>(
-      std::llround(frameIndex * kFrameIntervalMs));
+MotionFrameSample createDummySample(
+    const lvk::tracker::CameraFrame& cameraFrame) {
+  const auto timestampMs = cameraFrame.timestampMs;
   const double seconds = static_cast<double>(timestampMs) / 1000.0;
 
   return MotionFrameSample{
@@ -148,9 +149,25 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
-    writeMotionFrameJson(std::cout, createDummySample(frameIndex));
+  lvk::tracker::DummyCameraSource cameraSource;
+  if (!cameraSource.start()) {
+    std::cerr << "Failed to start local dummy camera source.\n";
+    return 1;
   }
+
+  for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+    lvk::tracker::CameraFrame cameraFrame{};
+    if (!cameraSource.nextFrame(cameraFrame)) {
+      std::cerr
+          << "Local dummy camera source stopped before all frames were emitted.\n";
+      cameraSource.stop();
+      return 1;
+    }
+
+    writeMotionFrameJson(std::cout, createDummySample(cameraFrame));
+  }
+
+  cameraSource.stop();
 
   return 0;
 }

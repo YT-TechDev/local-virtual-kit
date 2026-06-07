@@ -2,7 +2,7 @@
 
 This is the first minimal C++ Native Tracker skeleton for LVK.
 
-The current executable does not access a camera, open a network transport, or run real tracking. It emits deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
+The current executable does not access a real camera, open a network transport, or run real tracking. It uses a local dummy camera source abstraction that emits synthetic frame metadata only, then writes deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
 
 ## Build
 
@@ -43,6 +43,10 @@ After the native tracker has been built, the LVK Desktop Shell can start and sto
 
 This Desktop Shell control is development-only and still does not add camera capture, real tracking, or the final production native transport.
 
+## Camera input status
+
+Native camera input is currently a local dummy abstraction. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS so the tracker can be wired for future capture work without touching real devices. Real camera capture, raw image storage/output, OpenCV, telemetry, upload, and network behavior are intentionally not implemented yet.
+
 ## Output policy
 
 - Emits one JSON object per line.
@@ -54,7 +58,7 @@ This Desktop Shell control is development-only and still does not add camera cap
 
 ## Out of scope
 
-- Camera capture.
+- Real camera capture.
 - Face detection or landmark extraction.
 - OpenCV, MediaPipe, ONNX Runtime, or other heavy tracking dependencies.
 - Production native WebSocket or localhost transport.
