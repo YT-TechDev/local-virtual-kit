@@ -59,6 +59,24 @@ function hasExited(processRef: ChildProcessWithoutNullStreams): boolean {
   return processRef.exitCode !== null || processRef.signalCode !== null
 }
 
+function getTrackerExecutableCandidates(repoRoot: string): string[] {
+  const executableName =
+    nodeProcess.platform === 'win32' ? 'lvk-tracker-core.exe' : 'lvk-tracker-core'
+  const buildDir = join(repoRoot, 'native', 'tracker-core', 'build')
+  const configDirs = ['', 'Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel']
+
+  return configDirs.map((configDir) =>
+    configDir ? join(buildDir, configDir, executableName) : join(buildDir, executableName)
+  )
+}
+
+function resolveTrackerExecutable(repoRoot: string): string | null {
+  return (
+    getTrackerExecutableCandidates(repoRoot).find((candidatePath) => existsSync(candidatePath)) ??
+    null
+  )
+}
+
 export class NativePipelineManager {
   private status = createInitialStatus()
   private trackerProcess: ChildProcessWithoutNullStreams | null = null
@@ -79,13 +97,8 @@ export class NativePipelineManager {
 
     const repoRoot = findRepoRoot()
     const bridgeScriptPath = join(repoRoot, 'tools', 'motion-ws-bridge.mjs')
-    const trackerExecutablePath = join(
-      repoRoot,
-      'native',
-      'tracker-core',
-      'build',
-      nodeProcess.platform === 'win32' ? 'lvk-tracker-core.exe' : 'lvk-tracker-core'
-    )
+    const trackerExecutableCandidates = getTrackerExecutableCandidates(repoRoot)
+    const trackerExecutablePath = resolveTrackerExecutable(repoRoot)
 
     if (!existsSync(bridgeScriptPath)) {
       this.status = {
@@ -97,12 +110,12 @@ export class NativePipelineManager {
       return this.getStatus()
     }
 
-    if (!existsSync(trackerExecutablePath)) {
+    if (trackerExecutablePath === null) {
       this.status = {
         ...this.status,
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'manual_dev_tool',
-        lastError: `Native tracker executable was not found at ${trackerExecutablePath}. Build it first with: cmake -S native/tracker-core -B native/tracker-core/build && cmake --build native/tracker-core/build`
+        lastError: `Native tracker executable was not found. Build it first with: cmake -S native/tracker-core -B native/tracker-core/build && cmake --build native/tracker-core/build. Candidate locations checked: ${trackerExecutableCandidates.join(', ')}`
       }
       return this.getStatus()
     }
