@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type RuntimeStatus = Awaited<ReturnType<Window['lvk']['getRuntimeStatus']>>
 
 type NativeTrackerStatus = RuntimeStatus['nativeTrackerStatus']
 type MotionBridgeStatus = RuntimeStatus['motionBridgeStatus']
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
+
+const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 
 const developmentCommands = [
   'pnpm dev:web',
@@ -63,36 +65,52 @@ function App(): React.JSX.Element {
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
 
-  const refreshRuntimeStatus = async (): Promise<void> => {
-    setLoadError(null)
+  const isMountedRef = useRef(false)
+  const isRuntimeStatusRequestInFlightRef = useRef(false)
+
+  const loadRuntimeStatus = useCallback(async (): Promise<void> => {
+    if (isRuntimeStatusRequestInFlightRef.current) {
+      return
+    }
+
+    isRuntimeStatusRequestInFlightRef.current = true
 
     try {
-      setRuntimeStatus(await window.lvk.getRuntimeStatus())
+      const status = await window.lvk.getRuntimeStatus()
+
+      if (isMountedRef.current) {
+        setRuntimeStatus(status)
+        setLoadError(null)
+      }
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Failed to load runtime status.')
-    }
-  }
-
-  useEffect(() => {
-    let isMounted = true
-
-    window.lvk
-      .getRuntimeStatus()
-      .then((status) => {
-        if (isMounted) {
-          setRuntimeStatus(status)
-        }
-      })
-      .catch((error: unknown) => {
-        if (isMounted) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load runtime status.')
-        }
-      })
-
-    return () => {
-      isMounted = false
+      if (isMountedRef.current) {
+        setLoadError(error instanceof Error ? error.message : 'Failed to load runtime status.')
+      }
+    } finally {
+      isRuntimeStatusRequestInFlightRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    isMountedRef.current = true
+    const initialStatusLoadTimeoutId = window.setTimeout(() => {
+      void loadRuntimeStatus()
+    }, 0)
+
+    const statusPollIntervalId = window.setInterval(() => {
+      void loadRuntimeStatus()
+    }, RUNTIME_STATUS_POLL_INTERVAL_MS)
+
+    return () => {
+      isMountedRef.current = false
+      window.clearTimeout(initialStatusLoadTimeoutId)
+      window.clearInterval(statusPollIntervalId)
+    }
+  }, [loadRuntimeStatus])
+
+  const refreshRuntimeStatus = async (): Promise<void> => {
+    await loadRuntimeStatus()
+  }
 
   const openPreviewUrl = async (url: string): Promise<void> => {
     setOpenError(null)
@@ -188,6 +206,7 @@ function App(): React.JSX.Element {
                 <p className="section-label">Runtime</p>
                 <h2 id="runtime-heading">Source status</h2>
               </div>
+              <StatusPill label="Auto-refreshing" />
             </div>
 
             <dl className="status-list">
