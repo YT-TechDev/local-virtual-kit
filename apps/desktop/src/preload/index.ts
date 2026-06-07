@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import { LVK_IPC_CHANNELS, type LvkDesktopApi, type LvkRuntimeStatus } from './api'
 
 const api: LvkDesktopApi = {
@@ -12,15 +11,7 @@ const api: LvkDesktopApi = {
 }
 
 if (process.contextIsolated) {
-  contextBridge.exposeInMainWorld('electron', electronAPI)
   contextBridge.exposeInMainWorld('lvk', api)
 } else {
-  const unsafeWindow = window as Window &
-    typeof globalThis & {
-      electron: typeof electronAPI
-      lvk: LvkDesktopApi
-    }
-
-  unsafeWindow.electron = electronAPI
-  unsafeWindow.lvk = api
+  console.error('LVK preload API was not exposed because context isolation is disabled.')
 }

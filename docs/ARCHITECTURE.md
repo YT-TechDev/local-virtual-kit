@@ -141,6 +141,10 @@ Does not own:
 - camera frame upload
 - server-side processing
 
+### Electron Security Boundary
+
+The Electron renderer is UI-only and must not have Node.js access. Keep context isolation and sandbox enabled for desktop windows, and expose privileged behavior only through explicit LVK preload/IPC APIs. External URL opening is restricted to the local preview URLs, while camera frames and tracking data remain local to the native/local runtime boundary.
+
 ---
 
 ## 4. Process Model

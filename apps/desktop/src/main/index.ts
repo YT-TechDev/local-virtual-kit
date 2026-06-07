@@ -12,12 +12,16 @@ const runtimeStatus: LvkRuntimeStatus = {
   motionBridgeStatus: 'manual_dev_tool'
 }
 
-const allowedPreviewOrigins = new Set(['http://localhost:5173', 'http://127.0.0.1:5173'])
+const allowedPreviewUrls = new Set([
+  'http://localhost:5173/?source=dummy',
+  'http://localhost:5173/?source=native',
+  'http://127.0.0.1:5173/?source=dummy',
+  'http://127.0.0.1:5173/?source=native'
+])
 
 function isSafeLocalPreviewUrl(url: string): boolean {
   try {
-    const parsedUrl = new URL(url)
-    return allowedPreviewOrigins.has(parsedUrl.origin) && parsedUrl.pathname === '/'
+    return allowedPreviewUrls.has(new URL(url).href)
   } catch {
     return false
   }
@@ -43,7 +47,9 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
     }
   })
 
