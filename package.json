@@ -7,6 +7,7 @@
     "dev": "pnpm -r --parallel --if-present dev",
     "dev:desktop": "pnpm --filter @lvk/desktop dev",
     "dev:web": "pnpm --filter @lvk/web-preview dev",
+    "dev:motion-bridge": "node tools/motion-ws-bridge.mjs",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
