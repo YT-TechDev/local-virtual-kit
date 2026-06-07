@@ -1,22 +1,26 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { LVK_IPC_CHANNELS, type LvkDesktopApi, type LvkRuntimeStatus } from './api'
 
-// Custom APIs for renderer
-const api = {}
-
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
+const api: LvkDesktopApi = {
+  async getRuntimeStatus(): Promise<LvkRuntimeStatus> {
+    return (await ipcRenderer.invoke(LVK_IPC_CHANNELS.getRuntimeStatus)) as LvkRuntimeStatus
+  },
+  async openExternalUrl(url: string): Promise<void> {
+    await ipcRenderer.invoke(LVK_IPC_CHANNELS.openExternalUrl, url)
   }
+}
+
+if (process.contextIsolated) {
+  contextBridge.exposeInMainWorld('electron', electronAPI)
+  contextBridge.exposeInMainWorld('lvk', api)
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  const unsafeWindow = window as Window &
+    typeof globalThis & {
+      electron: typeof electronAPI
+      lvk: LvkDesktopApi
+    }
+
+  unsafeWindow.electron = electronAPI
+  unsafeWindow.lvk = api
 }
