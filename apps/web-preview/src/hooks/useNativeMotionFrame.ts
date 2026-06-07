@@ -88,14 +88,10 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
 
   useEffect(() => {
     latestTimestampRef.current = -Infinity
-    setLatestFrame(null)
-
-    if (!enabled) {
-      return undefined
-    }
 
     let websocket: WebSocket | null = null
     let reconnectTimer: number | undefined
+    let resetFrameTimer: number | undefined
     let isUnmounted = false
 
     const clearReconnectTimer = () => {
@@ -105,8 +101,30 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
       }
     }
 
+    const clearResetFrameTimer = () => {
+      if (resetFrameTimer !== undefined) {
+        window.clearTimeout(resetFrameTimer)
+        resetFrameTimer = undefined
+      }
+    }
+
     const clearNativeFrame = () => {
       setLatestFrame(null)
+    }
+
+    resetFrameTimer = window.setTimeout(() => {
+      resetFrameTimer = undefined
+
+      if (!isUnmounted && latestTimestampRef.current === -Infinity) {
+        clearNativeFrame()
+      }
+    }, 0)
+
+    if (!enabled) {
+      return () => {
+        isUnmounted = true
+        clearResetFrameTimer()
+      }
     }
 
     const scheduleReconnect = () => {
@@ -160,6 +178,7 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
     return () => {
       isUnmounted = true
       clearReconnectTimer()
+      clearResetFrameTimer()
       websocket?.close()
       websocket = null
     }
