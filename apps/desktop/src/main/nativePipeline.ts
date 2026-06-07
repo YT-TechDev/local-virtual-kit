@@ -188,8 +188,8 @@ export class NativePipelineManager {
     }
 
     await Promise.all([
-      this.terminateProcess(this.trackerProcess, 'native tracker'),
-      this.terminateProcess(this.bridgeProcess, 'motion bridge')
+      this.terminateProcess(this.trackerProcess),
+      this.terminateProcess(this.bridgeProcess)
     ])
 
     this.trackerProcess = null
@@ -248,8 +248,8 @@ export class NativePipelineManager {
           lastError: `Motion bridge failed: ${message}`
         }
 
-        void this.terminateProcess(this.trackerProcess, 'native tracker')
-        void this.terminateProcess(this.bridgeProcess, 'motion bridge')
+        void this.terminateProcess(this.trackerProcess)
+        void this.terminateProcess(this.bridgeProcess)
       }
     })
 
@@ -301,7 +301,7 @@ export class NativePipelineManager {
           }
 
           if (code !== 0 && this.trackerProcess) {
-            void this.terminateProcess(this.trackerProcess, 'native tracker')
+            void this.terminateProcess(this.trackerProcess)
           }
         }
       }
@@ -309,8 +309,7 @@ export class NativePipelineManager {
   }
 
   private async terminateProcess(
-    childProcess: ChildProcessWithoutNullStreams | null,
-    _label: string
+    childProcess: ChildProcessWithoutNullStreams | null
   ): Promise<void> {
     if (!childProcess || hasExited(childProcess)) {
       return

@@ -217,7 +217,11 @@ function App(): React.JSX.Element {
             </dl>
 
             <div className="button-row" aria-label="Development native pipeline controls">
-              <button type="button" onClick={startNativePipeline} disabled={!canStartNativePipeline}>
+              <button
+                type="button"
+                onClick={startNativePipeline}
+                disabled={!canStartNativePipeline}
+              >
                 Start native pipeline
               </button>
               <button type="button" onClick={stopNativePipeline} disabled={!canStopNativePipeline}>
