@@ -150,7 +150,6 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
         const frame = parseMotionFrame(event.data)
 
         if (frame === null) {
-          clearNativeFrame()
           return
         }
 
@@ -163,12 +162,10 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
       }
 
       websocket.onerror = () => {
-        clearNativeFrame()
         websocket?.close()
       }
 
       websocket.onclose = () => {
-        clearNativeFrame()
         scheduleReconnect()
       }
     }

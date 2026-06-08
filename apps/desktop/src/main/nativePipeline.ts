@@ -7,7 +7,7 @@ import type { LvkRuntimeStatus, MotionBridgeStatus, NativeTrackerStatus } from '
 const PREVIEW_DUMMY_URL = 'http://localhost:5173/?source=dummy'
 const PREVIEW_NATIVE_URL = 'http://localhost:5173/?source=native'
 const MOTION_ENDPOINT = 'ws://127.0.0.1:45731/motion'
-const TRACKER_FRAME_COUNT = '600'
+const TRACKER_ARGS = ['--continuous', '--realtime']
 const FORCE_KILL_TIMEOUT_MS = 1_500
 const MAX_STATUS_MESSAGE_LENGTH = 360
 
@@ -137,15 +137,11 @@ export class NativePipelineManager {
       })
       this.attachProcessHandlers('bridge', this.bridgeProcess)
 
-      this.trackerProcess = spawn(
-        trackerExecutablePath,
-        ['--frames', TRACKER_FRAME_COUNT, '--realtime'],
-        {
-          cwd: repoRoot,
-          shell: false,
-          stdio: ['pipe', 'pipe', 'pipe']
-        }
-      )
+      this.trackerProcess = spawn(trackerExecutablePath, TRACKER_ARGS, {
+        cwd: repoRoot,
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
       this.attachProcessHandlers('tracker', this.trackerProcess)
 
       this.trackerProcess.stdout.pipe(this.bridgeProcess.stdin, { end: true })
