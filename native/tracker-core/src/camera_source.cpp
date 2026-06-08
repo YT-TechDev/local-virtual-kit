@@ -63,6 +63,9 @@ CameraSourceDiagnostics DummyCameraSource::diagnostics() const {
       height_,
       nominalFps_,
       nextSequenceNumber_,
+      -1,
+      0,
+      "dummy",
   };
 }
 

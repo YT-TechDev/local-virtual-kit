@@ -4,6 +4,8 @@
 
 #include <opencv2/videoio.hpp>
 
+#include <string>
+
 namespace lvk::tracker {
 
 class OpenCvCameraSource final : public CameraSource {
@@ -29,6 +31,8 @@ class OpenCvCameraSource final : public CameraSource {
   int width_;
   int height_;
   long long emittedFrameCount_ = 0;
+  long long failedReadCount_ = 0;
+  std::string backendName_ = "opencv";
   bool isRunning_ = false;
   cv::VideoCapture capture_;
 };

@@ -13,7 +13,7 @@ const developmentCommands = [
   'cmake -S native/tracker-core -B native/tracker-core/build',
   'cmake --build native/tracker-core/build',
   './native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime | node tools/motion-ws-bridge.mjs',
-  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status | node tools/motion-ws-bridge.mjs'
+  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs'
 ]
 
 const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {

@@ -41,7 +41,7 @@ To inspect the current local dummy camera source state without changing stdout, 
 ./native/tracker-core/build/lvk-tracker-core --frames 10 --log-camera-status
 ```
 
-Camera diagnostics are written to stderr only. Stdout remains newline-delimited MotionFrame JSON, so the desktop and WebSocket bridge pipelines can keep treating stdout as protocol data. The diagnostics report the dummy source name, running state, dimensions, nominal FPS, emitted frame count, and shutdown effective FPS.
+Camera diagnostics are written to stderr only. Stdout remains newline-delimited MotionFrame JSON, so the desktop and WebSocket bridge pipelines can keep treating stdout as protocol data. The diagnostics report the source name, running state, dimensions, nominal or effective FPS, emitted frame count, camera index, backend name, failed read count, and shutdown effective FPS when available. Raw frames are never printed or written.
 
 The native CLI now makes the camera source and dummy source parameters explicit:
 
@@ -51,6 +51,7 @@ The native CLI now makes the camera source and dummy source parameters explicit:
 - `--camera-width N` configures the requested camera source width. `N` must be an integer from 1 to 7680.
 - `--camera-height N` configures the requested camera source height. `N` must be an integer from 1 to 4320.
 - `--camera-fps N` configures the requested camera source nominal FPS. `N` must be between 1 and 240.
+- `--camera-status-interval N` writes periodic camera diagnostics every `N` emitted frames when `--log-camera-status` is also set. `N` must be between 1 and 100000. If omitted, diagnostics remain startup/shutdown only.
 
 For example:
 
@@ -84,10 +85,16 @@ Example continuous local capture:
 ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --continuous --realtime --log-camera-status
 ```
 
+Example OpenCV diagnostics with periodic status every 60 emitted frames:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60
+```
+
 To choose a camera device explicitly:
 
 ```bash
-./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60
 ```
 
 This is local camera capture only. `DummyMotionTracker` still provides MotionFrame values, and the MotionFrame schema is unchanged. If OpenCV is not found at configure time, dummy builds still succeed and requesting `--camera-source opencv` fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
@@ -105,20 +112,20 @@ cmake --build native/tracker-core/build
 For OpenCV-backed local capture in builds configured with OpenCV support:
 
 ```bash
-./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status | node tools/motion-ws-bridge.mjs
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs
 ```
 
 The bridge binds only to `ws://127.0.0.1:45731/motion`, accepts newline-delimited MotionFrame JSON from stdin, and broadcasts valid native frames to connected browser previews. It is temporary development tooling, not the final production native transport.
 
 ## Desktop Shell development pipeline
 
-After the native tracker has been built, the LVK Desktop Shell can start and stop the current development native pipeline from Electron Main Process. The shell can choose either `--camera-source dummy` or the Native Core-only `--camera-source opencv --camera-index 0` path, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
+After the native tracker has been built, the LVK Desktop Shell can start and stop the current development native pipeline from Electron Main Process. The shell can choose either `--camera-source dummy` or the Native Core-only `--camera-source opencv --camera-index 0` path, adds `--camera-status-interval 60` for OpenCV diagnostics, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
 
 This Desktop Shell control is development-only. OpenCV mode is local capture-only, `DummyMotionTracker` still provides MotionFrame values, and real face tracking or the final production native transport remain out of scope.
 
 ## Camera input status
 
-Native camera input supports a local dummy abstraction and, when enabled at configure time, a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
+Native camera input supports a local dummy abstraction and, when enabled at configure time, a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. Its diagnostics use `cameraIndex=-1`, `backendName=dummy`, and `failedReadCount=0`. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Its diagnostics include the requested camera index, OpenCV backend name when available, and a count of failed or empty `VideoCapture::read` attempts. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
 
 ## Tracking abstraction
 
