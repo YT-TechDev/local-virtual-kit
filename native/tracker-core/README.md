@@ -41,7 +41,20 @@ To inspect the current local dummy camera source state without changing stdout, 
 
 Camera diagnostics are written to stderr only. Stdout remains newline-delimited MotionFrame JSON, so the desktop and WebSocket bridge pipelines can keep treating stdout as protocol data. The diagnostics report the dummy source name, running state, dimensions, nominal FPS, emitted frame count, and shutdown effective FPS.
 
-This is still a dummy metadata source with dummy tracking values; real camera capture and real face tracking are not implemented yet.
+The native CLI now makes the camera source and dummy source parameters explicit:
+
+- `--camera-source dummy` selects the dummy camera source. `dummy` is the only supported source for now.
+- `--camera-width N` configures the dummy source width. `N` must be an integer from 1 to 7680.
+- `--camera-height N` configures the dummy source height. `N` must be an integer from 1 to 4320.
+- `--camera-fps N` configures the dummy source nominal FPS. `N` must be greater than 0 and up to 240.
+
+For example:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --frames 3 --camera-source dummy --camera-width 1280 --camera-height 720 --camera-fps 30 --log-camera-status
+```
+
+This is still a dummy metadata source with dummy tracking values; real camera capture and real face tracking are not implemented yet. This PR does not implement real camera capture.
 
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 

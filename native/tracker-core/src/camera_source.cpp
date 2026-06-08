@@ -12,6 +12,16 @@ long long timestampForSequence(int sequenceNumber, double nominalFps) {
 
 }  // namespace
 
+std::unique_ptr<CameraSource> createCameraSource(
+    const CameraSourceOptions& options) {
+  if (options.sourceName != "dummy") {
+    return nullptr;
+  }
+
+  return std::make_unique<DummyCameraSource>(
+      options.width, options.height, options.nominalFps);
+}
+
 DummyCameraSource::DummyCameraSource(
     int width,
     int height,
