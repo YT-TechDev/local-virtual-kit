@@ -2,7 +2,7 @@
 
 This is the first minimal C++ Native Tracker skeleton for LVK.
 
-The current executable does not access a real camera, open a network transport, or run real tracking. It uses a local dummy camera source abstraction that emits synthetic frame metadata only, then writes deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
+The current executable does not access a real camera, open a network transport, or run real tracking. It uses a local dummy camera source abstraction that emits synthetic frame metadata only, then passes each frame to `DummyMotionTracker` and writes deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
 
 ## Build
 
@@ -41,7 +41,7 @@ To inspect the current local dummy camera source state without changing stdout, 
 
 Camera diagnostics are written to stderr only. Stdout remains newline-delimited MotionFrame JSON, so the desktop and WebSocket bridge pipelines can keep treating stdout as protocol data. The diagnostics report the dummy source name, running state, dimensions, nominal FPS, emitted frame count, and shutdown effective FPS.
 
-This is still a dummy metadata source; real camera capture is not implemented yet.
+This is still a dummy metadata source with dummy tracking values; real camera capture and real face tracking are not implemented yet.
 
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 
@@ -70,6 +70,10 @@ This Desktop Shell control is development-only and still does not add camera cap
 ## Camera input status
 
 Native camera input is currently a local dummy abstraction. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS so the tracker can be wired for future capture work without touching real devices. Real camera capture, raw image storage/output, OpenCV, telemetry, upload, and network behavior are intentionally not implemented yet.
+
+## Tracking abstraction
+
+Current native tracking is provided by `DummyMotionTracker`. It is a small replacement point between the camera frame source and MotionFrame JSON output, preserving the existing deterministic dummy values while keeping real face tracking out of scope for this skeleton.
 
 ## Output policy
 
