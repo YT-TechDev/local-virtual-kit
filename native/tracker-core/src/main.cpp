@@ -1,8 +1,7 @@
 #include "camera_source.h"
+#include "tracker.h"
 
-#include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <csignal>
 #include <cstdlib>
 #include <iomanip>
@@ -17,49 +16,12 @@ constexpr int kMaxFrameCount = 100000;
 
 volatile std::sig_atomic_t gShouldStop = 0;
 
-struct Vector2 {
-  double x;
-  double y;
-};
-
-struct Vector3 {
-  double x;
-  double y;
-  double z;
-};
-
-struct EulerRotation {
-  double pitch;
-  double yaw;
-  double roll;
-};
-
-struct MotionFrameSample {
-  long long timestampMs;
-  Vector3 facePosition;
-  EulerRotation faceRotation;
-  double leftEyeOpen;
-  double rightEyeOpen;
-  Vector2 gaze;
-  double mouthOpen;
-  double mouthSmile;
-};
-
 struct TrackerOptions {
   int frameCount = kDefaultFrameCount;
   bool continuous = false;
   bool realtime = false;
   bool logCameraStatus = false;
 };
-
-double clamp(double value, double minValue, double maxValue) {
-  return std::max(minValue, std::min(value, maxValue));
-}
-
-double wave(double base, double amplitude, double speed, double seconds,
-            double phase = 0.0) {
-  return base + std::sin((seconds * speed) + phase) * amplitude;
-}
 
 bool parseFrameCount(const std::string &value, int &frameCount) {
   char *end = nullptr;
@@ -171,36 +133,8 @@ void paceNextFrame(std::chrono::steady_clock::time_point &nextFrameTime,
   std::this_thread::sleep_until(nextFrameTime);
 }
 
-MotionFrameSample
-createDummySample(const lvk::tracker::CameraFrame &cameraFrame) {
-  const auto timestampMs = cameraFrame.timestampMs;
-  const double seconds = static_cast<double>(timestampMs) / 1000.0;
-
-  return MotionFrameSample{
-      timestampMs,
-      Vector3{
-          wave(0.0, 0.05, 0.8, seconds),
-          wave(0.0, 0.04, 0.6, seconds),
-          0.0,
-      },
-      EulerRotation{
-          wave(0.0, 0.12, 0.7, seconds),
-          wave(0.0, 0.18, 0.9, seconds),
-          wave(0.0, 0.08, 0.5, seconds),
-      },
-      clamp(wave(0.85, 0.15, 3.0, seconds), 0.0, 1.0),
-      clamp(wave(0.85, 0.15, 3.0, seconds, 0.2), 0.0, 1.0),
-      Vector2{
-          wave(0.0, 0.25, 0.9, seconds),
-          wave(0.0, 0.15, 0.7, seconds),
-      },
-      clamp(wave(0.25, 0.20, 4.0, seconds), 0.0, 1.0),
-      clamp(wave(0.35, 0.15, 0.8, seconds), 0.0, 1.0),
-  };
-}
-
 void writeMotionFrameJson(std::ostream &output,
-                          const MotionFrameSample &sample) {
+                          const lvk::tracker::TrackingSample &sample) {
   output << std::fixed << std::setprecision(6);
   output << "{"
          << "\"schemaVersion\":1,"
@@ -245,6 +179,7 @@ int main(int argc, char *argv[]) {
   }
 
   lvk::tracker::DummyCameraSource cameraSource;
+  lvk::tracker::DummyMotionTracker motionTracker;
   if (!cameraSource.start()) {
     std::cerr << "Failed to start local dummy camera source.\n";
     return 1;
@@ -269,7 +204,7 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
-    writeMotionFrameJson(std::cout, createDummySample(cameraFrame));
+    writeMotionFrameJson(std::cout, motionTracker.track(cameraFrame));
 
     if (options.realtime) {
       std::cout.flush();

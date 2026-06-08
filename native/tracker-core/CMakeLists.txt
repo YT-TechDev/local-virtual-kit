@@ -5,6 +5,7 @@ project(lvk_tracker_core LANGUAGES CXX)
 add_executable(lvk-tracker-core
   src/camera_source.cpp
   src/main.cpp
+  src/tracker.cpp
 )
 
 target_compile_features(lvk-tracker-core PRIVATE cxx_std_17)
