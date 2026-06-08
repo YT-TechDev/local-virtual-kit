@@ -33,6 +33,12 @@ For development flows that need progressive dummy output, add `--realtime` to pa
 
 Without `--realtime`, the executable preserves the default fast deterministic output behavior.
 
+For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --continuous --realtime
+```
+
 ## Development WebSocket bridge
 
 For local Web Preview development with `?source=native`, pipe the native dummy stdout into the development-only MotionFrame WebSocket bridge:
@@ -40,14 +46,14 @@ For local Web Preview development with `?source=native`, pipe the native dummy s
 ```bash
 cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
-./native/tracker-core/build/lvk-tracker-core --frames 600 --realtime | node tools/motion-ws-bridge.mjs
+./native/tracker-core/build/lvk-tracker-core --continuous --realtime | node tools/motion-ws-bridge.mjs
 ```
 
 The bridge binds only to `ws://127.0.0.1:45731/motion`, accepts newline-delimited MotionFrame JSON from stdin, and broadcasts valid native frames to connected browser previews. It is temporary development tooling, not the final production native transport.
 
 ## Desktop Shell development pipeline
 
-After the native tracker has been built, the LVK Desktop Shell can start and stop the current development dummy pipeline from Electron Main Process. The shell runs the built tracker with `--frames 600 --realtime`, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
+After the native tracker has been built, the LVK Desktop Shell can start and stop the current development dummy pipeline from Electron Main Process. The shell runs the built tracker with `--continuous --realtime`, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
 
 This Desktop Shell control is development-only and still does not add camera capture, real tracking, or the final production native transport.
 

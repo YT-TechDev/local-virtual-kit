@@ -44,6 +44,7 @@ struct MotionFrameSample {
 
 struct TrackerOptions {
   int frameCount = kDefaultFrameCount;
+  bool continuous = false;
   bool realtime = false;
 };
 
@@ -73,8 +74,9 @@ bool parseFrameCount(const std::string &value, int &frameCount) {
 }
 
 void printUsage(std::ostream &output) {
-  output << "Usage: lvk-tracker-core [--frames N] [--realtime]\n";
+  output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime]\n";
   output << "N must be an integer between 0 and " << kMaxFrameCount << ".\n";
+  output << "--continuous emits frames until the process is stopped.\n";
   output << "--realtime emits frames at the dummy camera nominal FPS.\n";
 }
 
@@ -84,6 +86,11 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
 
     if (argument == "--realtime") {
       options.realtime = true;
+      continue;
+    }
+
+    if (argument == "--continuous") {
+      options.continuous = true;
       continue;
     }
 
@@ -205,7 +212,8 @@ int main(int argc, char *argv[]) {
 
   auto nextFrameTime = std::chrono::steady_clock::now();
 
-  for (int frameIndex = 0; frameIndex < options.frameCount; ++frameIndex) {
+  for (long long frameIndex = 0;
+       options.continuous || frameIndex < options.frameCount; ++frameIndex) {
     lvk::tracker::CameraFrame cameraFrame{};
     if (!cameraSource.nextFrame(cameraFrame)) {
       std::cerr << "Local dummy camera source stopped before all frames were "
@@ -219,7 +227,7 @@ int main(int argc, char *argv[]) {
     if (options.realtime) {
       std::cout.flush();
 
-      if (frameIndex + 1 < options.frameCount) {
+      if (options.continuous || frameIndex + 1 < options.frameCount) {
         paceNextFrame(nextFrameTime, cameraFrame);
       }
     }
