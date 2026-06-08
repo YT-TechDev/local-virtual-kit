@@ -10,6 +10,10 @@
 #include <string>
 #include <thread>
 
+#ifndef LVK_HAS_OPENCV
+#define LVK_HAS_OPENCV 0
+#endif
+
 namespace {
 
 constexpr int kDefaultFrameCount = 120;
@@ -323,8 +327,13 @@ int main(int argc, char *argv[]) {
 
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);
   if (!cameraSource) {
-    std::cerr << "Unsupported camera source: " << options.camera.sourceName
-              << ". Supported values are 'dummy' and 'opencv'.\n";
+    if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV) {
+      std::cerr << "OpenCV camera source is not enabled in this build. "
+                   "Install OpenCV development packages and reconfigure.\n";
+    } else {
+      std::cerr << "Unsupported camera source: " << options.camera.sourceName
+                << ". Supported values are 'dummy' and 'opencv'.\n";
+    }
     return 1;
   }
 

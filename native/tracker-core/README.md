@@ -2,7 +2,7 @@
 
 This is the first minimal C++ Native Tracker skeleton for LVK.
 
-The executable can run with the safest default dummy camera source or with a local OpenCV camera source for Native Core-only webcam capture. Both paths still pass frame metadata to `DummyMotionTracker` and write deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
+The executable can always run with the safest default dummy camera source. When CMake finds OpenCV, it can also build a local OpenCV camera source for Native Core-only webcam capture. Both paths still pass frame metadata to `DummyMotionTracker` and write deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
 
 ## Build
 
@@ -11,7 +11,7 @@ cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
 ```
 
-The native tracker core now depends on OpenCV for the optional local camera source. Install an OpenCV development package that CMake can discover with `find_package(OpenCV ...)` before configuring this target. OpenCV is linked only into the native `lvk-tracker-core` executable.
+The dummy camera source builds without OpenCV. The optional OpenCV camera source is enabled only when CMake can discover an OpenCV development package with `find_package(OpenCV QUIET COMPONENTS core videoio)`. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## Run
 
@@ -46,7 +46,7 @@ Camera diagnostics are written to stderr only. Stdout remains newline-delimited 
 The native CLI now makes the camera source and dummy source parameters explicit:
 
 - `--camera-source dummy` selects the dummy camera source. `dummy` remains the default and safest development source.
-- `--camera-source opencv` selects the Native Core-only OpenCV local camera source.
+- `--camera-source opencv` selects the Native Core-only OpenCV local camera source when this binary was configured with OpenCV support.
 - `--camera-index N` configures the OpenCV camera device index. `N` must be an integer from 0 to 16.
 - `--camera-width N` configures the requested camera source width. `N` must be an integer from 1 to 7680.
 - `--camera-height N` configures the requested camera source height. `N` must be an integer from 1 to 4320.
@@ -68,7 +68,7 @@ For desktop-managed development pipelines that should keep running until stopped
 
 ## OpenCV camera source
 
-`--camera-source opencv` opens a local webcam through OpenCV `VideoCapture`, reads frames inside the native process, and emits the existing MotionFrame JSON schema through the unchanged dummy tracker pipeline. Raw frame pixels remain local to Native Core memory; they are not written to disk and are not printed to stdout or stderr.
+`--camera-source opencv` is available only in native builds where CMake found OpenCV. In those builds it opens a local webcam through OpenCV `VideoCapture`, reads frames inside the native process, and emits the existing MotionFrame JSON schema through the unchanged dummy tracker pipeline. Raw frame pixels remain local to Native Core memory; they are not written to disk and are not printed to stdout or stderr.
 
 Example finite smoke test:
 
@@ -90,7 +90,7 @@ To choose a camera device explicitly:
 ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status
 ```
 
-This is local camera capture only. `DummyMotionTracker` still provides MotionFrame values, and the MotionFrame schema is unchanged. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+This is local camera capture only. `DummyMotionTracker` still provides MotionFrame values, and the MotionFrame schema is unchanged. If OpenCV is not found at configure time, dummy builds still succeed and requesting `--camera-source opencv` fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## Development WebSocket bridge
 
@@ -112,7 +112,7 @@ This Desktop Shell control is development-only and still does not add camera cap
 
 ## Camera input status
 
-Native camera input supports a local dummy abstraction and a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
+Native camera input supports a local dummy abstraction and, when enabled at configure time, a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
 
 ## Tracking abstraction
 

@@ -1,5 +1,12 @@
 #include "camera_source.h"
+
+#ifndef LVK_HAS_OPENCV
+#define LVK_HAS_OPENCV 0
+#endif
+
+#if LVK_HAS_OPENCV
 #include "opencv_camera_source.h"
+#endif
 
 #include <cmath>
 
@@ -21,8 +28,12 @@ std::unique_ptr<CameraSource> createCameraSource(
   }
 
   if (options.sourceName == "opencv") {
+#if LVK_HAS_OPENCV
     return std::make_unique<OpenCvCameraSource>(
         options.cameraIndex, options.width, options.height, options.nominalFps);
+#else
+    return nullptr;
+#endif
   }
 
   return nullptr;
