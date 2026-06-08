@@ -1,4 +1,5 @@
 #include "camera_source.h"
+#include "opencv_camera_source.h"
 
 #include <cmath>
 
@@ -14,12 +15,17 @@ long long timestampForSequence(int sequenceNumber, double nominalFps) {
 
 std::unique_ptr<CameraSource> createCameraSource(
     const CameraSourceOptions& options) {
-  if (options.sourceName != "dummy") {
-    return nullptr;
+  if (options.sourceName == "dummy") {
+    return std::make_unique<DummyCameraSource>(
+        options.width, options.height, options.nominalFps);
   }
 
-  return std::make_unique<DummyCameraSource>(
-      options.width, options.height, options.nominalFps);
+  if (options.sourceName == "opencv") {
+    return std::make_unique<OpenCvCameraSource>(
+        options.cameraIndex, options.width, options.height, options.nominalFps);
+  }
+
+  return nullptr;
 }
 
 DummyCameraSource::DummyCameraSource(

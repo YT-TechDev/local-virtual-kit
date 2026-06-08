@@ -18,6 +18,7 @@ struct CameraSourceOptions {
   int width = 640;
   int height = 480;
   double nominalFps = 60.0;
+  int cameraIndex = 0;
 };
 
 struct CameraSourceDiagnostics {

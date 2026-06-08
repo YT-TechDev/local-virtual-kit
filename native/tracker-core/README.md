@@ -2,7 +2,7 @@
 
 This is the first minimal C++ Native Tracker skeleton for LVK.
 
-The current executable does not access a real camera, open a network transport, or run real tracking. It uses a local dummy camera source abstraction that emits synthetic frame metadata only, then passes each frame to `DummyMotionTracker` and writes deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
+The executable can run with the safest default dummy camera source or with a local OpenCV camera source for Native Core-only webcam capture. Both paths still pass frame metadata to `DummyMotionTracker` and write deterministic MotionFrame-shaped dummy JSON lines to stdout so later Electron process lifecycle and local transport work can integrate against the current protocol shape.
 
 ## Build
 
@@ -10,6 +10,8 @@ The current executable does not access a real camera, open a network transport, 
 cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
 ```
+
+The native tracker core now depends on OpenCV for the optional local camera source. Install an OpenCV development package that CMake can discover with `find_package(OpenCV ...)` before configuring this target. OpenCV is linked only into the native `lvk-tracker-core` executable.
 
 ## Run
 
@@ -43,10 +45,12 @@ Camera diagnostics are written to stderr only. Stdout remains newline-delimited 
 
 The native CLI now makes the camera source and dummy source parameters explicit:
 
-- `--camera-source dummy` selects the dummy camera source. `dummy` is the only supported source for now.
-- `--camera-width N` configures the dummy source width. `N` must be an integer from 1 to 7680.
-- `--camera-height N` configures the dummy source height. `N` must be an integer from 1 to 4320.
-- `--camera-fps N` configures the dummy source nominal FPS. `N` must be between 1 and 240.
+- `--camera-source dummy` selects the dummy camera source. `dummy` remains the default and safest development source.
+- `--camera-source opencv` selects the Native Core-only OpenCV local camera source.
+- `--camera-index N` configures the OpenCV camera device index. `N` must be an integer from 0 to 16.
+- `--camera-width N` configures the requested camera source width. `N` must be an integer from 1 to 7680.
+- `--camera-height N` configures the requested camera source height. `N` must be an integer from 1 to 4320.
+- `--camera-fps N` configures the requested camera source nominal FPS. `N` must be between 1 and 240.
 
 For example:
 
@@ -54,13 +58,39 @@ For example:
 ./native/tracker-core/build/lvk-tracker-core --frames 3 --camera-source dummy --camera-width 1280 --camera-height 720 --camera-fps 30 --log-camera-status
 ```
 
-This is still a dummy metadata source with dummy tracking values; real camera capture and real face tracking are not implemented yet. This PR does not implement real camera capture.
+The dummy source is still a metadata-only source with dummy tracking values. The OpenCV source reads local webcam frames into Native Core memory, converts only frame metadata into the existing `CameraFrame`, and still uses dummy tracking values. Real face detection, landmark extraction, and VTuber tracking are not implemented yet.
 
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 
 ```bash
 ./native/tracker-core/build/lvk-tracker-core --continuous --realtime
 ```
+
+## OpenCV camera source
+
+`--camera-source opencv` opens a local webcam through OpenCV `VideoCapture`, reads frames inside the native process, and emits the existing MotionFrame JSON schema through the unchanged dummy tracker pipeline. Raw frame pixels remain local to Native Core memory; they are not written to disk and are not printed to stdout or stderr.
+
+Example finite smoke test:
+
+```bash
+cmake -S native/tracker-core -B native/tracker-core/build
+cmake --build native/tracker-core/build
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --frames 3 --log-camera-status
+```
+
+Example continuous local capture:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --continuous --realtime --log-camera-status
+```
+
+To choose a camera device explicitly:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status
+```
+
+This is local camera capture only. `DummyMotionTracker` still provides MotionFrame values, and the MotionFrame schema is unchanged. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## Development WebSocket bridge
 
@@ -82,7 +112,7 @@ This Desktop Shell control is development-only and still does not add camera cap
 
 ## Camera input status
 
-Native camera input is currently a local dummy abstraction. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS so the tracker can be wired for future capture work without touching real devices. Real camera capture, raw image storage/output, OpenCV, telemetry, upload, and network behavior are intentionally not implemented yet.
+Native camera input supports a local dummy abstraction and a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
 
 ## Tracking abstraction
 
@@ -101,9 +131,9 @@ MotionFrame JSON serialization is handled by the native MotionFrame writer modul
 
 ## Out of scope
 
-- Real camera capture.
 - Face detection or landmark extraction.
-- OpenCV, MediaPipe, ONNX Runtime, or other heavy tracking dependencies.
+- Real VTuber tracking values.
+- MediaPipe, ONNX Runtime, or other face-tracking dependencies.
 - Production native WebSocket or localhost transport.
 - Production Electron/native transport packaging.
 - Remote processing, telemetry, analytics, or cloud upload.
