@@ -13,19 +13,26 @@ export type MotionBridgeStatus =
   | 'exited'
   | 'error'
 
+export type NativePipelineCameraSource = 'dummy' | 'opencv'
+
+export interface NativePipelineStartOptions {
+  cameraSource: NativePipelineCameraSource
+}
+
 export interface LvkRuntimeStatus {
   previewDummyUrl: string
   previewNativeUrl: string
   motionEndpoint: string
   nativeTrackerStatus: NativeTrackerStatus
   motionBridgeStatus: MotionBridgeStatus
+  pipelineCameraSource?: NativePipelineCameraSource
   lastError?: string
   lastMessage?: string
 }
 
 export interface LvkDesktopApi {
   getRuntimeStatus: () => Promise<LvkRuntimeStatus>
-  startNativePipeline: () => Promise<LvkRuntimeStatus>
+  startNativePipeline: (options?: NativePipelineStartOptions) => Promise<LvkRuntimeStatus>
   stopNativePipeline: () => Promise<LvkRuntimeStatus>
   openExternalUrl: (url: string) => Promise<void>
 }

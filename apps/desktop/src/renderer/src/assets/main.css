@@ -9,7 +9,8 @@ body {
   user-select: none;
 }
 
-button {
+button,
+select {
   border: 1px solid rgba(148, 163, 184, 0.32);
   border-radius: 999px;
   padding: 8px 16px;
@@ -20,14 +21,32 @@ button {
   cursor: pointer;
 }
 
-button:disabled {
+button:disabled,
+select:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled),
+select:hover:not(:disabled) {
   border-color: rgba(148, 163, 184, 0.52);
   background: rgba(148, 163, 184, 0.2);
+}
+
+select {
+  min-width: 170px;
+  appearance: none;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  color: var(--ev-c-text-2);
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 code {
