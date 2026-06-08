@@ -28,6 +28,9 @@ struct CameraSourceDiagnostics {
   int height;
   double nominalFps;
   long long emittedFrameCount;
+  int cameraIndex;
+  long long failedReadCount;
+  std::string backendName;
 };
 
 class CameraSource {

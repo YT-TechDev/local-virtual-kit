@@ -21,6 +21,7 @@ constexpr int kMaxFrameCount = 100000;
 constexpr int kMaxCameraWidth = 7680;
 constexpr int kMaxCameraHeight = 4320;
 constexpr int kMaxCameraIndex = 16;
+constexpr int kMaxCameraStatusInterval = 100000;
 constexpr double kMinCameraFps = 1.0;
 constexpr double kMaxCameraFps = 240.0;
 
@@ -31,6 +32,7 @@ struct TrackerOptions {
   bool continuous = false;
   bool realtime = false;
   bool logCameraStatus = false;
+  int cameraStatusInterval = 0;
   lvk::tracker::CameraSourceOptions camera;
 };
 
@@ -110,13 +112,17 @@ bool parseDoubleInRange(
 
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
-            "[--log-camera-status] [--camera-source dummy|opencv] "
-            "[--camera-index N] [--camera-width N] [--camera-height N] [--camera-fps N]\n";
+            "[--log-camera-status] [--camera-status-interval N] "
+            "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
+            "[--camera-height N] [--camera-fps N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
   output << "--realtime emits frames at the configured camera nominal FPS.\n";
   output << "--log-camera-status writes local camera diagnostics to stderr.\n";
+  output << "--camera-status-interval N writes periodic camera diagnostics every N "
+         << "emitted frames when --log-camera-status is set. N must be between 1 "
+         << "and " << kMaxCameraStatusInterval << ".\n";
   output << "--camera-source selects the camera source; supported values are 'dummy' and 'opencv'.\n";
   output << "--camera-index N must be an integer between 0 and "
          << kMaxCameraIndex << ".\n";
@@ -144,7 +150,10 @@ void writeCameraStatus(
          << "width=" << diagnostics.width << ", "
          << "height=" << diagnostics.height << ", "
          << "nominalFps=" << diagnostics.nominalFps << ", "
-         << "emittedFrameCount=" << diagnostics.emittedFrameCount;
+         << "emittedFrameCount=" << diagnostics.emittedFrameCount << ", "
+         << "cameraIndex=" << diagnostics.cameraIndex << ", "
+         << "backendName=" << diagnostics.backendName << ", "
+         << "failedReadCount=" << diagnostics.failedReadCount;
 
   if (effectiveFps > 0.0) {
     output << ", effectiveFps=" << effectiveFps;
@@ -169,6 +178,29 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
 
     if (argument == "--log-camera-status") {
       options.logCameraStatus = true;
+      continue;
+    }
+
+    if (argument == "--camera-status-interval") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --camera-status-interval.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int cameraStatusInterval = 0;
+      if (!parsePositiveIntegerInRange(
+              argv[argIndex + 1],
+              kMaxCameraStatusInterval,
+              cameraStatusInterval)) {
+        std::cerr << "Invalid value for --camera-status-interval: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.cameraStatusInterval = cameraStatusInterval;
+      ++argIndex;
       continue;
     }
 
@@ -359,12 +391,24 @@ int main(int argc, char *argv[]) {
     if (!cameraSource->nextFrame(cameraFrame)) {
       std::cerr << "Local camera source stopped before all frames were "
                    "emitted.\n";
+      if (options.logCameraStatus) {
+        writeCameraStatus(
+            std::cerr, "capture-failure", cameraSource->diagnostics());
+      }
       cameraSource->stop();
       return 1;
     }
 
     lvk::tracker::writeMotionFrameJson(
         std::cout, motionTracker.track(cameraFrame));
+
+    if (options.logCameraStatus && options.cameraStatusInterval > 0 &&
+        cameraSource->diagnostics().emittedFrameCount %
+                options.cameraStatusInterval ==
+            0) {
+      writeCameraStatus(
+          std::cerr, "periodic", cameraSource->diagnostics());
+    }
 
     if (options.realtime) {
       std::cout.flush();

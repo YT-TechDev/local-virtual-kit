@@ -24,7 +24,9 @@ function createTrackerArgs(cameraSource: NativePipelineCameraSource): string[] {
       '0',
       '--continuous',
       '--realtime',
-      '--log-camera-status'
+      '--log-camera-status',
+      '--camera-status-interval',
+      '60'
     ]
   }
 

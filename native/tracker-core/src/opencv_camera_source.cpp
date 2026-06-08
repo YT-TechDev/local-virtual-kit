@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <opencv2/core.hpp>
+#include <opencv2/core/version.hpp>
 #include <opencv2/videoio.hpp>
 
 namespace lvk::tracker {
@@ -34,6 +35,23 @@ int validDimensionOrFallback(double dimension, int fallback) {
   return fallback;
 }
 
+std::string backendNameOrFallback(cv::VideoCapture& capture) {
+#if defined(CV_VERSION_MAJOR) && CV_VERSION_MAJOR >= 4
+  if (capture.isOpened()) {
+    try {
+      const std::string backendName = capture.getBackendName();
+      if (!backendName.empty()) {
+        return backendName;
+      }
+    } catch (const cv::Exception&) {
+      return "opencv";
+    }
+  }
+#endif
+
+  return "opencv";
+}
+
 }  // namespace
 
 OpenCvCameraSource::OpenCvCameraSource(
@@ -57,6 +75,8 @@ bool OpenCvCameraSource::start() {
   stop();
 
   emittedFrameCount_ = 0;
+  failedReadCount_ = 0;
+  backendName_ = "opencv";
   width_ = requestedWidth_;
   height_ = requestedHeight_;
   effectiveFps_ = validFpsOrFallback(0.0, requestedFps_);
@@ -81,6 +101,7 @@ bool OpenCvCameraSource::start() {
       capture_.get(cv::CAP_PROP_FRAME_HEIGHT), requestedHeight_);
   effectiveFps_ = validFpsOrFallback(
       capture_.get(cv::CAP_PROP_FPS), requestedFps_);
+  backendName_ = backendNameOrFallback(capture_);
   isRunning_ = true;
   return true;
 }
@@ -100,6 +121,7 @@ bool OpenCvCameraSource::nextFrame(CameraFrame& frame) {
 
   cv::Mat frameMat;
   if (!capture_.read(frameMat) || frameMat.empty()) {
+    ++failedReadCount_;
     return false;
   }
 
@@ -128,6 +150,9 @@ CameraSourceDiagnostics OpenCvCameraSource::diagnostics() const {
       height_,
       effectiveFps_,
       emittedFrameCount_,
+      cameraIndex_,
+      failedReadCount_,
+      backendName_,
   };
 }
 
