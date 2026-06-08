@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 namespace lvk::tracker {
@@ -10,6 +11,13 @@ struct CameraFrame {
   int width;
   int height;
   double nominalFps;
+};
+
+struct CameraSourceOptions {
+  std::string sourceName = "dummy";
+  int width = 640;
+  int height = 480;
+  double nominalFps = 60.0;
 };
 
 struct CameraSourceDiagnostics {
@@ -30,6 +38,9 @@ class CameraSource {
   virtual bool nextFrame(CameraFrame& frame) = 0;
   virtual CameraSourceDiagnostics diagnostics() const = 0;
 };
+
+std::unique_ptr<CameraSource> createCameraSource(
+    const CameraSourceOptions& options);
 
 class DummyCameraSource final : public CameraSource {
  public:

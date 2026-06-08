@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <csignal>
+#include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -13,6 +14,10 @@ namespace {
 
 constexpr int kDefaultFrameCount = 120;
 constexpr int kMaxFrameCount = 100000;
+constexpr int kMaxCameraWidth = 7680;
+constexpr int kMaxCameraHeight = 4320;
+constexpr double kMinCameraFps = 1.0;
+constexpr double kMaxCameraFps = 240.0;
 
 volatile std::sig_atomic_t gShouldStop = 0;
 
@@ -21,6 +26,7 @@ struct TrackerOptions {
   bool continuous = false;
   bool realtime = false;
   bool logCameraStatus = false;
+  lvk::tracker::CameraSourceOptions camera;
 };
 
 bool parseFrameCount(const std::string &value, int &frameCount) {
@@ -39,14 +45,62 @@ bool parseFrameCount(const std::string &value, int &frameCount) {
   return true;
 }
 
+bool parsePositiveIntegerInRange(
+    const std::string &value,
+    int maxValue,
+    int &parsedValue) {
+  char *end = nullptr;
+  const long parsed = std::strtol(value.c_str(), &end, 10);
+
+  if (end == value.c_str() || *end != '\0') {
+    return false;
+  }
+
+  if (parsed < 1 || parsed > maxValue) {
+    return false;
+  }
+
+  parsedValue = static_cast<int>(parsed);
+  return true;
+}
+
+bool parseDoubleInRange(
+    const std::string &value,
+    double minValue,
+    double maxValue,
+    double &parsedValue) {
+  char *end = nullptr;
+  const double parsed = std::strtod(value.c_str(), &end);
+
+  if (end == value.c_str() || *end != '\0') {
+    return false;
+  }
+
+  if (!std::isfinite(parsed) || parsed < minValue || parsed > maxValue) {
+    return false;
+  }
+
+  parsedValue = parsed;
+  return true;
+}
+
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
-            "[--log-camera-status]\n";
-  output << "N must be an integer between 0 and " << kMaxFrameCount << ".\n";
+            "[--log-camera-status] [--camera-source dummy] "
+            "[--camera-width N] [--camera-height N] [--camera-fps N]\n";
+  output << "--frames N must be an integer between 0 and " << kMaxFrameCount
+         << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
-  output << "--realtime emits frames at the dummy camera nominal FPS.\n";
-  output << "--log-camera-status writes local dummy camera diagnostics to "
-            "stderr.\n";
+  output << "--realtime emits frames at the configured camera nominal FPS.\n";
+  output << "--log-camera-status writes local camera diagnostics to stderr.\n";
+  output << "--camera-source selects the camera source; only 'dummy' is "
+            "supported for now.\n";
+  output << "--camera-width N must be an integer between 1 and "
+         << kMaxCameraWidth << ".\n";
+  output << "--camera-height N must be an integer between 1 and "
+         << kMaxCameraHeight << ".\n";
+  output << "--camera-fps N must be between " << kMinCameraFps << " and "
+         << kMaxCameraFps << ".\n";
 }
 
 void handleStopSignal(int) {
@@ -109,6 +163,81 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       }
 
       options.frameCount = frameCount;
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--camera-source") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --camera-source.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.camera.sourceName = argv[argIndex + 1];
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--camera-width") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --camera-width.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int width = 0;
+      if (!parsePositiveIntegerInRange(
+              argv[argIndex + 1], kMaxCameraWidth, width)) {
+        std::cerr << "Invalid value for --camera-width: " << argv[argIndex + 1]
+                  << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.camera.width = width;
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--camera-height") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --camera-height.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int height = 0;
+      if (!parsePositiveIntegerInRange(
+              argv[argIndex + 1], kMaxCameraHeight, height)) {
+        std::cerr << "Invalid value for --camera-height: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.camera.height = height;
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--camera-fps") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --camera-fps.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      double nominalFps = 0.0;
+      if (!parseDoubleInRange(
+              argv[argIndex + 1], kMinCameraFps, kMaxCameraFps, nominalFps)) {
+        std::cerr << "Invalid value for --camera-fps: " << argv[argIndex + 1]
+                  << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.camera.nominalFps = nominalFps;
       ++argIndex;
       continue;
     }
@@ -178,15 +307,22 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  lvk::tracker::DummyCameraSource cameraSource;
+  auto cameraSource = lvk::tracker::createCameraSource(options.camera);
+  if (!cameraSource) {
+    std::cerr << "Unsupported camera source: " << options.camera.sourceName
+              << ". Only 'dummy' is supported for now.\n";
+    return 1;
+  }
+
   lvk::tracker::DummyMotionTracker motionTracker;
-  if (!cameraSource.start()) {
-    std::cerr << "Failed to start local dummy camera source.\n";
+  if (!cameraSource->start()) {
+    std::cerr << "Failed to start local camera source: "
+              << options.camera.sourceName << ".\n";
     return 1;
   }
 
   if (options.logCameraStatus) {
-    writeCameraStatus(std::cerr, "startup", cameraSource.diagnostics());
+    writeCameraStatus(std::cerr, "startup", cameraSource->diagnostics());
   }
 
   auto nextFrameTime = std::chrono::steady_clock::now();
@@ -197,10 +333,10 @@ int main(int argc, char *argv[]) {
        (options.continuous || frameIndex < options.frameCount);
        ++frameIndex) {
     lvk::tracker::CameraFrame cameraFrame{};
-    if (!cameraSource.nextFrame(cameraFrame)) {
-      std::cerr << "Local dummy camera source stopped before all frames were "
+    if (!cameraSource->nextFrame(cameraFrame)) {
+      std::cerr << "Local camera source stopped before all frames were "
                    "emitted.\n";
-      cameraSource.stop();
+      cameraSource->stop();
       return 1;
     }
 
@@ -216,10 +352,10 @@ int main(int argc, char *argv[]) {
   }
 
   const auto stoppedAt = std::chrono::steady_clock::now();
-  cameraSource.stop();
+  cameraSource->stop();
 
   if (options.logCameraStatus) {
-    const auto diagnostics = cameraSource.diagnostics();
+    const auto diagnostics = cameraSource->diagnostics();
     const double elapsedSeconds =
         std::chrono::duration<double>(stoppedAt - startedAt).count();
     const double effectiveFps = elapsedSeconds > 0.0
