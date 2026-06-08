@@ -11,7 +11,7 @@ cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
 ```
 
-The dummy camera source builds without OpenCV. Optional OpenCV camera and face-detector paths are enabled only when CMake can discover an OpenCV development package with `find_package(OpenCV QUIET COMPONENTS core videoio imgproc objdetect)`. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+The dummy camera source builds without OpenCV. Optional OpenCV camera and face-detector paths are gated separately: camera capture is enabled when CMake finds OpenCV `core` + `videoio`, while the face detector is enabled when CMake finds OpenCV `core` + `imgproc` + `objdetect`. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## Run
 
@@ -97,7 +97,7 @@ To choose a camera device explicitly:
 ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60
 ```
 
-This is local camera capture only unless `--face-detector opencv` is explicitly selected. The default detector remains `noop`, no-face frames still fall back to `DummyMotionTracker`, and the MotionFrame schema is unchanged. If OpenCV is not found at configure time, dummy builds still succeed and requesting `--camera-source opencv` or `--face-detector opencv` fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+This is local camera capture only unless `--face-detector opencv` is explicitly selected. The default detector remains `noop`, no-face frames still fall back to `DummyMotionTracker`, and the MotionFrame schema is unchanged. If the required OpenCV components are not found at configure time, dummy builds still succeed; requesting `--camera-source opencv` without camera support or `--face-detector opencv` without detector support fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## OpenCV face detector
 

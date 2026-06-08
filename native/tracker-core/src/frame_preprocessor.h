@@ -8,7 +8,7 @@ struct PreprocessedFrame {
   CameraFrame cameraFrame;
   int width;
   int height;
-#if LVK_HAS_OPENCV
+#if LVK_HAS_OPENCV_IMAGE
   cv::Mat image;
 #endif
 };

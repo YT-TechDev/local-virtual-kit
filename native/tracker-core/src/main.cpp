@@ -5,7 +5,7 @@
 #include "motion_frame_writer.h"
 #include "tracker.h"
 
-#if LVK_HAS_OPENCV
+#if LVK_HAS_OPENCV_FACE_DETECTOR
 #include "opencv_face_detector.h"
 #endif
 
@@ -18,8 +18,12 @@
 #include <string>
 #include <thread>
 
-#ifndef LVK_HAS_OPENCV
-#define LVK_HAS_OPENCV 0
+#ifndef LVK_HAS_OPENCV_CAMERA
+#define LVK_HAS_OPENCV_CAMERA 0
+#endif
+
+#ifndef LVK_HAS_OPENCV_FACE_DETECTOR
+#define LVK_HAS_OPENCV_FACE_DETECTOR 0
 #endif
 
 namespace {
@@ -405,7 +409,7 @@ int main(int argc, char *argv[]) {
 
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);
   if (!cameraSource) {
-    if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV) {
+    if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV_CAMERA) {
       std::cerr << "OpenCV camera source is not enabled in this build. "
                    "Install OpenCV development packages and reconfigure.\n";
     } else {
@@ -419,12 +423,12 @@ int main(int argc, char *argv[]) {
   if (options.faceDetectorName == "noop") {
     faceDetector = std::make_unique<lvk::tracker::NoopFaceDetector>();
   } else if (options.faceDetectorName == "opencv") {
+#if LVK_HAS_OPENCV_FACE_DETECTOR
     if (options.faceCascadePath.empty()) {
       std::cerr << "--face-detector opencv requires --face-cascade PATH.\n";
       return 1;
     }
 
-#if LVK_HAS_OPENCV
     auto openCvFaceDetector =
         std::make_unique<lvk::tracker::OpenCvFaceDetector>(
             options.faceCascadePath);
@@ -437,7 +441,7 @@ int main(int argc, char *argv[]) {
     faceDetector = std::move(openCvFaceDetector);
 #else
     std::cerr << "OpenCV face detector is not enabled in this build. "
-                 "Install OpenCV development packages with objdetect/imgproc "
+                 "Install OpenCV development packages with imgproc/objdetect "
                  "support and reconfigure.\n";
     return 1;
 #endif

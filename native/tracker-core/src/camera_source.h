@@ -3,11 +3,11 @@
 #include <memory>
 #include <string>
 
-#ifndef LVK_HAS_OPENCV
-#define LVK_HAS_OPENCV 0
+#ifndef LVK_HAS_OPENCV_IMAGE
+#define LVK_HAS_OPENCV_IMAGE 0
 #endif
 
-#if LVK_HAS_OPENCV
+#if LVK_HAS_OPENCV_IMAGE
 #include <opencv2/core/mat.hpp>
 #endif
 
@@ -19,7 +19,7 @@ struct CameraFrame {
   int width;
   int height;
   double nominalFps;
-#if LVK_HAS_OPENCV
+#if LVK_HAS_OPENCV_IMAGE
   cv::Mat image;
 #endif
 };

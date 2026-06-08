@@ -3,7 +3,7 @@
 namespace lvk::tracker {
 
 PreprocessedFrame NoopFramePreprocessor::process(const CameraFrame& frame) {
-#if LVK_HAS_OPENCV
+#if LVK_HAS_OPENCV_IMAGE
   return PreprocessedFrame{
       frame,
       frame.width,
