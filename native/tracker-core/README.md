@@ -33,6 +33,16 @@ For development flows that need progressive dummy output, add `--realtime` to pa
 
 Without `--realtime`, the executable preserves the default fast deterministic output behavior.
 
+To inspect the current local dummy camera source state without changing stdout, add `--log-camera-status`:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --frames 10 --log-camera-status
+```
+
+Camera diagnostics are written to stderr only. Stdout remains newline-delimited MotionFrame JSON, so the desktop and WebSocket bridge pipelines can keep treating stdout as protocol data. The diagnostics report the dummy source name, running state, dimensions, nominal FPS, emitted frame count, and shutdown effective FPS.
+
+This is still a dummy metadata source; real camera capture is not implemented yet.
+
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 
 ```bash

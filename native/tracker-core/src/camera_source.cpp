@@ -28,6 +28,17 @@ void DummyCameraSource::stop() {
   isRunning_ = false;
 }
 
+CameraSourceDiagnostics DummyCameraSource::diagnostics() const {
+  return CameraSourceDiagnostics{
+      "dummy-camera-source",
+      isRunning_,
+      width_,
+      height_,
+      nominalFps_,
+      nextSequenceNumber_,
+  };
+}
+
 bool DummyCameraSource::nextFrame(CameraFrame& frame) {
   if (!isRunning_) {
     return false;
