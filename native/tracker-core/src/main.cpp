@@ -5,16 +5,25 @@
 #include "motion_frame_writer.h"
 #include "tracker.h"
 
+#if LVK_HAS_OPENCV_FACE_DETECTOR
+#include "opencv_face_detector.h"
+#endif
+
 #include <chrono>
 #include <csignal>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 
-#ifndef LVK_HAS_OPENCV
-#define LVK_HAS_OPENCV 0
+#ifndef LVK_HAS_OPENCV_CAMERA
+#define LVK_HAS_OPENCV_CAMERA 0
+#endif
+
+#ifndef LVK_HAS_OPENCV_FACE_DETECTOR
+#define LVK_HAS_OPENCV_FACE_DETECTOR 0
 #endif
 
 namespace {
@@ -37,6 +46,8 @@ struct TrackerOptions {
   bool logCameraStatus = false;
   int cameraStatusInterval = 0;
   lvk::tracker::CameraSourceOptions camera;
+  std::string faceDetectorName = "noop";
+  std::string faceCascadePath;
 };
 
 bool parseFrameCount(const std::string &value, int &frameCount) {
@@ -117,7 +128,8 @@ void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
             "[--log-camera-status] [--camera-status-interval N] "
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
-            "[--camera-height N] [--camera-fps N]\n";
+            "[--camera-height N] [--camera-fps N] "
+            "[--face-detector noop|opencv] [--face-cascade PATH]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -135,6 +147,8 @@ void printUsage(std::ostream &output) {
          << kMaxCameraHeight << ".\n";
   output << "--camera-fps N must be between " << kMinCameraFps << " and "
          << kMaxCameraFps << ".\n";
+  output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
+  output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
 }
 
 void handleStopSignal(int) {
@@ -323,6 +337,39 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       continue;
     }
 
+
+    if (argument == "--face-detector") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --face-detector.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      const std::string faceDetectorName = argv[argIndex + 1];
+      if (faceDetectorName != "noop" && faceDetectorName != "opencv") {
+        std::cerr << "Unsupported face detector: " << faceDetectorName
+                  << ". Supported values are 'noop' and 'opencv'.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.faceDetectorName = faceDetectorName;
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--face-cascade") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --face-cascade.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.faceCascadePath = argv[argIndex + 1];
+      ++argIndex;
+      continue;
+    }
+
     std::cerr << "Unknown argument: " << argument << "\n";
     printUsage(std::cerr);
     return false;
@@ -362,7 +409,7 @@ int main(int argc, char *argv[]) {
 
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);
   if (!cameraSource) {
-    if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV) {
+    if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV_CAMERA) {
       std::cerr << "OpenCV camera source is not enabled in this build. "
                    "Install OpenCV development packages and reconfigure.\n";
     } else {
@@ -372,11 +419,38 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  std::unique_ptr<lvk::tracker::FaceDetector> faceDetector;
+  if (options.faceDetectorName == "noop") {
+    faceDetector = std::make_unique<lvk::tracker::NoopFaceDetector>();
+  } else if (options.faceDetectorName == "opencv") {
+#if LVK_HAS_OPENCV_FACE_DETECTOR
+    if (options.faceCascadePath.empty()) {
+      std::cerr << "--face-detector opencv requires --face-cascade PATH.\n";
+      return 1;
+    }
+
+    auto openCvFaceDetector =
+        std::make_unique<lvk::tracker::OpenCvFaceDetector>(
+            options.faceCascadePath);
+    if (!openCvFaceDetector->isReady()) {
+      std::cerr << "Failed to load OpenCV face cascade: "
+                << options.faceCascadePath << "\n";
+      return 1;
+    }
+
+    faceDetector = std::move(openCvFaceDetector);
+#else
+    std::cerr << "OpenCV face detector is not enabled in this build. "
+                 "Install OpenCV development packages with imgproc/objdetect "
+                 "support and reconfigure.\n";
+    return 1;
+#endif
+  }
+
   lvk::tracker::NoopFramePreprocessor framePreprocessor;
-  lvk::tracker::NoopFaceDetector faceDetector;
   lvk::tracker::DummyMotionTracker motionTracker;
   lvk::tracker::FaceTrackingPipeline trackingPipeline(
-      faceDetector, motionTracker);
+      *faceDetector, motionTracker);
   if (!cameraSource->start()) {
     std::cerr << "Failed to start local camera source: "
               << options.camera.sourceName << ".\n";

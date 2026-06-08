@@ -136,6 +136,7 @@ bool OpenCvCameraSource::nextFrame(CameraFrame& frame) {
       width_,
       height_,
       effectiveFps_,
+      frameMat,
   };
 
   ++emittedFrameCount_;

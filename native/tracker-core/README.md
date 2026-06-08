@@ -11,7 +11,7 @@ cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
 ```
 
-The dummy camera source builds without OpenCV. The optional OpenCV camera source is enabled only when CMake can discover an OpenCV development package with `find_package(OpenCV QUIET COMPONENTS core videoio)`. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+The dummy camera source builds without OpenCV. Optional OpenCV camera and face-detector paths are gated separately: camera capture is enabled when CMake finds OpenCV `core` + `videoio`, while the face detector is enabled when CMake finds OpenCV `core` + `imgproc` + `objdetect`. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## Run
 
@@ -59,7 +59,7 @@ For example:
 ./native/tracker-core/build/lvk-tracker-core --frames 3 --camera-source dummy --camera-width 1280 --camera-height 720 --camera-fps 30 --log-camera-status
 ```
 
-The dummy source is still a metadata-only source with dummy tracking values. The OpenCV source reads local webcam frames into Native Core memory, converts only frame metadata into the existing `CameraFrame`, and still uses dummy tracking values. Real face detection, landmark extraction, and VTuber tracking are not implemented yet.
+The dummy source is still a metadata-only source with dummy tracking values. The OpenCV source reads local webcam frames into Native Core memory. The default face detector remains `noop`, so dummy tracking values are preserved unless the optional OpenCV face detector is explicitly selected with an external cascade path. Landmark extraction and full VTuber tracking are not implemented yet.
 
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 
@@ -97,7 +97,34 @@ To choose a camera device explicitly:
 ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60
 ```
 
-This is local camera capture only. `DummyMotionTracker` still provides MotionFrame values, and the MotionFrame schema is unchanged. If OpenCV is not found at configure time, dummy builds still succeed and requesting `--camera-source opencv` fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+This is local camera capture only unless `--face-detector opencv` is explicitly selected. The default detector remains `noop`, no-face frames still fall back to `DummyMotionTracker`, and the MotionFrame schema is unchanged. If the required OpenCV components are not found at configure time, dummy builds still succeed; requesting `--camera-source opencv` without camera support or `--face-detector opencv` without detector support fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+
+## OpenCV face detector
+
+`--face-detector opencv` enables a minimal Native Core-only OpenCV Haar-cascade detector behind the generic `FaceDetector` interface. It is optional and never selected by default; `--face-detector noop` remains the default path and preserves the existing dummy fallback output.
+
+The OpenCV detector requires an external cascade XML file supplied by the user:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --frames 3
+```
+
+Environment-dependent OpenCV example:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --camera-source opencv \
+  --camera-index 0 \
+  --face-detector opencv \
+  --face-cascade /path/to/haarcascade_frontalface_default.xml \
+  --continuous \
+  --realtime \
+  --log-camera-status
+```
+
+Cascade XML files are not bundled or downloaded by LVK. If `--face-detector opencv` is requested without `--face-cascade`, or if the cascade cannot be loaded, startup fails clearly instead of silently falling back to `noop`.
+
+This detector maps only coarse face bounds and face position through the existing `createTrackingSampleFromFaceDetection(...)` layer. Confidence is currently `1.0` for a selected detected face and `0.0` for no face. Landmarks, head pose, gaze, mouth, expression, and full face tracking are not implemented or faked. When no face is detected, `FaceTrackingPipeline` keeps the current fallback dummy tracker behavior for now. Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, disk, telemetry, analytics, cloud upload, or external servers.
 
 ## Development WebSocket bridge
 
@@ -125,21 +152,21 @@ This Desktop Shell control is development-only. OpenCV mode is local capture-onl
 
 ## Camera input status
 
-Native camera input supports a local dummy abstraction and, when enabled at configure time, a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. Its diagnostics use `cameraIndex=-1`, `backendName=dummy`, and `failedReadCount=0`. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Its diagnostics include the requested camera index, OpenCV backend name when available, and a count of failed or empty `VideoCapture::read` attempts. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
+Native camera input supports a local dummy abstraction and, when enabled at configure time, a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. Its diagnostics use `cameraIndex=-1`, `backendName=dummy`, and `failedReadCount=0`. `OpenCvCameraSource` reads local webcam frames through OpenCV and keeps optional image data inside Native Core memory so native-only preprocessing or detection seams can inspect it. Its diagnostics include the requested camera index, OpenCV backend name when available, and a count of failed or empty `VideoCapture::read` attempts. Raw image output, telemetry, upload, and external network behavior are intentionally not implemented.
 
 ## Frame preprocessing boundary
 
-The native pipeline now includes a small `FramePreprocessor` seam between `CameraSource` and `MotionTracker`. The current implementation uses `NoopFramePreprocessor`, which returns metadata matching the original `CameraFrame` dimensions and does not allocate or expose image buffers.
+The native pipeline now includes a small `FramePreprocessor` seam between `CameraSource` and `MotionTracker`. The current implementation uses `NoopFramePreprocessor`, which returns metadata matching the original `CameraFrame` dimensions and, in OpenCV-enabled native builds, passes along optional Native Core-only image data without exposing it outside the native process.
 
-This boundary intentionally does not resize, crop, color-convert, grayscale-convert, equalize, detect faces, extract landmarks, or produce real VTuber tracking values yet. Raw camera frames remain local to Native Core and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Future local preprocessing should live behind this Native Core abstraction after the pipeline boundary is stable; real-device camera validation is intentionally deferred until then.
+This boundary intentionally does not resize, crop, color-convert, grayscale-convert, equalize, extract landmarks, or produce real VTuber tracking values yet. Raw camera frames remain local to Native Core and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Future local preprocessing should live behind this Native Core abstraction after the pipeline boundary is stable; real-device camera validation is intentionally deferred until then.
 
 ## Face tracking pipeline boundary
 
-The native pipeline now includes a generic `FaceDetector` interface and a `FaceTrackingPipeline` seam on top of the existing `FramePreprocessor` boundary. The current implementation uses `NoopFaceDetector`, which returns no detected face, zero confidence, and zeroed bounds without inspecting image data or using OpenCV face-detection modules.
+The native pipeline now includes a generic `FaceDetector` interface and a `FaceTrackingPipeline` seam on top of the existing `FramePreprocessor` boundary. The default implementation uses `NoopFaceDetector`, which returns no detected face, zero confidence, and zeroed bounds without inspecting image data or using OpenCV face-detection modules. OpenCV-enabled native builds also include an explicit `--face-detector opencv --face-cascade PATH` path for minimal Haar-cascade face detection.
 
 `FaceTrackingPipeline` now maps positive `FaceDetectionResult` metadata into safe `TrackingSample` values through a small factory layer. The mapper clamps confidence, derives only a coarse normalized face position from detector bounds, and keeps rotation, eyes, gaze, and mouth values neutral until local landmarks exist. A safe lost-sample helper also exists for future no-face handling.
 
-The default `NoopFaceDetector` still returns no face, so the pipeline keeps falling back to `DummyMotionTracker` for the same deterministic MotionFrame values as before. No real face detection, OpenCV face detection, landmark extraction, lost-state policy change, or real VTuber tracking values are implemented yet. OpenCV capture may exist for local Native Core-only camera input, but OpenCV face detection is intentionally not implemented in this phase.
+The default `NoopFaceDetector` still returns no face, so the pipeline keeps falling back to `DummyMotionTracker` for the same deterministic MotionFrame values as before. The optional OpenCV detector can produce coarse face bounds only when explicitly requested and configured with a user-provided cascade. Landmark extraction, lost-state policy changes, and real VTuber tracking values are not implemented yet.
 
 Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Local real-device validation remains deferred until the camera, preprocessing, and tracking boundaries are stable.
 
@@ -162,8 +189,8 @@ MotionFrame JSON serialization is handled by the native MotionFrame writer modul
 
 ## Out of scope
 
-- Real face detection or landmark extraction.
-- Real VTuber tracking values.
+- Full face tracking, landmark extraction, head pose, gaze, mouth, or expression tracking.
+- Real VTuber tracking values beyond optional coarse OpenCV face bounds.
 - MediaPipe, ONNX Runtime, or other face-tracking dependencies.
 - Production native WebSocket or localhost transport.
 - Production Electron/native transport packaging.

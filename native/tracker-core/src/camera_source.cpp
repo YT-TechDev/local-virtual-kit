@@ -1,10 +1,14 @@
 #include "camera_source.h"
 
-#ifndef LVK_HAS_OPENCV
-#define LVK_HAS_OPENCV 0
+#ifndef LVK_HAS_OPENCV_CAMERA
+#define LVK_HAS_OPENCV_CAMERA 0
 #endif
 
-#if LVK_HAS_OPENCV
+#ifndef LVK_HAS_OPENCV_IMAGE
+#define LVK_HAS_OPENCV_IMAGE 0
+#endif
+
+#if LVK_HAS_OPENCV_CAMERA
 #include "opencv_camera_source.h"
 #endif
 
@@ -28,7 +32,7 @@ std::unique_ptr<CameraSource> createCameraSource(
   }
 
   if (options.sourceName == "opencv") {
-#if LVK_HAS_OPENCV
+#if LVK_HAS_OPENCV_CAMERA
     return std::make_unique<OpenCvCameraSource>(
         options.cameraIndex, options.width, options.height, options.nominalFps);
 #else
@@ -74,6 +78,16 @@ bool DummyCameraSource::nextFrame(CameraFrame& frame) {
     return false;
   }
 
+#if LVK_HAS_OPENCV_IMAGE
+  frame = CameraFrame{
+      nextSequenceNumber_,
+      timestampForSequence(nextSequenceNumber_, nominalFps_),
+      width_,
+      height_,
+      nominalFps_,
+      cv::Mat{},
+  };
+#else
   frame = CameraFrame{
       nextSequenceNumber_,
       timestampForSequence(nextSequenceNumber_, nominalFps_),
@@ -81,6 +95,7 @@ bool DummyCameraSource::nextFrame(CameraFrame& frame) {
       height_,
       nominalFps_,
   };
+#endif
 
   ++nextSequenceNumber_;
   return true;
