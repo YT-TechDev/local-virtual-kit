@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -13,6 +14,8 @@ namespace {
 
 constexpr int kDefaultFrameCount = 120;
 constexpr int kMaxFrameCount = 100000;
+
+volatile std::sig_atomic_t gShouldStop = 0;
 
 struct Vector2 {
   double x;
@@ -46,6 +49,7 @@ struct TrackerOptions {
   int frameCount = kDefaultFrameCount;
   bool continuous = false;
   bool realtime = false;
+  bool logCameraStatus = false;
 };
 
 double clamp(double value, double minValue, double maxValue) {
@@ -74,10 +78,38 @@ bool parseFrameCount(const std::string &value, int &frameCount) {
 }
 
 void printUsage(std::ostream &output) {
-  output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime]\n";
+  output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
+            "[--log-camera-status]\n";
   output << "N must be an integer between 0 and " << kMaxFrameCount << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
   output << "--realtime emits frames at the dummy camera nominal FPS.\n";
+  output << "--log-camera-status writes local dummy camera diagnostics to "
+            "stderr.\n";
+}
+
+void handleStopSignal(int) {
+  gShouldStop = 1;
+}
+
+void writeCameraStatus(
+    std::ostream &output,
+    const std::string &label,
+    const lvk::tracker::CameraSourceDiagnostics &diagnostics,
+    double effectiveFps = 0.0) {
+  output << "[camera] " << label << ": "
+         << "sourceName=" << diagnostics.sourceName << ", "
+         << "isRunning=" << (diagnostics.isRunning ? "true" : "false")
+         << ", "
+         << "width=" << diagnostics.width << ", "
+         << "height=" << diagnostics.height << ", "
+         << "nominalFps=" << diagnostics.nominalFps << ", "
+         << "emittedFrameCount=" << diagnostics.emittedFrameCount;
+
+  if (effectiveFps > 0.0) {
+    output << ", effectiveFps=" << effectiveFps;
+  }
+
+  output << "\n";
 }
 
 bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
@@ -91,6 +123,11 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
 
     if (argument == "--continuous") {
       options.continuous = true;
+      continue;
+    }
+
+    if (argument == "--log-camera-status") {
+      options.logCameraStatus = true;
       continue;
     }
 
@@ -193,6 +230,9 @@ void writeMotionFrameJson(std::ostream &output,
 } // namespace
 
 int main(int argc, char *argv[]) {
+  std::signal(SIGINT, handleStopSignal);
+  std::signal(SIGTERM, handleStopSignal);
+
   if (argc == 2 &&
       (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
     printUsage(std::cout);
@@ -210,10 +250,17 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  if (options.logCameraStatus) {
+    writeCameraStatus(std::cerr, "startup", cameraSource.diagnostics());
+  }
+
   auto nextFrameTime = std::chrono::steady_clock::now();
+  const auto startedAt = std::chrono::steady_clock::now();
 
   for (long long frameIndex = 0;
-       options.continuous || frameIndex < options.frameCount; ++frameIndex) {
+       gShouldStop == 0 &&
+       (options.continuous || frameIndex < options.frameCount);
+       ++frameIndex) {
     lvk::tracker::CameraFrame cameraFrame{};
     if (!cameraSource.nextFrame(cameraFrame)) {
       std::cerr << "Local dummy camera source stopped before all frames were "
@@ -233,7 +280,20 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  const auto stoppedAt = std::chrono::steady_clock::now();
   cameraSource.stop();
+
+  if (options.logCameraStatus) {
+    const auto diagnostics = cameraSource.diagnostics();
+    const double elapsedSeconds =
+        std::chrono::duration<double>(stoppedAt - startedAt).count();
+    const double effectiveFps = elapsedSeconds > 0.0
+                                    ? static_cast<double>(
+                                          diagnostics.emittedFrameCount) /
+                                          elapsedSeconds
+                                    : 0.0;
+    writeCameraStatus(std::cerr, "shutdown", diagnostics, effectiveFps);
+  }
 
   return 0;
 }
