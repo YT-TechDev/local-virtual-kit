@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(lvk_tracker_core LANGUAGES CXX)
 
-find_package(OpenCV QUIET COMPONENTS core videoio)
+find_package(OpenCV QUIET COMPONENTS core videoio imgproc objdetect)
 
 add_executable(lvk-tracker-core
   src/camera_source.cpp
@@ -18,7 +18,10 @@ add_executable(lvk-tracker-core
 target_compile_features(lvk-tracker-core PRIVATE cxx_std_17)
 
 if(OpenCV_FOUND)
-  target_sources(lvk-tracker-core PRIVATE src/opencv_camera_source.cpp)
+  target_sources(lvk-tracker-core PRIVATE
+    src/opencv_camera_source.cpp
+    src/opencv_face_detector.cpp
+  )
   target_include_directories(lvk-tracker-core PRIVATE ${OpenCV_INCLUDE_DIRS})
   target_link_libraries(lvk-tracker-core PRIVATE ${OpenCV_LIBS})
   target_compile_definitions(lvk-tracker-core PRIVATE LVK_HAS_OPENCV=1)
