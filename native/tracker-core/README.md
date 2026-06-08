@@ -101,30 +101,71 @@ To choose a camera device explicitly:
 
 This is local camera capture only unless `--face-detector opencv` is explicitly selected. The default detector remains `noop`, no-face frames still fall back to `DummyMotionTracker`, and the MotionFrame schema is unchanged. If the required OpenCV components are not found at configure time, dummy builds still succeed; requesting `--camera-source opencv` without camera support or `--face-detector opencv` without detector support fails clearly at runtime. Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
-## OpenCV face detector
+## OpenCV face detector local validation
 
-`--face-detector opencv` enables a minimal Native Core-only OpenCV Haar-cascade detector behind the generic `FaceDetector` interface. It is optional and never selected by default; `--face-detector noop` remains the default path and preserves the existing dummy fallback output.
+`--face-detector opencv --face-cascade PATH` enables a minimal Native Core-only OpenCV Haar-cascade detector behind the generic `FaceDetector` interface. The detector is opt-in; `--face-detector noop` remains the default path and preserves the existing dummy fallback output.
 
-The OpenCV detector requires an external cascade XML file supplied by the user:
+`--face-cascade PATH` points to a local Haar cascade XML file. LVK does not bundle cascade XML files, does not download them, and does not print or send cascade file contents anywhere. The user must provide a path from their local OpenCV installation or another trusted local source. The path is passed only to Native Core so OpenCV can load the classifier.
 
-```bash
-./native/tracker-core/build/lvk-tracker-core --face-detector opencv --face-cascade /path/to/haarcascade_frontalface_default.xml --frames 3
+Cascade files are intentionally not bundled so the repository stays small, model/data redistribution assumptions remain explicit, the first detector implementation stays local and opt-in, and local validation environments remain transparent.
+
+Environment-dependent cascade path examples include:
+
+```text
+/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml
+/usr/local/share/opencv4/haarcascades/haarcascade_frontalface_default.xml
+C:\path\to\opencv\sources\data\haarcascades\haarcascade_frontalface_default.xml
 ```
 
-Opt-in face diagnostics example with the default no-op detector:
+These examples are not guaranteed to exist. Locate the cascade XML file in your local OpenCV installation or another trusted local source before running the OpenCV detector. Do not add cascade files to this repository.
+
+For broader adoption context, see `docs/OPENCV_ADOPTION.md`.
+
+### Native CLI validation sequence
+
+Use this safe progression for local validation. These commands do not download cascade files and should not be treated as proof of real-device validation unless they are actually run on the target machine.
+
+1. Confirm the default dummy path still works:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --frames 3
+```
+
+2. Confirm the explicit noop face detector path:
 
 ```bash
 ./native/tracker-core/build/lvk-tracker-core \
   --camera-source dummy \
   --face-detector noop \
-  --frames 5 \
-  --log-face-status \
-  --face-status-interval 2
+  --frames 3
 ```
 
-Face diagnostics are one-line stderr messages containing safe metadata only: detector name, whether a face was detected, confidence, detector bounds, and whether fallback dummy tracking was used. They do not change stdout, which remains MotionFrame JSON only. Raw frames remain local to Native Core and are never logged or written.
+3. Confirm the expected OpenCV detector failure without a cascade path:
 
-Environment-dependent OpenCV example:
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --face-detector opencv \
+  --frames 3
+```
+
+This should fail clearly because `--face-detector opencv` requires `--face-cascade PATH`. That failure is expected and useful because it confirms the detector does not silently fall back to `noop` when required local detector data is missing.
+
+4. Run the OpenCV camera and OpenCV face detector with a local cascade path:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --camera-source opencv \
+  --camera-index 0 \
+  --face-detector opencv \
+  --face-cascade /path/to/haarcascade_frontalface_default.xml \
+  --frames 60 \
+  --realtime \
+  --log-camera-status \
+  --log-face-status \
+  --face-status-interval 10
+```
+
+5. Run a continuous local test:
 
 ```bash
 ./native/tracker-core/build/lvk-tracker-core \
@@ -135,13 +176,77 @@ Environment-dependent OpenCV example:
   --continuous \
   --realtime \
   --log-camera-status \
+  --camera-status-interval 60 \
   --log-face-status \
   --face-status-interval 60
 ```
 
-Cascade XML files are not bundled or downloaded by LVK. If `--face-detector opencv` is requested without `--face-cascade`, or if the cascade cannot be loaded, startup fails clearly instead of silently falling back to `noop`.
+Stop continuous runs with Ctrl+C. Camera and face diagnostics go to stderr. MotionFrame JSON remains newline-delimited stdout only, so do not redirect stdout into diagnostic logs unless you intentionally want MotionFrame JSON logs.
 
-This detector maps only coarse face bounds and face position through the existing `createTrackingSampleFromFaceDetection(...)` layer. Confidence is currently `1.0` for a selected detected face and `0.0` for no face. Landmarks, head pose, gaze, mouth, expression, and full face tracking are not implemented or faked. When no face is detected, `FaceTrackingPipeline` keeps the current fallback dummy tracker behavior for now. Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, disk, telemetry, analytics, cloud upload, or external servers. Face diagnostics expose metadata only and never include image data, `cv::Mat` contents, cascade contents, raw pixels, or frame buffers.
+### stdout and stderr separation
+
+- stdout: newline-delimited MotionFrame JSON only.
+- stderr: camera diagnostics and face diagnostics only.
+
+This separation allows stdout to be piped safely to the development MotionFrame bridge while diagnostics remain visible on stderr:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --camera-source opencv \
+  --camera-index 0 \
+  --face-detector opencv \
+  --face-cascade /path/to/haarcascade_frontalface_default.xml \
+  --continuous \
+  --realtime \
+  --log-camera-status \
+  --camera-status-interval 60 \
+  --log-face-status \
+  --face-status-interval 60 \
+  | node tools/motion-ws-bridge.mjs
+```
+
+Only MotionFrame JSON is piped to the bridge. Diagnostics still appear on stderr. Raw frames are not piped.
+
+### Common failure cases
+
+- OpenCV was not found at CMake configure time.
+- The OpenCV build is missing required modules such as `videoio`, `imgproc`, or `objdetect`.
+- `--face-detector opencv` was used without `--face-cascade`.
+- The cascade path has a typo or points to a missing/unreadable file.
+- The camera index is wrong.
+- Camera permission is denied by the OS.
+- WSL cannot access the host webcam directly.
+- The camera opens but frame reads fail.
+- No face is detected in the camera frame.
+- Diagnostics are enabled but the interval is too high for a short run.
+
+### Local-first privacy note
+
+Camera frames remain local to Native Core memory. Raw frames are not written to disk, printed to stdout or stderr, exposed to Electron renderer, exposed to Web Preview, or sent to external servers. The cascade path is local-only and is used only by Native Core to load the local OpenCV classifier.
+
+### Current limitations
+
+- Haar cascade face detection is only a minimal first detector.
+- No landmarks.
+- No head pose.
+- No eye tracking.
+- No mouth or expression tracking.
+- No smoothing or calibration yet.
+- No-face currently falls back to `DummyMotionTracker`.
+- Desktop UI does not yet expose OpenCV face detector settings.
+- Desktop integration should happen after Native CLI local validation.
+
+### Local validation checklist
+
+- [ ] Build Native Core with OpenCV enabled.
+- [ ] Locate a local Haar cascade XML file.
+- [ ] Confirm default dummy output still works.
+- [ ] Confirm missing cascade path fails clearly.
+- [ ] Run OpenCV camera with `--log-camera-status`.
+- [ ] Run OpenCV face detector with `--log-face-status`.
+- [ ] Confirm MotionFrame JSON remains stdout-only.
+- [ ] Confirm diagnostics appear on stderr.
+- [ ] Confirm no raw frames are written or logged.
 
 ## Development WebSocket bridge
 
