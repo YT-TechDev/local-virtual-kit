@@ -52,6 +52,8 @@ The native CLI now makes the camera source and dummy source parameters explicit:
 - `--camera-height N` configures the requested camera source height. `N` must be an integer from 1 to 4320.
 - `--camera-fps N` configures the requested camera source nominal FPS. `N` must be between 1 and 240.
 - `--camera-status-interval N` writes periodic camera diagnostics every `N` emitted frames when `--log-camera-status` is also set. `N` must be between 1 and 100000. If omitted, diagnostics remain startup/shutdown only.
+- `--log-face-status` writes safe face detection diagnostics to stderr only. Stdout remains newline-delimited MotionFrame JSON only.
+- `--face-status-interval N` writes periodic face diagnostics every `N` emitted frames when `--log-face-status` is also set. `N` must be between 1 and 100000. If omitted, face diagnostics use the safe default interval of 60 emitted frames.
 
 For example:
 
@@ -59,7 +61,7 @@ For example:
 ./native/tracker-core/build/lvk-tracker-core --frames 3 --camera-source dummy --camera-width 1280 --camera-height 720 --camera-fps 30 --log-camera-status
 ```
 
-The dummy source is still a metadata-only source with dummy tracking values. The OpenCV source reads local webcam frames into Native Core memory. The default face detector remains `noop`, so dummy tracking values are preserved unless the optional OpenCV face detector is explicitly selected with an external cascade path. Landmark extraction and full VTuber tracking are not implemented yet.
+The dummy source is still a metadata-only source with dummy tracking values. The OpenCV source reads local webcam frames into Native Core memory. The default face detector remains `noop`, so dummy tracking values are preserved unless the optional OpenCV face detector is explicitly selected with an external cascade path. Face diagnostics never log raw frames, raw pixels, frame buffers, cascade file contents, or image dumps. Landmark extraction, head pose, gaze, mouth, expression, and full VTuber tracking are not implemented yet.
 
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 
@@ -106,8 +108,21 @@ This is local camera capture only unless `--face-detector opencv` is explicitly 
 The OpenCV detector requires an external cascade XML file supplied by the user:
 
 ```bash
-./native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --frames 3
+./native/tracker-core/build/lvk-tracker-core --face-detector opencv --face-cascade /path/to/haarcascade_frontalface_default.xml --frames 3
 ```
+
+Opt-in face diagnostics example with the default no-op detector:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --camera-source dummy \
+  --face-detector noop \
+  --frames 5 \
+  --log-face-status \
+  --face-status-interval 2
+```
+
+Face diagnostics are one-line stderr messages containing safe metadata only: detector name, whether a face was detected, confidence, detector bounds, and whether fallback dummy tracking was used. They do not change stdout, which remains MotionFrame JSON only. Raw frames remain local to Native Core and are never logged or written.
 
 Environment-dependent OpenCV example:
 
@@ -119,12 +134,14 @@ Environment-dependent OpenCV example:
   --face-cascade /path/to/haarcascade_frontalface_default.xml \
   --continuous \
   --realtime \
-  --log-camera-status
+  --log-camera-status \
+  --log-face-status \
+  --face-status-interval 60
 ```
 
 Cascade XML files are not bundled or downloaded by LVK. If `--face-detector opencv` is requested without `--face-cascade`, or if the cascade cannot be loaded, startup fails clearly instead of silently falling back to `noop`.
 
-This detector maps only coarse face bounds and face position through the existing `createTrackingSampleFromFaceDetection(...)` layer. Confidence is currently `1.0` for a selected detected face and `0.0` for no face. Landmarks, head pose, gaze, mouth, expression, and full face tracking are not implemented or faked. When no face is detected, `FaceTrackingPipeline` keeps the current fallback dummy tracker behavior for now. Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, disk, telemetry, analytics, cloud upload, or external servers.
+This detector maps only coarse face bounds and face position through the existing `createTrackingSampleFromFaceDetection(...)` layer. Confidence is currently `1.0` for a selected detected face and `0.0` for no face. Landmarks, head pose, gaze, mouth, expression, and full face tracking are not implemented or faked. When no face is detected, `FaceTrackingPipeline` keeps the current fallback dummy tracker behavior for now. Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, disk, telemetry, analytics, cloud upload, or external servers. Face diagnostics expose metadata only and never include image data, `cv::Mat` contents, cascade contents, raw pixels, or frame buffers.
 
 ## Development WebSocket bridge
 
@@ -168,7 +185,7 @@ The native pipeline now includes a generic `FaceDetector` interface and a `FaceT
 
 The default `NoopFaceDetector` still returns no face, so the pipeline keeps falling back to `DummyMotionTracker` for the same deterministic MotionFrame values as before. The optional OpenCV detector can produce coarse face bounds only when explicitly requested and configured with a user-provided cascade. Landmark extraction, lost-state policy changes, and real VTuber tracking values are not implemented yet.
 
-Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Local real-device validation remains deferred until the camera, preprocessing, and tracking boundaries are stable.
+Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Opt-in face diagnostics report safe metadata only and keep the MotionFrame schema unchanged. Local real-device validation remains deferred until the camera, preprocessing, and tracking boundaries are stable.
 
 ## Tracking abstraction
 

@@ -2,15 +2,34 @@
 
 #include "tracking_sample_factory.h"
 
+#include <utility>
+
 namespace lvk::tracker {
 
 FaceTrackingPipeline::FaceTrackingPipeline(
     FaceDetector& faceDetector,
-    MotionTracker& fallbackTracker)
-    : faceDetector_(faceDetector), fallbackTracker_(fallbackTracker) {}
+    MotionTracker& fallbackTracker,
+    std::string detectorName)
+    : faceDetector_(faceDetector),
+      fallbackTracker_(fallbackTracker),
+      detectorName_(std::move(detectorName)),
+      latestDiagnostics_{
+          detectorName_,
+          false,
+          0.0,
+          FaceBounds{0, 0, 0, 0},
+          false,
+      } {}
 
 TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
   const auto faceDetection = faceDetector_.detect(frame);
+  latestDiagnostics_ = FaceDetectionDiagnostics{
+      detectorName_,
+      faceDetection.hasFace,
+      faceDetection.confidence,
+      faceDetection.bounds,
+      !faceDetection.hasFace,
+  };
 
   if (faceDetection.hasFace) {
     return createTrackingSampleFromFaceDetection(frame, faceDetection);
@@ -19,6 +38,11 @@ TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
   // No-face policy is intentionally deferred; keep the current no-op detector
   // path on deterministic dummy MotionFrame output through the fallback tracker.
   return fallbackTracker_.track(frame);
+}
+
+const FaceDetectionDiagnostics&
+FaceTrackingPipeline::lastDetectionDiagnostics() const {
+  return latestDiagnostics_;
 }
 
 }  // namespace lvk::tracker

@@ -2,6 +2,8 @@
 
 #include "frame_preprocessor.h"
 
+#include <string>
+
 namespace lvk::tracker {
 
 struct FaceBounds {
@@ -15,6 +17,14 @@ struct FaceDetectionResult {
   bool hasFace;
   double confidence;
   FaceBounds bounds;
+};
+
+struct FaceDetectionDiagnostics {
+  std::string detectorName;
+  bool hasFace;
+  double confidence;
+  FaceBounds bounds;
+  bool usedFallbackTracking;
 };
 
 class FaceDetector {

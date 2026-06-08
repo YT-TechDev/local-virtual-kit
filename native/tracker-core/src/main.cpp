@@ -34,6 +34,8 @@ constexpr int kMaxCameraWidth = 7680;
 constexpr int kMaxCameraHeight = 4320;
 constexpr int kMaxCameraIndex = 16;
 constexpr int kMaxCameraStatusInterval = 100000;
+constexpr int kDefaultFaceStatusInterval = 60;
+constexpr int kMaxFaceStatusInterval = 100000;
 constexpr double kMinCameraFps = 1.0;
 constexpr double kMaxCameraFps = 240.0;
 
@@ -45,6 +47,8 @@ struct TrackerOptions {
   bool realtime = false;
   bool logCameraStatus = false;
   int cameraStatusInterval = 0;
+  bool logFaceStatus = false;
+  int faceStatusInterval = kDefaultFaceStatusInterval;
   lvk::tracker::CameraSourceOptions camera;
   std::string faceDetectorName = "noop";
   std::string faceCascadePath;
@@ -127,6 +131,7 @@ bool parseDoubleInRange(
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
             "[--log-camera-status] [--camera-status-interval N] "
+            "[--log-face-status] [--face-status-interval N] "
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH]\n";
@@ -138,6 +143,10 @@ void printUsage(std::ostream &output) {
   output << "--camera-status-interval N writes periodic camera diagnostics every N "
          << "emitted frames when --log-camera-status is set. N must be between 1 "
          << "and " << kMaxCameraStatusInterval << ".\n";
+  output << "--log-face-status writes safe face detection diagnostics to stderr.\n";
+  output << "--face-status-interval N writes periodic face diagnostics every N "
+         << "emitted frames when --log-face-status is set. N must be between 1 "
+         << "and " << kMaxFaceStatusInterval << ".\n";
   output << "--camera-source selects the camera source; supported values are 'dummy' and 'opencv'.\n";
   output << "--camera-index N must be an integer between 0 and "
          << kMaxCameraIndex << ".\n";
@@ -179,6 +188,23 @@ void writeCameraStatus(
   output << "\n";
 }
 
+void writeFaceStatus(
+    std::ostream &output,
+    const std::string &label,
+    const lvk::tracker::FaceDetectionDiagnostics &diagnostics) {
+  output << "[face] " << label << ": "
+         << "detectorName=" << diagnostics.detectorName << ", "
+         << "hasFace=" << (diagnostics.hasFace ? "true" : "false") << ", "
+         << "confidence=" << diagnostics.confidence << ", "
+         << "bounds={"
+         << "x=" << diagnostics.bounds.x << ", "
+         << "y=" << diagnostics.bounds.y << ", "
+         << "width=" << diagnostics.bounds.width << ", "
+         << "height=" << diagnostics.bounds.height << "}, "
+         << "usedFallbackTracking="
+         << (diagnostics.usedFallbackTracking ? "true" : "false") << "\n";
+}
+
 bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
   for (int argIndex = 1; argIndex < argc; ++argIndex) {
     const std::string argument = argv[argIndex];
@@ -195,6 +221,34 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
 
     if (argument == "--log-camera-status") {
       options.logCameraStatus = true;
+      continue;
+    }
+
+    if (argument == "--log-face-status") {
+      options.logFaceStatus = true;
+      continue;
+    }
+
+    if (argument == "--face-status-interval") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --face-status-interval.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int faceStatusInterval = 0;
+      if (!parsePositiveIntegerInRange(
+              argv[argIndex + 1],
+              kMaxFaceStatusInterval,
+              faceStatusInterval)) {
+        std::cerr << "Invalid value for --face-status-interval: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.faceStatusInterval = faceStatusInterval;
+      ++argIndex;
       continue;
     }
 
@@ -450,7 +504,7 @@ int main(int argc, char *argv[]) {
   lvk::tracker::NoopFramePreprocessor framePreprocessor;
   lvk::tracker::DummyMotionTracker motionTracker;
   lvk::tracker::FaceTrackingPipeline trackingPipeline(
-      *faceDetector, motionTracker);
+      *faceDetector, motionTracker, options.faceDetectorName);
   if (!cameraSource->start()) {
     std::cerr << "Failed to start local camera source: "
               << options.camera.sourceName << ".\n";
@@ -459,6 +513,11 @@ int main(int argc, char *argv[]) {
 
   if (options.logCameraStatus) {
     writeCameraStatus(std::cerr, "startup", cameraSource->diagnostics());
+  }
+
+  if (options.logFaceStatus) {
+    writeFaceStatus(
+        std::cerr, "startup", trackingPipeline.lastDetectionDiagnostics());
   }
 
   auto nextFrameTime = std::chrono::steady_clock::now();
@@ -483,6 +542,15 @@ int main(int argc, char *argv[]) {
     const auto preprocessedFrame = framePreprocessor.process(cameraFrame);
     lvk::tracker::writeMotionFrameJson(
         std::cout, trackingPipeline.track(preprocessedFrame));
+
+    if (options.logFaceStatus &&
+        cameraSource->diagnostics().emittedFrameCount %
+                options.faceStatusInterval ==
+            0) {
+      writeFaceStatus(
+          std::cerr, "periodic",
+          trackingPipeline.lastDetectionDiagnostics());
+    }
 
     if (options.logCameraStatus && options.cameraStatusInterval > 0 &&
         cameraSource->diagnostics().emittedFrameCount %
