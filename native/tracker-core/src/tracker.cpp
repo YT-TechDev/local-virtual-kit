@@ -23,6 +23,8 @@ TrackingSample DummyMotionTracker::track(const PreprocessedFrame &frame) {
 
   return TrackingSample{
       timestampMs,
+      TrackingStatus::Tracking,
+      1.0,
       Vector3{
           wave(0.0, 0.05, 0.8, seconds),
           wave(0.0, 0.04, 0.6, seconds),

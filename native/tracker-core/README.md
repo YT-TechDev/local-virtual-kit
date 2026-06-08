@@ -145,6 +145,8 @@ Raw frames remain local to Native Core memory and are not exposed to Electron, W
 
 Current native tracking is provided by `DummyMotionTracker`. It is a small replacement point between the camera frame source and MotionFrame JSON output, preserving the existing deterministic dummy values while keeping real face tracking out of scope for this skeleton.
 
+`TrackingSample` owns the native tracking status and confidence used by MotionFrame serialization. The current dummy tracker emits `TrackingStatus::Tracking` with confidence `1.0`; future local face detection or lost-state work can set `lost` or lower confidence without changing the MotionFrame writer shape.
+
 MotionFrame JSON serialization is handled by the native MotionFrame writer module, keeping stdout formatting separate from CLI parsing, camera source lifecycle, realtime pacing, and tracking/value estimation.
 
 ## Output policy
@@ -152,13 +154,13 @@ MotionFrame JSON serialization is handled by the native MotionFrame writer modul
 - Emits one JSON object per line.
 - Uses `schemaVersion: 1`.
 - Uses `source: "native"`.
-- Uses `tracking.status: "tracking"` and `tracking.confidence: 1`.
+- Uses tracking status and confidence from `TrackingSample`; current dummy output remains `tracking.status: "tracking"` and `tracking.confidence: 1`.
 - Emits the current `face.position`, `face.rotation`, `eyes`, and `mouth` MotionFrame fields.
 - Does not emit stale fields such as `face.detected`, `head.*`, `eyes.blink`, or `emotion`.
 
 ## Out of scope
 
-- Face detection or landmark extraction.
+- Real face detection or landmark extraction.
 - Real VTuber tracking values.
 - MediaPipe, ONNX Runtime, or other face-tracking dependencies.
 - Production native WebSocket or localhost transport.

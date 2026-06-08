@@ -21,8 +21,16 @@ struct EulerRotation {
   double roll;
 };
 
+enum class TrackingStatus {
+  NotStarted,
+  Tracking,
+  Lost,
+};
+
 struct TrackingSample {
   long long timestampMs;
+  TrackingStatus status;
+  double confidence;
   Vector3 facePosition;
   EulerRotation faceRotation;
   double leftEyeOpen;
