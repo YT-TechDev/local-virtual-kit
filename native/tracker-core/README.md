@@ -88,6 +88,8 @@ Native camera input is currently a local dummy abstraction. `DummyCameraSource` 
 
 Current native tracking is provided by `DummyMotionTracker`. It is a small replacement point between the camera frame source and MotionFrame JSON output, preserving the existing deterministic dummy values while keeping real face tracking out of scope for this skeleton.
 
+MotionFrame JSON serialization is handled by the native MotionFrame writer module, keeping stdout formatting separate from CLI parsing, camera source lifecycle, realtime pacing, and tracking/value estimation.
+
 ## Output policy
 
 - Emits one JSON object per line.
