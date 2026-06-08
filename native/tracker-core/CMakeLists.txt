@@ -5,6 +5,7 @@ project(lvk_tracker_core LANGUAGES CXX)
 add_executable(lvk-tracker-core
   src/camera_source.cpp
   src/main.cpp
+  src/motion_frame_writer.cpp
   src/tracker.cpp
 )
 

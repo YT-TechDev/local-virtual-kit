@@ -1,11 +1,11 @@
 #include "camera_source.h"
+#include "motion_frame_writer.h"
 #include "tracker.h"
 
 #include <chrono>
 #include <csignal>
 #include <cmath>
 #include <cstdlib>
-#include <iomanip>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -262,34 +262,6 @@ void paceNextFrame(std::chrono::steady_clock::time_point &nextFrameTime,
   std::this_thread::sleep_until(nextFrameTime);
 }
 
-void writeMotionFrameJson(std::ostream &output,
-                          const lvk::tracker::TrackingSample &sample) {
-  output << std::fixed << std::setprecision(6);
-  output << "{"
-         << "\"schemaVersion\":1,"
-         << "\"timestampMs\":" << sample.timestampMs << ","
-         << "\"source\":\"native\","
-         << "\"tracking\":{\"status\":\"tracking\",\"confidence\":1},"
-         << "\"face\":{"
-         << "\"position\":{"
-         << "\"x\":" << sample.facePosition.x << ","
-         << "\"y\":" << sample.facePosition.y << ","
-         << "\"z\":" << sample.facePosition.z << "},"
-         << "\"rotation\":{"
-         << "\"pitch\":" << sample.faceRotation.pitch << ","
-         << "\"yaw\":" << sample.faceRotation.yaw << ","
-         << "\"roll\":" << sample.faceRotation.roll << "}},"
-         << "\"eyes\":{"
-         << "\"leftOpen\":" << sample.leftEyeOpen << ","
-         << "\"rightOpen\":" << sample.rightEyeOpen << ","
-         << "\"gaze\":{"
-         << "\"x\":" << sample.gaze.x << ","
-         << "\"y\":" << sample.gaze.y << "}},"
-         << "\"mouth\":{"
-         << "\"open\":" << sample.mouthOpen << ","
-         << "\"smile\":" << sample.mouthSmile << "}}\n";
-}
-
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -340,7 +312,8 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
-    writeMotionFrameJson(std::cout, motionTracker.track(cameraFrame));
+    lvk::tracker::writeMotionFrameJson(
+        std::cout, motionTracker.track(cameraFrame));
 
     if (options.realtime) {
       std::cout.flush();
