@@ -46,7 +46,7 @@ The native CLI now makes the camera source and dummy source parameters explicit:
 - `--camera-source dummy` selects the dummy camera source. `dummy` is the only supported source for now.
 - `--camera-width N` configures the dummy source width. `N` must be an integer from 1 to 7680.
 - `--camera-height N` configures the dummy source height. `N` must be an integer from 1 to 4320.
-- `--camera-fps N` configures the dummy source nominal FPS. `N` must be greater than 0 and up to 240.
+- `--camera-fps N` configures the dummy source nominal FPS. `N` must be between 1 and 240.
 
 For example:
 

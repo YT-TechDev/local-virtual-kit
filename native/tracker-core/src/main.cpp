@@ -16,6 +16,7 @@ constexpr int kDefaultFrameCount = 120;
 constexpr int kMaxFrameCount = 100000;
 constexpr int kMaxCameraWidth = 7680;
 constexpr int kMaxCameraHeight = 4320;
+constexpr double kMinCameraFps = 1.0;
 constexpr double kMaxCameraFps = 240.0;
 
 volatile std::sig_atomic_t gShouldStop = 0;
@@ -63,8 +64,9 @@ bool parsePositiveIntegerInRange(
   return true;
 }
 
-bool parsePositiveDoubleInRange(
+bool parseDoubleInRange(
     const std::string &value,
+    double minValue,
     double maxValue,
     double &parsedValue) {
   char *end = nullptr;
@@ -74,7 +76,7 @@ bool parsePositiveDoubleInRange(
     return false;
   }
 
-  if (!std::isfinite(parsed) || parsed <= 0.0 || parsed > maxValue) {
+  if (!std::isfinite(parsed) || parsed < minValue || parsed > maxValue) {
     return false;
   }
 
@@ -97,8 +99,8 @@ void printUsage(std::ostream &output) {
          << kMaxCameraWidth << ".\n";
   output << "--camera-height N must be an integer between 1 and "
          << kMaxCameraHeight << ".\n";
-  output << "--camera-fps N must be greater than 0 and up to " << kMaxCameraFps
-         << ".\n";
+  output << "--camera-fps N must be between " << kMinCameraFps << " and "
+         << kMaxCameraFps << ".\n";
 }
 
 void handleStopSignal(int) {
@@ -227,8 +229,8 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       }
 
       double nominalFps = 0.0;
-      if (!parsePositiveDoubleInRange(
-              argv[argIndex + 1], kMaxCameraFps, nominalFps)) {
+      if (!parseDoubleInRange(
+              argv[argIndex + 1], kMinCameraFps, kMaxCameraFps, nominalFps)) {
         std::cerr << "Invalid value for --camera-fps: " << argv[argIndex + 1]
                   << "\n";
         printUsage(std::cerr);
