@@ -12,6 +12,7 @@ add_executable(lvk-tracker-core
   src/main.cpp
   src/motion_frame_writer.cpp
   src/tracker.cpp
+  src/tracking_sample_factory.cpp
 )
 
 target_compile_features(lvk-tracker-core PRIVATE cxx_std_17)

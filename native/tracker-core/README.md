@@ -137,7 +137,9 @@ This boundary intentionally does not resize, crop, color-convert, grayscale-conv
 
 The native pipeline now includes a generic `FaceDetector` interface and a `FaceTrackingPipeline` seam on top of the existing `FramePreprocessor` boundary. The current implementation uses `NoopFaceDetector`, which returns no detected face, zero confidence, and zeroed bounds without inspecting image data or using OpenCV face-detection modules.
 
-`FaceTrackingPipeline` currently calls the detector so the boundary is exercised, then falls back to `DummyMotionTracker` for the same deterministic MotionFrame values as before. No real face detection, OpenCV face detection, landmark extraction, lost-state decisions, or real VTuber tracking values are implemented yet. OpenCV capture may exist for local Native Core-only camera input, but OpenCV face detection is intentionally not implemented in this phase.
+`FaceTrackingPipeline` now maps positive `FaceDetectionResult` metadata into safe `TrackingSample` values through a small factory layer. The mapper clamps confidence, derives only a coarse normalized face position from detector bounds, and keeps rotation, eyes, gaze, and mouth values neutral until local landmarks exist. A safe lost-sample helper also exists for future no-face handling.
+
+The default `NoopFaceDetector` still returns no face, so the pipeline keeps falling back to `DummyMotionTracker` for the same deterministic MotionFrame values as before. No real face detection, OpenCV face detection, landmark extraction, lost-state policy change, or real VTuber tracking values are implemented yet. OpenCV capture may exist for local Native Core-only camera input, but OpenCV face detection is intentionally not implemented in this phase.
 
 Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Local real-device validation remains deferred until the camera, preprocessing, and tracking boundaries are stable.
 
