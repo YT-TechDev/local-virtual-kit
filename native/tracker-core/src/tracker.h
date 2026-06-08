@@ -1,6 +1,6 @@
 #pragma once
 
-#include "camera_source.h"
+#include "frame_preprocessor.h"
 
 namespace lvk::tracker {
 
@@ -36,12 +36,12 @@ class MotionTracker {
 public:
   virtual ~MotionTracker() = default;
 
-  virtual TrackingSample track(const CameraFrame &frame) = 0;
+  virtual TrackingSample track(const PreprocessedFrame &frame) = 0;
 };
 
 class DummyMotionTracker final : public MotionTracker {
 public:
-  TrackingSample track(const CameraFrame &frame) override;
+  TrackingSample track(const PreprocessedFrame &frame) override;
 };
 
 } // namespace lvk::tracker

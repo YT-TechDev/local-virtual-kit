@@ -127,6 +127,12 @@ This Desktop Shell control is development-only. OpenCV mode is local capture-onl
 
 Native camera input supports a local dummy abstraction and, when enabled at configure time, a Native Core-only OpenCV camera source. `DummyCameraSource` creates synthetic frame metadata such as sequence number, timestamp, dimensions, and nominal FPS. Its diagnostics use `cameraIndex=-1`, `backendName=dummy`, and `failedReadCount=0`. `OpenCvCameraSource` reads local webcam frames through OpenCV and exposes only metadata to the existing tracker interface. Its diagnostics include the requested camera index, OpenCV backend name when available, and a count of failed or empty `VideoCapture::read` attempts. Raw image storage/output, telemetry, upload, and external network behavior are intentionally not implemented.
 
+## Frame preprocessing boundary
+
+The native pipeline now includes a small `FramePreprocessor` seam between `CameraSource` and `MotionTracker`. The current implementation uses `NoopFramePreprocessor`, which returns metadata matching the original `CameraFrame` dimensions and does not allocate or expose image buffers.
+
+This boundary intentionally does not resize, crop, color-convert, grayscale-convert, equalize, detect faces, extract landmarks, or produce real VTuber tracking values yet. Raw camera frames remain local to Native Core and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Future local preprocessing should live behind this Native Core abstraction after the pipeline boundary is stable; real-device camera validation is intentionally deferred until then.
+
 ## Tracking abstraction
 
 Current native tracking is provided by `DummyMotionTracker`. It is a small replacement point between the camera frame source and MotionFrame JSON output, preserving the existing deterministic dummy values while keeping real face tracking out of scope for this skeleton.

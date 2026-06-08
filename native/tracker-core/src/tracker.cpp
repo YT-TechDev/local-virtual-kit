@@ -17,8 +17,8 @@ double wave(double base, double amplitude, double speed, double seconds,
 
 } // namespace
 
-TrackingSample DummyMotionTracker::track(const CameraFrame &frame) {
-  const auto timestampMs = frame.timestampMs;
+TrackingSample DummyMotionTracker::track(const PreprocessedFrame &frame) {
+  const auto timestampMs = frame.cameraFrame.timestampMs;
   const double seconds = static_cast<double>(timestampMs) / 1000.0;
 
   return TrackingSample{
