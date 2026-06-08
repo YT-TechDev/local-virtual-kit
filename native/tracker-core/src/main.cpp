@@ -1,4 +1,5 @@
 #include "camera_source.h"
+#include "frame_preprocessor.h"
 #include "motion_frame_writer.h"
 #include "tracker.h"
 
@@ -369,6 +370,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  lvk::tracker::NoopFramePreprocessor framePreprocessor;
   lvk::tracker::DummyMotionTracker motionTracker;
   if (!cameraSource->start()) {
     std::cerr << "Failed to start local camera source: "
@@ -399,8 +401,9 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
+    const auto preprocessedFrame = framePreprocessor.process(cameraFrame);
     lvk::tracker::writeMotionFrameJson(
-        std::cout, motionTracker.track(cameraFrame));
+        std::cout, motionTracker.track(preprocessedFrame));
 
     if (options.logCameraStatus && options.cameraStatusInterval > 0 &&
         cameraSource->diagnostics().emittedFrameCount %

@@ -6,6 +6,7 @@ find_package(OpenCV QUIET COMPONENTS core videoio)
 
 add_executable(lvk-tracker-core
   src/camera_source.cpp
+  src/frame_preprocessor.cpp
   src/main.cpp
   src/motion_frame_writer.cpp
   src/tracker.cpp
