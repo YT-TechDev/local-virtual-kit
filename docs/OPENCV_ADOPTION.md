@@ -19,6 +19,9 @@ The current native tracker core is already split into small replacement points:
 - `main.cpp` owns CLI parsing, camera source lifecycle, realtime pacing, stop signals, diagnostics, and stdout emission.
 - Electron owns the development native pipeline lifecycle and keeps the renderer sandboxed.
 This state is ready for an OpenCV adoption decision because the camera source and tracker abstractions exist. It is not yet ready for broad face-tracking implementation because real frames, preprocessing, model choice, calibration, and diagnostics still need to be added in stages.
+
+The Native Core now also has a generic `FaceDetector` / `FaceTrackingPipeline` seam between `FramePreprocessor` and MotionFrame sample generation. The current detector is a no-op and intentionally does not add OpenCV face detection, landmark extraction, or real tracking values yet.
+
 ## OpenCV Research Notes
 ### License
 OpenCV 4.5.0 and later are licensed under the Apache License 2.0 according to the official OpenCV license page. Earlier OpenCV versions used the 3-clause BSD license.

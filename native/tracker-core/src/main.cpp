@@ -1,4 +1,6 @@
 #include "camera_source.h"
+#include "face_detector.h"
+#include "face_tracking_pipeline.h"
 #include "frame_preprocessor.h"
 #include "motion_frame_writer.h"
 #include "tracker.h"
@@ -371,7 +373,10 @@ int main(int argc, char *argv[]) {
   }
 
   lvk::tracker::NoopFramePreprocessor framePreprocessor;
+  lvk::tracker::NoopFaceDetector faceDetector;
   lvk::tracker::DummyMotionTracker motionTracker;
+  lvk::tracker::FaceTrackingPipeline trackingPipeline(
+      faceDetector, motionTracker);
   if (!cameraSource->start()) {
     std::cerr << "Failed to start local camera source: "
               << options.camera.sourceName << ".\n";
@@ -403,7 +408,7 @@ int main(int argc, char *argv[]) {
 
     const auto preprocessedFrame = framePreprocessor.process(cameraFrame);
     lvk::tracker::writeMotionFrameJson(
-        std::cout, motionTracker.track(preprocessedFrame));
+        std::cout, trackingPipeline.track(preprocessedFrame));
 
     if (options.logCameraStatus && options.cameraStatusInterval > 0 &&
         cameraSource->diagnostics().emittedFrameCount %

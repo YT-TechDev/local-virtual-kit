@@ -133,6 +133,14 @@ The native pipeline now includes a small `FramePreprocessor` seam between `Camer
 
 This boundary intentionally does not resize, crop, color-convert, grayscale-convert, equalize, detect faces, extract landmarks, or produce real VTuber tracking values yet. Raw camera frames remain local to Native Core and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Future local preprocessing should live behind this Native Core abstraction after the pipeline boundary is stable; real-device camera validation is intentionally deferred until then.
 
+## Face tracking pipeline boundary
+
+The native pipeline now includes a generic `FaceDetector` interface and a `FaceTrackingPipeline` seam on top of the existing `FramePreprocessor` boundary. The current implementation uses `NoopFaceDetector`, which returns no detected face, zero confidence, and zeroed bounds without inspecting image data or using OpenCV face-detection modules.
+
+`FaceTrackingPipeline` currently calls the detector so the boundary is exercised, then falls back to `DummyMotionTracker` for the same deterministic MotionFrame values as before. No real face detection, OpenCV face detection, landmark extraction, lost-state decisions, or real VTuber tracking values are implemented yet. OpenCV capture may exist for local Native Core-only camera input, but OpenCV face detection is intentionally not implemented in this phase.
+
+Raw frames remain local to Native Core memory and are not exposed to Electron, Web Preview, stdout, stderr, or disk. Local real-device validation remains deferred until the camera, preprocessing, and tracking boundaries are stable.
+
 ## Tracking abstraction
 
 Current native tracking is provided by `DummyMotionTracker`. It is a small replacement point between the camera frame source and MotionFrame JSON output, preserving the existing deterministic dummy values while keeping real face tracking out of scope for this skeleton.
