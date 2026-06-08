@@ -1,5 +1,13 @@
 #include "camera_source.h"
 
+#ifndef LVK_HAS_OPENCV
+#define LVK_HAS_OPENCV 0
+#endif
+
+#if LVK_HAS_OPENCV
+#include "opencv_camera_source.h"
+#endif
+
 #include <cmath>
 
 namespace lvk::tracker {
@@ -14,12 +22,21 @@ long long timestampForSequence(int sequenceNumber, double nominalFps) {
 
 std::unique_ptr<CameraSource> createCameraSource(
     const CameraSourceOptions& options) {
-  if (options.sourceName != "dummy") {
-    return nullptr;
+  if (options.sourceName == "dummy") {
+    return std::make_unique<DummyCameraSource>(
+        options.width, options.height, options.nominalFps);
   }
 
-  return std::make_unique<DummyCameraSource>(
-      options.width, options.height, options.nominalFps);
+  if (options.sourceName == "opencv") {
+#if LVK_HAS_OPENCV
+    return std::make_unique<OpenCvCameraSource>(
+        options.cameraIndex, options.width, options.height, options.nominalFps);
+#else
+    return nullptr;
+#endif
+  }
+
+  return nullptr;
 }
 
 DummyCameraSource::DummyCameraSource(

@@ -10,12 +10,17 @@
 #include <string>
 #include <thread>
 
+#ifndef LVK_HAS_OPENCV
+#define LVK_HAS_OPENCV 0
+#endif
+
 namespace {
 
 constexpr int kDefaultFrameCount = 120;
 constexpr int kMaxFrameCount = 100000;
 constexpr int kMaxCameraWidth = 7680;
 constexpr int kMaxCameraHeight = 4320;
+constexpr int kMaxCameraIndex = 16;
 constexpr double kMinCameraFps = 1.0;
 constexpr double kMaxCameraFps = 240.0;
 
@@ -42,6 +47,25 @@ bool parseFrameCount(const std::string &value, int &frameCount) {
   }
 
   frameCount = static_cast<int>(parsed);
+  return true;
+}
+
+bool parseNonNegativeIntegerInRange(
+    const std::string &value,
+    int maxValue,
+    int &parsedValue) {
+  char *end = nullptr;
+  const long parsed = std::strtol(value.c_str(), &end, 10);
+
+  if (end == value.c_str() || *end != '\0') {
+    return false;
+  }
+
+  if (parsed < 0 || parsed > maxValue) {
+    return false;
+  }
+
+  parsedValue = static_cast<int>(parsed);
   return true;
 }
 
@@ -86,15 +110,16 @@ bool parseDoubleInRange(
 
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
-            "[--log-camera-status] [--camera-source dummy] "
-            "[--camera-width N] [--camera-height N] [--camera-fps N]\n";
+            "[--log-camera-status] [--camera-source dummy|opencv] "
+            "[--camera-index N] [--camera-width N] [--camera-height N] [--camera-fps N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
   output << "--realtime emits frames at the configured camera nominal FPS.\n";
   output << "--log-camera-status writes local camera diagnostics to stderr.\n";
-  output << "--camera-source selects the camera source; only 'dummy' is "
-            "supported for now.\n";
+  output << "--camera-source selects the camera source; supported values are 'dummy' and 'opencv'.\n";
+  output << "--camera-index N must be an integer between 0 and "
+         << kMaxCameraIndex << ".\n";
   output << "--camera-width N must be an integer between 1 and "
          << kMaxCameraWidth << ".\n";
   output << "--camera-height N must be an integer between 1 and "
@@ -175,6 +200,27 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       }
 
       options.camera.sourceName = argv[argIndex + 1];
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--camera-index") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --camera-index.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int cameraIndex = 0;
+      if (!parseNonNegativeIntegerInRange(
+              argv[argIndex + 1], kMaxCameraIndex, cameraIndex)) {
+        std::cerr << "Invalid value for --camera-index: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.camera.cameraIndex = cameraIndex;
       ++argIndex;
       continue;
     }
@@ -281,8 +327,13 @@ int main(int argc, char *argv[]) {
 
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);
   if (!cameraSource) {
-    std::cerr << "Unsupported camera source: " << options.camera.sourceName
-              << ". Only 'dummy' is supported for now.\n";
+    if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV) {
+      std::cerr << "OpenCV camera source is not enabled in this build. "
+                   "Install OpenCV development packages and reconfigure.\n";
+    } else {
+      std::cerr << "Unsupported camera source: " << options.camera.sourceName
+                << ". Supported values are 'dummy' and 'opencv'.\n";
+    }
     return 1;
   }
 
