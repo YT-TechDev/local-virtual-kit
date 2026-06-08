@@ -99,16 +99,22 @@ For local Web Preview development with `?source=native`, pipe the native dummy s
 ```bash
 cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
-./native/tracker-core/build/lvk-tracker-core --continuous --realtime | node tools/motion-ws-bridge.mjs
+./native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime | node tools/motion-ws-bridge.mjs
+```
+
+For OpenCV-backed local capture in builds configured with OpenCV support:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status | node tools/motion-ws-bridge.mjs
 ```
 
 The bridge binds only to `ws://127.0.0.1:45731/motion`, accepts newline-delimited MotionFrame JSON from stdin, and broadcasts valid native frames to connected browser previews. It is temporary development tooling, not the final production native transport.
 
 ## Desktop Shell development pipeline
 
-After the native tracker has been built, the LVK Desktop Shell can start and stop the current development dummy pipeline from Electron Main Process. The shell runs the built tracker with `--continuous --realtime`, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
+After the native tracker has been built, the LVK Desktop Shell can start and stop the current development native pipeline from Electron Main Process. The shell can choose either `--camera-source dummy` or the Native Core-only `--camera-source opencv --camera-index 0` path, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
 
-This Desktop Shell control is development-only and still does not add camera capture, real tracking, or the final production native transport.
+This Desktop Shell control is development-only. OpenCV mode is local capture-only, `DummyMotionTracker` still provides MotionFrame values, and real face tracking or the final production native transport remain out of scope.
 
 ## Camera input status
 

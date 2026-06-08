@@ -2,14 +2,38 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import nodeProcess from 'node:process'
-import type { LvkRuntimeStatus, MotionBridgeStatus, NativeTrackerStatus } from '../preload/api'
+import type {
+  LvkRuntimeStatus,
+  MotionBridgeStatus,
+  NativePipelineCameraSource,
+  NativeTrackerStatus
+} from '../preload/api'
 
 const PREVIEW_DUMMY_URL = 'http://localhost:5173/?source=dummy'
 const PREVIEW_NATIVE_URL = 'http://localhost:5173/?source=native'
 const MOTION_ENDPOINT = 'ws://127.0.0.1:45731/motion'
-const TRACKER_ARGS = ['--continuous', '--realtime']
 const FORCE_KILL_TIMEOUT_MS = 1_500
 const MAX_STATUS_MESSAGE_LENGTH = 360
+
+function createTrackerArgs(cameraSource: NativePipelineCameraSource): string[] {
+  if (cameraSource === 'opencv') {
+    return [
+      '--camera-source',
+      'opencv',
+      '--camera-index',
+      '0',
+      '--continuous',
+      '--realtime',
+      '--log-camera-status'
+    ]
+  }
+
+  return ['--camera-source', 'dummy', '--continuous', '--realtime']
+}
+
+function getCameraSourceLabel(cameraSource: NativePipelineCameraSource): string {
+  return cameraSource === 'opencv' ? 'OpenCV camera' : 'dummy'
+}
 
 function createInitialStatus(): LvkRuntimeStatus {
   return {
@@ -17,7 +41,8 @@ function createInitialStatus(): LvkRuntimeStatus {
     previewNativeUrl: PREVIEW_NATIVE_URL,
     motionEndpoint: MOTION_ENDPOINT,
     nativeTrackerStatus: 'not_started',
-    motionBridgeStatus: 'manual_dev_tool'
+    motionBridgeStatus: 'manual_dev_tool',
+    pipelineCameraSource: 'dummy'
   }
 }
 
@@ -87,7 +112,7 @@ export class NativePipelineManager {
     return { ...this.status }
   }
 
-  start(): LvkRuntimeStatus {
+  start(cameraSource: NativePipelineCameraSource = 'dummy'): LvkRuntimeStatus {
     if (
       isActiveStatus(this.status.nativeTrackerStatus) ||
       isActiveStatus(this.status.motionBridgeStatus)
@@ -95,6 +120,8 @@ export class NativePipelineManager {
       return this.getStatus()
     }
 
+    const trackerArgs = createTrackerArgs(cameraSource)
+    const cameraSourceLabel = getCameraSourceLabel(cameraSource)
     const repoRoot = findRepoRoot()
     const bridgeScriptPath = join(repoRoot, 'tools', 'motion-ws-bridge.mjs')
     const trackerExecutableCandidates = getTrackerExecutableCandidates(repoRoot)
@@ -105,6 +132,7 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'not_started',
         motionBridgeStatus: 'error',
+        pipelineCameraSource: cameraSource,
         lastError: `Development MotionFrame bridge was not found at ${bridgeScriptPath}. Run this from the LVK repository checkout.`
       }
       return this.getStatus()
@@ -115,6 +143,7 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'manual_dev_tool',
+        pipelineCameraSource: cameraSource,
         lastError: `Native tracker executable was not found. Build it first with: cmake -S native/tracker-core -B native/tracker-core/build && cmake --build native/tracker-core/build. Candidate locations checked: ${trackerExecutableCandidates.join(', ')}`
       }
       return this.getStatus()
@@ -125,7 +154,8 @@ export class NativePipelineManager {
       ...createInitialStatus(),
       nativeTrackerStatus: 'starting',
       motionBridgeStatus: 'starting',
-      lastMessage: 'Starting development native MotionFrame pipeline.'
+      pipelineCameraSource: cameraSource,
+      lastMessage: `Starting development native MotionFrame pipeline with ${cameraSourceLabel} source.`
     }
 
     try {
@@ -137,7 +167,7 @@ export class NativePipelineManager {
       })
       this.attachProcessHandlers('bridge', this.bridgeProcess)
 
-      this.trackerProcess = spawn(trackerExecutablePath, TRACKER_ARGS, {
+      this.trackerProcess = spawn(trackerExecutablePath, trackerArgs, {
         cwd: repoRoot,
         shell: false,
         stdio: ['pipe', 'pipe', 'pipe']
@@ -159,7 +189,8 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'running',
         motionBridgeStatus: 'running',
-        lastMessage: `Development native pipeline started with realtime dummy output. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
+        pipelineCameraSource: cameraSource,
+        lastMessage: `Development native pipeline started with ${cameraSourceLabel} source. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
       }
     } catch (error) {
       this.status = {
@@ -291,7 +322,7 @@ export class NativePipelineManager {
             nativeTrackerStatus: code === 0 ? 'exited' : 'error',
             lastMessage:
               code === 0
-                ? 'Native tracker exited after emitting development dummy frames.'
+                ? `Native tracker exited after emitting development ${getCameraSourceLabel(this.status.pipelineCameraSource ?? 'dummy')} frames.`
                 : this.status.lastMessage,
             lastError:
               code === 0

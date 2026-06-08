@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 type RuntimeStatus = Awaited<ReturnType<Window['lvk']['getRuntimeStatus']>>
-
+type NativePipelineCameraSource = NonNullable<RuntimeStatus['pipelineCameraSource']>
 type NativeTrackerStatus = RuntimeStatus['nativeTrackerStatus']
 type MotionBridgeStatus = RuntimeStatus['motionBridgeStatus']
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
@@ -12,8 +12,14 @@ const developmentCommands = [
   'pnpm dev:web',
   'cmake -S native/tracker-core -B native/tracker-core/build',
   'cmake --build native/tracker-core/build',
-  './native/tracker-core/build/lvk-tracker-core --frames 600 --realtime | node tools/motion-ws-bridge.mjs'
+  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime | node tools/motion-ws-bridge.mjs',
+  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status | node tools/motion-ws-bridge.mjs'
 ]
+
+const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {
+  dummy: 'Dummy source',
+  opencv: 'OpenCV camera'
+}
 
 const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
   not_started: 'Not started',
@@ -61,6 +67,8 @@ function StatusPill({
 
 function App(): React.JSX.Element {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
+  const [selectedCameraSource, setSelectedCameraSource] =
+    useState<NativePipelineCameraSource>('dummy')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -126,7 +134,7 @@ function App(): React.JSX.Element {
     setPipelineError(null)
 
     try {
-      setRuntimeStatus(await window.lvk.startNativePipeline())
+      setRuntimeStatus(await window.lvk.startNativePipeline({ cameraSource: selectedCameraSource }))
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to start native pipeline.')
     }
@@ -142,14 +150,16 @@ function App(): React.JSX.Element {
     }
   }
 
-  const canStartNativePipeline = runtimeStatus
-    ? !['starting', 'running', 'stopping'].includes(runtimeStatus.nativeTrackerStatus) &&
-      !['starting', 'running', 'stopping'].includes(runtimeStatus.motionBridgeStatus)
+  const isPipelineBusy = runtimeStatus
+    ? ['starting', 'running', 'stopping'].includes(runtimeStatus.nativeTrackerStatus) ||
+      ['starting', 'running', 'stopping'].includes(runtimeStatus.motionBridgeStatus)
     : false
+  const canStartNativePipeline = runtimeStatus ? !isPipelineBusy : false
   const canStopNativePipeline = runtimeStatus
     ? ['starting', 'running'].includes(runtimeStatus.nativeTrackerStatus) ||
       ['starting', 'running'].includes(runtimeStatus.motionBridgeStatus)
     : false
+  const activeCameraSource = runtimeStatus?.pipelineCameraSource ?? 'dummy'
 
   return (
     <main className="desktop-shell">
@@ -217,6 +227,12 @@ function App(): React.JSX.Element {
                 </dd>
               </div>
               <div>
+                <dt>Camera source</dt>
+                <dd>
+                  <StatusPill label={cameraSourceLabels[activeCameraSource]} />
+                </dd>
+              </div>
+              <div>
                 <dt>Native tracker status</dt>
                 <dd>
                   <StatusPill
@@ -235,6 +251,21 @@ function App(): React.JSX.Element {
                 </dd>
               </div>
             </dl>
+
+            <label className="field-row" htmlFor="camera-source">
+              <span>Camera source</span>
+              <select
+                id="camera-source"
+                value={selectedCameraSource}
+                disabled={isPipelineBusy}
+                onChange={(event) =>
+                  setSelectedCameraSource(event.currentTarget.value as NativePipelineCameraSource)
+                }
+              >
+                <option value="dummy">Dummy source</option>
+                <option value="opencv">OpenCV camera</option>
+              </select>
+            </label>
 
             <div className="button-row" aria-label="Development native pipeline controls">
               <button
@@ -278,10 +309,9 @@ function App(): React.JSX.Element {
             </ol>
 
             <p className="note">
-              This shell can start the development native dummy MotionFrame pipeline with realtime
-              paced output after the native tracker has been built. Real camera tracking and the
-              final production native transport are still out of scope for this development control
-              surface.
+              Desktop can start dummy or OpenCV camera source for the development native MotionFrame
+              pipeline. OpenCV source is capture-only for now. DummyMotionTracker still produces
+              MotionFrame values, and real face tracking is still out of scope.
             </p>
           </section>
         </div>
