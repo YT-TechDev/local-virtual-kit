@@ -11,7 +11,7 @@ cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
 ```
 
-The dummy camera source builds without OpenCV. Optional OpenCV camera and face-detector paths are gated separately: camera capture is enabled when CMake finds OpenCV `core` + `videoio`, while the face detector is enabled when CMake finds OpenCV `core` + `imgproc` + `objdetect`. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
+The dummy camera source builds without OpenCV. Optional OpenCV camera and face-detector paths are gated separately: camera capture is enabled when CMake finds OpenCV `core` + `videoio`, while the face detector is enabled when CMake finds OpenCV `core` + `imgproc` + `objdetect`. CMake configure prints a short OpenCV feature summary showing which optional Native Core paths are enabled. When found, OpenCV is linked only into the native `lvk-tracker-core` executable; Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV dependencies.
 
 ## Run
 

@@ -16,6 +16,22 @@ if(LVK_HAS_OPENCV_FACE_DETECTOR)
   set(LVK_OPENCV_FACE_DETECTOR_LIBS ${OpenCV_LIBS})
 endif()
 
+if(LVK_HAS_OPENCV_CAMERA)
+  set(LVK_OPENCV_CAMERA_STATUS ON)
+else()
+  set(LVK_OPENCV_CAMERA_STATUS OFF)
+endif()
+
+if(LVK_HAS_OPENCV_FACE_DETECTOR)
+  set(LVK_OPENCV_FACE_DETECTOR_STATUS ON)
+else()
+  set(LVK_OPENCV_FACE_DETECTOR_STATUS OFF)
+endif()
+
+message(STATUS "LVK Native Core OpenCV feature summary:")
+message(STATUS "  LVK OpenCV camera support: ${LVK_OPENCV_CAMERA_STATUS} (components: core + videoio)")
+message(STATUS "  LVK OpenCV face detector support: ${LVK_OPENCV_FACE_DETECTOR_STATUS} (components: core + imgproc + objdetect)")
+
 add_executable(lvk-tracker-core
   src/camera_source.cpp
   src/face_detector.cpp
