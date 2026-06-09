@@ -1,0 +1,6 @@
+node_modules
+dist
+out
+coverage
+native/tracker-core/build
+pnpm-lock.yaml
