@@ -1,185 +1,210 @@
-import { useEffect, useRef, useState } from 'react'
-import type { MotionFrame, TrackingStatus } from '@lvk/motion-protocol'
+import { useEffect, useRef, useState } from "react";
+import type { MotionFrame, TrackingStatus } from "@lvk/motion-protocol";
 
-const NATIVE_MOTION_WS_URL = 'ws://127.0.0.1:45731/motion'
-const RECONNECT_DELAY_MS = 1000
+const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
+const RECONNECT_DELAY_MS = 1000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null
-}
+  return typeof value === "object" && value !== null;
+};
 
 const isFiniteNumber = (value: unknown): value is number => {
-  return typeof value === 'number' && Number.isFinite(value)
-}
+  return typeof value === "number" && Number.isFinite(value);
+};
 
 const isTrackingStatus = (value: unknown): value is TrackingStatus => {
-  return value === 'not_started' || value === 'tracking' || value === 'lost'
-}
+  return value === "not_started" || value === "tracking" || value === "lost";
+};
 
 const isVector2 = (value: unknown): value is { x: number; y: number } => {
-  return isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y)
-}
+  return isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
+};
 
-const isVector3 = (value: unknown): value is { x: number; y: number; z: number } => {
-  return isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y) && isFiniteNumber(value.z)
-}
+const isVector3 = (
+  value: unknown,
+): value is { x: number; y: number; z: number } => {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.x) &&
+    isFiniteNumber(value.y) &&
+    isFiniteNumber(value.z)
+  );
+};
 
-const isEulerRotation = (value: unknown): value is { pitch: number; yaw: number; roll: number } => {
+const isEulerRotation = (
+  value: unknown,
+): value is { pitch: number; yaw: number; roll: number } => {
   return (
     isRecord(value) &&
     isFiniteNumber(value.pitch) &&
     isFiniteNumber(value.yaw) &&
     isFiniteNumber(value.roll)
-  )
-}
+  );
+};
 
 const isMotionFrame = (value: unknown): value is MotionFrame => {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
-  if (value.schemaVersion !== 1 || value.source !== 'native' || !isFiniteNumber(value.timestampMs)) {
-    return false
+  if (
+    value.schemaVersion !== 1 ||
+    value.source !== "native" ||
+    !isFiniteNumber(value.timestampMs)
+  ) {
+    return false;
   }
 
   if (!isRecord(value.tracking) || !isTrackingStatus(value.tracking.status)) {
-    return false
+    return false;
   }
 
   if (!isFiniteNumber(value.tracking.confidence)) {
-    return false
+    return false;
   }
 
-  if (!isRecord(value.face) || !isVector3(value.face.position) || !isEulerRotation(value.face.rotation)) {
-    return false
+  if (
+    !isRecord(value.face) ||
+    !isVector3(value.face.position) ||
+    !isEulerRotation(value.face.rotation)
+  ) {
+    return false;
   }
 
-  if (!isRecord(value.eyes) || !isFiniteNumber(value.eyes.leftOpen) || !isFiniteNumber(value.eyes.rightOpen)) {
-    return false
+  if (
+    !isRecord(value.eyes) ||
+    !isFiniteNumber(value.eyes.leftOpen) ||
+    !isFiniteNumber(value.eyes.rightOpen)
+  ) {
+    return false;
   }
 
   if (!isVector2(value.eyes.gaze)) {
-    return false
+    return false;
   }
 
-  if (!isRecord(value.mouth) || !isFiniteNumber(value.mouth.open) || !isFiniteNumber(value.mouth.smile)) {
-    return false
+  if (
+    !isRecord(value.mouth) ||
+    !isFiniteNumber(value.mouth.open) ||
+    !isFiniteNumber(value.mouth.smile)
+  ) {
+    return false;
   }
 
-  return true
-}
+  return true;
+};
 
 const parseMotionFrame = (data: unknown): MotionFrame | null => {
-  if (typeof data !== 'string') {
-    return null
+  if (typeof data !== "string") {
+    return null;
   }
 
   try {
-    const parsed: unknown = JSON.parse(data)
-    return isMotionFrame(parsed) ? parsed : null
+    const parsed: unknown = JSON.parse(data);
+    return isMotionFrame(parsed) ? parsed : null;
   } catch {
-    return null
+    return null;
   }
-}
+};
 
 export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
-  const [latestFrame, setLatestFrame] = useState<MotionFrame | null>(null)
-  const latestTimestampRef = useRef(-Infinity)
+  const [latestFrame, setLatestFrame] = useState<MotionFrame | null>(null);
+  const latestTimestampRef = useRef(-Infinity);
 
   useEffect(() => {
-    latestTimestampRef.current = -Infinity
+    latestTimestampRef.current = -Infinity;
 
-    let websocket: WebSocket | null = null
-    let reconnectTimer: number | undefined
-    let resetFrameTimer: number | undefined
-    let isUnmounted = false
+    let websocket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    let resetFrameTimer: number | undefined;
+    let isUnmounted = false;
 
     const clearReconnectTimer = () => {
       if (reconnectTimer !== undefined) {
-        window.clearTimeout(reconnectTimer)
-        reconnectTimer = undefined
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
       }
-    }
+    };
 
     const clearResetFrameTimer = () => {
       if (resetFrameTimer !== undefined) {
-        window.clearTimeout(resetFrameTimer)
-        resetFrameTimer = undefined
+        window.clearTimeout(resetFrameTimer);
+        resetFrameTimer = undefined;
       }
-    }
+    };
 
     const clearNativeFrame = () => {
-      setLatestFrame(null)
-    }
+      setLatestFrame(null);
+    };
 
     resetFrameTimer = window.setTimeout(() => {
-      resetFrameTimer = undefined
+      resetFrameTimer = undefined;
 
       if (!isUnmounted && latestTimestampRef.current === -Infinity) {
-        clearNativeFrame()
+        clearNativeFrame();
       }
-    }, 0)
+    }, 0);
 
     if (!enabled) {
       return () => {
-        isUnmounted = true
-        clearResetFrameTimer()
-      }
+        isUnmounted = true;
+        clearResetFrameTimer();
+      };
     }
 
     const scheduleReconnect = () => {
       if (isUnmounted || reconnectTimer !== undefined) {
-        return
+        return;
       }
 
       reconnectTimer = window.setTimeout(() => {
-        reconnectTimer = undefined
-        connect()
-      }, RECONNECT_DELAY_MS)
-    }
+        reconnectTimer = undefined;
+        connect();
+      }, RECONNECT_DELAY_MS);
+    };
 
     const connect = () => {
       if (isUnmounted) {
-        return
+        return;
       }
 
-      latestTimestampRef.current = -Infinity
-      websocket = new WebSocket(NATIVE_MOTION_WS_URL)
+      latestTimestampRef.current = -Infinity;
+      websocket = new WebSocket(NATIVE_MOTION_WS_URL);
 
       websocket.onmessage = (event: MessageEvent<unknown>) => {
-        const frame = parseMotionFrame(event.data)
+        const frame = parseMotionFrame(event.data);
 
         if (frame === null) {
-          return
+          return;
         }
 
         if (frame.timestampMs <= latestTimestampRef.current) {
-          return
+          return;
         }
 
-        latestTimestampRef.current = frame.timestampMs
-        setLatestFrame(frame)
-      }
+        latestTimestampRef.current = frame.timestampMs;
+        setLatestFrame(frame);
+      };
 
       websocket.onerror = () => {
-        websocket?.close()
-      }
+        websocket?.close();
+      };
 
       websocket.onclose = () => {
-        scheduleReconnect()
-      }
-    }
+        scheduleReconnect();
+      };
+    };
 
-    connect()
+    connect();
 
     return () => {
-      isUnmounted = true
-      clearReconnectTimer()
-      clearResetFrameTimer()
-      websocket?.close()
-      websocket = null
-    }
-  }, [enabled])
+      isUnmounted = true;
+      clearReconnectTimer();
+      clearResetFrameTimer();
+      websocket?.close();
+      websocket = null;
+    };
+  }, [enabled]);
 
-  return latestFrame
+  return latestFrame;
 }
