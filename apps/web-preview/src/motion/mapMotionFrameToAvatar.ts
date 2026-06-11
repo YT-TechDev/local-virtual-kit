@@ -1,28 +1,30 @@
-import type { MotionFrame, TrackingStatus } from '@lvk/motion-protocol'
+import type { MotionFrame, TrackingStatus } from "@lvk/motion-protocol";
 
 export type AvatarMotionState = {
-  trackingStatus: TrackingStatus
-  confidence: number
-  rootPosition: [number, number, number]
-  headRotation: [number, number, number]
+  trackingStatus: TrackingStatus;
+  confidence: number;
+  rootPosition: [number, number, number];
+  headRotation: [number, number, number];
   eyeOpen: {
-    left: number
-    right: number
-  }
-  gaze: [number, number]
+    left: number;
+    right: number;
+  };
+  gaze: [number, number];
   mouth: {
-    open: number
-    smile: number
-  }
-}
+    open: number;
+    smile: number;
+  };
+};
 
 const clamp = (value: number, min: number, max: number): number => {
-  return Math.min(max, Math.max(min, value))
-}
+  return Math.min(max, Math.max(min, value));
+};
 
-const clamp01 = (value: number): number => clamp(value, 0, 1)
+const clamp01 = (value: number): number => clamp(value, 0, 1);
 
-export const mapMotionFrameToAvatar = (frame: MotionFrame): AvatarMotionState => {
+export const mapMotionFrameToAvatar = (
+  frame: MotionFrame,
+): AvatarMotionState => {
   return {
     trackingStatus: frame.tracking.status,
     confidence: clamp01(frame.tracking.confidence),
@@ -45,5 +47,5 @@ export const mapMotionFrameToAvatar = (frame: MotionFrame): AvatarMotionState =>
       open: clamp01(frame.mouth.open),
       smile: clamp01(frame.mouth.smile),
     },
-  }
-}
+  };
+};

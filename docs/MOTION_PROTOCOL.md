@@ -90,19 +90,19 @@ export type MotionFrame = {
 
 ## 4. Field Rules
 
-| Field | Rule |
-| --- | --- |
-| `schemaVersion` | v0.1 uses `1`. Increment only for breaking schema changes. |
-| `timestampMs` | milliseconds from producer perspective; monotonic when possible. |
-| `source` | `dummy` for TypeScript dummy frames, `native` for Native Core output. |
-| `tracking.status` | `not_started`, `tracking`, or `lost`. Replaces older `face.detected` boolean style. |
-| `tracking.confidence` | normalized `0.0` to `1.0`. |
-| `face.position.x/y/z` | normalized face position values. |
-| `face.rotation.pitch/yaw/roll` | normalized or stable small-angle head rotation values. |
-| `eyes.leftOpen/rightOpen` | normalized eye openness, `0.0` closed to `1.0` open. |
-| `eyes.gaze.x/y` | normalized gaze direction. |
-| `mouth.open` | normalized mouth opening, `0.0` to `1.0`. |
-| `mouth.smile` | normalized smile value, `0.0` to `1.0`. |
+| Field                          | Rule                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------- |
+| `schemaVersion`                | v0.1 uses `1`. Increment only for breaking schema changes.                          |
+| `timestampMs`                  | milliseconds from producer perspective; monotonic when possible.                    |
+| `source`                       | `dummy` for TypeScript dummy frames, `native` for Native Core output.               |
+| `tracking.status`              | `not_started`, `tracking`, or `lost`. Replaces older `face.detected` boolean style. |
+| `tracking.confidence`          | normalized `0.0` to `1.0`.                                                          |
+| `face.position.x/y/z`          | normalized face position values.                                                    |
+| `face.rotation.pitch/yaw/roll` | normalized or stable small-angle head rotation values.                              |
+| `eyes.leftOpen/rightOpen`      | normalized eye openness, `0.0` closed to `1.0` open.                                |
+| `eyes.gaze.x/y`                | normalized gaze direction.                                                          |
+| `mouth.open`                   | normalized mouth opening, `0.0` to `1.0`.                                           |
+| `mouth.smile`                  | normalized smile value, `0.0` to `1.0`.                                             |
 
 Do not add `face.detected`, `head.*`, `eyes.blink`, or `emotion` fields in v0.1 unless the protocol is intentionally changed in the same PR.
 

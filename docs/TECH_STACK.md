@@ -6,14 +6,14 @@ This document defines technology choices, package boundaries, and dependency pol
 
 ## 1. Stack Summary
 
-| Area | Stack |
-| --- | --- |
-| Workspace | pnpm monorepo |
-| Native Core | C++ / CMake |
-| Desktop App | Electron / React / TypeScript |
-| Web Preview | React / TypeScript / Vite / Three.js / React Three Fiber |
-| Protocol | MotionFrame over local WebSocket JSON |
-| Initial renderer data | Dummy MotionFrame from `@lvk/motion-protocol` |
+| Area                  | Stack                                                    |
+| --------------------- | -------------------------------------------------------- |
+| Workspace             | pnpm monorepo                                            |
+| Native Core           | C++ / CMake                                              |
+| Desktop App           | Electron / React / TypeScript                            |
+| Web Preview           | React / TypeScript / Vite / Three.js / React Three Fiber |
+| Protocol              | MotionFrame over local WebSocket JSON                    |
+| Initial renderer data | Dummy MotionFrame from `@lvk/motion-protocol`            |
 
 ---
 

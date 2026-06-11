@@ -40,18 +40,18 @@ MotionFrame Output
 
 The tracker should produce values that can fill the current MotionFrame shape:
 
-| Category | Current MotionFrame field |
-| --- | --- |
-| schema version | `schemaVersion` |
-| timestamp | `timestampMs` |
-| source | `source` |
-| tracking state | `tracking.status` |
-| confidence | `tracking.confidence` |
-| face position | `face.position.x/y/z` |
-| head rotation | `face.rotation.pitch/yaw/roll` |
-| eye openness | `eyes.leftOpen/rightOpen` |
-| gaze | `eyes.gaze.x/y` |
-| mouth values | `mouth.open/smile` |
+| Category       | Current MotionFrame field      |
+| -------------- | ------------------------------ |
+| schema version | `schemaVersion`                |
+| timestamp      | `timestampMs`                  |
+| source         | `source`                       |
+| tracking state | `tracking.status`              |
+| confidence     | `tracking.confidence`          |
+| face position  | `face.position.x/y/z`          |
+| head rotation  | `face.rotation.pitch/yaw/roll` |
+| eye openness   | `eyes.leftOpen/rightOpen`      |
+| gaze           | `eyes.gaze.x/y`                |
+| mouth values   | `mouth.open/smile`             |
 
 Do not use older field names such as `face.detected`, `head.yaw`, or `eyes.blink` unless the protocol is intentionally changed in the same PR.
 
@@ -59,14 +59,14 @@ Do not use older field names such as `face.detected`, `head.yaw`, or `eyes.blink
 
 ## 4. Normalization
 
-| Value type | Expected range |
-| --- | --- |
-| confidence | `0.0` to `1.0` |
-| face position | usually `-1.0` to `1.0` |
+| Value type           | Expected range                                                   |
+| -------------------- | ---------------------------------------------------------------- |
+| confidence           | `0.0` to `1.0`                                                   |
+| face position        | usually `-1.0` to `1.0`                                          |
 | rotation-like values | renderer-defined normalized radians or stable small-angle values |
-| eye openness | `0.0` to `1.0` |
-| gaze | usually `-1.0` to `1.0` |
-| mouth values | `0.0` to `1.0` |
+| eye openness         | `0.0` to `1.0`                                                   |
+| gaze                 | usually `-1.0` to `1.0`                                          |
+| mouth values         | `0.0` to `1.0`                                                   |
 
 The producer should clamp values when practical. The renderer should still tolerate out-of-range values.
 
@@ -76,11 +76,11 @@ The producer should clamp values when practical. The renderer should still toler
 
 Use `tracking.status`:
 
-| Status | Meaning |
-| --- | --- |
-| `not_started` | tracking has not started |
-| `tracking` | face is currently tracked |
-| `lost` | tracking was active but the face is currently lost |
+| Status        | Meaning                                            |
+| ------------- | -------------------------------------------------- |
+| `not_started` | tracking has not started                           |
+| `tracking`    | face is currently tracked                          |
+| `lost`        | tracking was active but the face is currently lost |
 
 When tracking is lost:
 

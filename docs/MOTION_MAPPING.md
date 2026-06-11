@@ -36,19 +36,19 @@ Early v0.1 code may implement only a subset of this pipeline, but the boundary s
 
 ## 3. Current Field Mapping
 
-| MotionFrame field | Renderer meaning |
-| --- | --- |
-| `tracking.status` | tracking state such as active/lost/not started |
+| MotionFrame field     | Renderer meaning                                  |
+| --------------------- | ------------------------------------------------- |
+| `tracking.status`     | tracking state such as active/lost/not started    |
 | `tracking.confidence` | confidence-based visibility or smoothing strength |
-| `face.position.x/y/z` | avatar root/head position offset |
-| `face.rotation.pitch` | avatar head rotation X |
-| `face.rotation.yaw` | avatar head rotation Y |
-| `face.rotation.roll` | avatar head rotation Z |
-| `eyes.leftOpen` | left eyelid or morph target |
-| `eyes.rightOpen` | right eyelid or morph target |
-| `eyes.gaze.x/y` | eye target or pupil offset |
-| `mouth.open` | jaw open or mouth morph |
-| `mouth.smile` | smile/happy morph blend |
+| `face.position.x/y/z` | avatar root/head position offset                  |
+| `face.rotation.pitch` | avatar head rotation X                            |
+| `face.rotation.yaw`   | avatar head rotation Y                            |
+| `face.rotation.roll`  | avatar head rotation Z                            |
+| `eyes.leftOpen`       | left eyelid or morph target                       |
+| `eyes.rightOpen`      | right eyelid or morph target                      |
+| `eyes.gaze.x/y`       | eye target or pupil offset                        |
+| `mouth.open`          | jaw open or mouth morph                           |
+| `mouth.smile`         | smile/happy morph blend                           |
 
 Do not map from older field names such as `face.detected`, `head.yaw`, or `eyes.blink` unless the protocol is intentionally changed.
 
