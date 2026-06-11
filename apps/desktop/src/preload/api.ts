@@ -22,6 +22,7 @@ export interface NativePipelineStartOptions {
 export interface LvkRuntimeStatus {
   previewDummyUrl: string
   previewNativeUrl: string
+  previewObsNativeUrl: string
   motionEndpoint: string
   nativeTrackerStatus: NativeTrackerStatus
   motionBridgeStatus: MotionBridgeStatus
