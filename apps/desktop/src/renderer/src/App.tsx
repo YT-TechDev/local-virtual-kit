@@ -343,6 +343,36 @@ function App(): React.JSX.Element {
             ) : null}
           </section>
 
+          <section className="card" aria-labelledby="settings-placeholder-heading">
+            <div className="card-header">
+              <div>
+                <p className="section-label">Settings</p>
+                <h2 id="settings-placeholder-heading">Desktop settings placeholder</h2>
+              </div>
+              <StatusPill label="Not implemented" tone="warning" />
+            </div>
+
+            <p className="note">
+              Future controls for camera source, preview, and runtime preferences will live here.
+              This card is display-only and does not change runtime behavior.
+            </p>
+          </section>
+
+          <section className="card" aria-labelledby="calibration-placeholder-heading">
+            <div className="card-header">
+              <div>
+                <p className="section-label">Calibration</p>
+                <h2 id="calibration-placeholder-heading">Tracking calibration placeholder</h2>
+              </div>
+              <StatusPill label="Not implemented" tone="warning" />
+            </div>
+
+            <p className="note">
+              Future neutral pose, deadzone, and smoothing controls will live here. This card is
+              display-only and does not access cameras or native tracking.
+            </p>
+          </section>
+
           <section className="card card--wide" aria-labelledby="commands-heading">
             <div className="card-header">
               <div>
