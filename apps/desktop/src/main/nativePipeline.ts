@@ -11,6 +11,7 @@ import type {
 
 const PREVIEW_DUMMY_URL = 'http://localhost:5173/?source=dummy'
 const PREVIEW_NATIVE_URL = 'http://localhost:5173/?source=native'
+const PREVIEW_OBS_NATIVE_URL = 'http://localhost:5173/?mode=obs&source=native'
 const MOTION_ENDPOINT = 'ws://127.0.0.1:45731/motion'
 const FORCE_KILL_TIMEOUT_MS = 1_500
 const MAX_STATUS_MESSAGE_LENGTH = 360
@@ -41,6 +42,7 @@ function createInitialStatus(): LvkRuntimeStatus {
   return {
     previewDummyUrl: PREVIEW_DUMMY_URL,
     previewNativeUrl: PREVIEW_NATIVE_URL,
+    previewObsNativeUrl: PREVIEW_OBS_NATIVE_URL,
     motionEndpoint: MOTION_ENDPOINT,
     nativeTrackerStatus: 'not_started',
     motionBridgeStatus: 'manual_dev_tool',

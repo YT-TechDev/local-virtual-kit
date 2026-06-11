@@ -147,6 +147,10 @@ h2 {
   grid-column: 1 / -1;
 }
 
+.fallback-card {
+  max-width: 720px;
+}
+
 .card-header {
   display: flex;
   align-items: flex-start;

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type {
+  LvkRuntimeStatus,
+  MotionBridgeStatus,
+  NativePipelineCameraSource,
+  NativeTrackerStatus
+} from '../../preload/api'
 
-type RuntimeStatus = Awaited<ReturnType<Window['lvk']['getRuntimeStatus']>>
-type NativePipelineCameraSource = NonNullable<RuntimeStatus['pipelineCameraSource']>
-type NativeTrackerStatus = RuntimeStatus['nativeTrackerStatus']
-type MotionBridgeStatus = RuntimeStatus['motionBridgeStatus']
+type RuntimeStatus = LvkRuntimeStatus
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
@@ -66,6 +69,7 @@ function StatusPill({
 }
 
 function App(): React.JSX.Element {
+  const desktopApi = window.lvk
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [selectedCameraSource, setSelectedCameraSource] =
     useState<NativePipelineCameraSource>('dummy')
@@ -77,6 +81,10 @@ function App(): React.JSX.Element {
   const isRuntimeStatusRequestInFlightRef = useRef(false)
 
   const loadRuntimeStatus = useCallback(async (): Promise<void> => {
+    if (!desktopApi) {
+      return
+    }
+
     if (isRuntimeStatusRequestInFlightRef.current) {
       return
     }
@@ -84,7 +92,7 @@ function App(): React.JSX.Element {
     isRuntimeStatusRequestInFlightRef.current = true
 
     try {
-      const status = await window.lvk.getRuntimeStatus()
+      const status = await desktopApi.getRuntimeStatus()
 
       if (isMountedRef.current) {
         setRuntimeStatus(status)
@@ -97,9 +105,13 @@ function App(): React.JSX.Element {
     } finally {
       isRuntimeStatusRequestInFlightRef.current = false
     }
-  }, [])
+  }, [desktopApi])
 
   useEffect(() => {
+    if (!desktopApi) {
+      return
+    }
+
     isMountedRef.current = true
     const initialStatusLoadTimeoutId = window.setTimeout(() => {
       void loadRuntimeStatus()
@@ -114,37 +126,49 @@ function App(): React.JSX.Element {
       window.clearTimeout(initialStatusLoadTimeoutId)
       window.clearInterval(statusPollIntervalId)
     }
-  }, [loadRuntimeStatus])
+  }, [desktopApi, loadRuntimeStatus])
 
   const refreshRuntimeStatus = async (): Promise<void> => {
     await loadRuntimeStatus()
   }
 
   const openPreviewUrl = async (url: string): Promise<void> => {
+    if (!desktopApi) {
+      return
+    }
+
     setOpenError(null)
 
     try {
-      await window.lvk.openExternalUrl(url)
+      await desktopApi.openExternalUrl(url)
     } catch (error) {
       setOpenError(error instanceof Error ? error.message : 'Failed to open preview URL.')
     }
   }
 
   const startNativePipeline = async (): Promise<void> => {
+    if (!desktopApi) {
+      return
+    }
+
     setPipelineError(null)
 
     try {
-      setRuntimeStatus(await window.lvk.startNativePipeline({ cameraSource: selectedCameraSource }))
+      setRuntimeStatus(await desktopApi.startNativePipeline({ cameraSource: selectedCameraSource }))
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to start native pipeline.')
     }
   }
 
   const stopNativePipeline = async (): Promise<void> => {
+    if (!desktopApi) {
+      return
+    }
+
     setPipelineError(null)
 
     try {
-      setRuntimeStatus(await window.lvk.stopNativePipeline())
+      setRuntimeStatus(await desktopApi.stopNativePipeline())
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to stop native pipeline.')
     }
@@ -171,7 +195,21 @@ function App(): React.JSX.Element {
 
       {loadError ? <p className="error-message">{loadError}</p> : null}
 
-      {runtimeStatus ? (
+      {!desktopApi ? (
+        <section className="card fallback-card" aria-labelledby="desktop-api-unavailable-heading">
+          <div className="card-header">
+            <div>
+              <p className="section-label">Desktop API</p>
+              <h2 id="desktop-api-unavailable-heading">Electron required</h2>
+            </div>
+            <StatusPill label="Unavailable" tone="warning" />
+          </div>
+          <p className="runtime-message">
+            LVK desktop API is not available. Open this page from the Electron app. For Web Preview,
+            run pnpm dev:web and open http://localhost:5173/?source=dummy.
+          </p>
+        </section>
+      ) : runtimeStatus ? (
         <div className="shell-grid">
           <section className="card" aria-labelledby="preview-heading">
             <div className="card-header">
@@ -201,6 +239,19 @@ function App(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => openPreviewUrl(runtimeStatus.previewNativeUrl)}
+                >
+                  Open
+                </button>
+              </div>
+
+              <div className="url-row">
+                <div>
+                  <span className="url-label">OBS native source</span>
+                  <code>{runtimeStatus.previewObsNativeUrl}</code>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openPreviewUrl(runtimeStatus.previewObsNativeUrl)}
                 >
                   Open
                 </button>
