@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Motion validator import smoke check
+        run: pnpm test:motion-validator-import
+
       - name: Build motion protocol
         run: pnpm --filter @lvk/motion-protocol build
 
