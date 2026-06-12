@@ -2,6 +2,7 @@
 
 #include "tracking_sample_factory.h"
 
+#include <chrono>
 #include <utility>
 
 namespace lvk::tracker {
@@ -18,11 +19,17 @@ FaceTrackingPipeline::FaceTrackingPipeline(
           false,
           0.0,
           FaceBounds{0, 0, 0, 0},
+          0.0,
           false,
       } {}
 
 TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
+  const auto detectionStartedAt = std::chrono::steady_clock::now();
   const auto faceDetection = faceDetector_.detect(frame);
+  const auto detectionFinishedAt = std::chrono::steady_clock::now();
+  const auto detectionDuration =
+      std::chrono::duration<double, std::milli>(
+          detectionFinishedAt - detectionStartedAt);
   const bool shouldUseFallbackTracking =
       detectorName_ == "noop" && !faceDetection.hasFace;
   latestDiagnostics_ = FaceDetectionDiagnostics{
@@ -30,6 +37,7 @@ TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
       faceDetection.hasFace,
       faceDetection.confidence,
       faceDetection.bounds,
+      detectionDuration.count(),
       shouldUseFallbackTracking,
   };
 

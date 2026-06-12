@@ -201,6 +201,7 @@ void writeFaceStatus(
          << "y=" << diagnostics.bounds.y << ", "
          << "width=" << diagnostics.bounds.width << ", "
          << "height=" << diagnostics.bounds.height << "}, "
+         << "detectionDurationMs=" << diagnostics.detectionDurationMs << ", "
          << "usedFallbackTracking="
          << (diagnostics.usedFallbackTracking ? "true" : "false") << "\n";
 }
