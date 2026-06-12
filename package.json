@@ -13,7 +13,8 @@
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:motion-validator-import": "node tools/check-motion-frame-validator-import.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"
