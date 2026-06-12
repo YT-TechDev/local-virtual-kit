@@ -154,7 +154,11 @@ http://localhost:5173/?source=native
 
 Expected result: Web Preview connects to the localhost bridge and consumes native MotionFrame JSON. Only MotionFrame JSON is piped to the bridge; raw frames are not piped.
 
+Stop the manual bridge process from Terminal 2 before starting the Electron smoke. Electron starts its own MotionFrame bridge, and leaving the manual bridge running will keep `127.0.0.1:45731` bound and can cause a port-in-use error.
+
 ### 5. Electron-started native pipeline smoke
+
+This is an alternative to the manual bridge smoke above when validating Electron-managed startup and shutdown.
 
 Terminal 1:
 
