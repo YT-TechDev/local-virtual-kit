@@ -14,6 +14,7 @@ export type MotionBridgeStatus =
   | 'error'
 
 export type NativePipelineCameraSource = 'dummy' | 'opencv'
+export type NativePipelineFaceDetector = 'noop' | 'opencv'
 
 export interface NativePipelineStartOptions {
   cameraSource: NativePipelineCameraSource
@@ -27,6 +28,7 @@ export interface LvkRuntimeStatus {
   nativeTrackerStatus: NativeTrackerStatus
   motionBridgeStatus: MotionBridgeStatus
   pipelineCameraSource?: NativePipelineCameraSource
+  pipelineFaceDetector?: NativePipelineFaceDetector
   lastError?: string
   lastMessage?: string
 }

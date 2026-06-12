@@ -3,6 +3,7 @@ import type {
   LvkRuntimeStatus,
   MotionBridgeStatus,
   NativePipelineCameraSource,
+  NativePipelineFaceDetector,
   NativeTrackerStatus
 } from '../../preload/api'
 
@@ -15,13 +16,19 @@ const developmentCommands = [
   'pnpm dev:web',
   'cmake -S native/tracker-core -B native/tracker-core/build',
   'cmake --build native/tracker-core/build',
-  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime | node tools/motion-ws-bridge.mjs',
-  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs'
+  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime | node tools/motion-ws-bridge.mjs',
+  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  'LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector opencv --face-cascade /path/to/haarcascade.xml --frames 3 --log-face-status'
 ]
 
 const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {
   dummy: 'Dummy source',
   opencv: 'OpenCV camera'
+}
+
+const faceDetectorLabels: Record<NativePipelineFaceDetector, string> = {
+  noop: 'Noop face detector',
+  opencv: 'OpenCV face detection'
 }
 
 const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
@@ -184,6 +191,7 @@ function App(): React.JSX.Element {
       ['starting', 'running'].includes(runtimeStatus.motionBridgeStatus)
     : false
   const activeCameraSource = runtimeStatus?.pipelineCameraSource ?? 'dummy'
+  const activeFaceDetector = runtimeStatus?.pipelineFaceDetector ?? 'noop'
 
   return (
     <main className="desktop-shell">
@@ -284,6 +292,12 @@ function App(): React.JSX.Element {
                 </dd>
               </div>
               <div>
+                <dt>Face detector</dt>
+                <dd>
+                  <StatusPill label={faceDetectorLabels[activeFaceDetector]} />
+                </dd>
+              </div>
+              <div>
                 <dt>Native tracker status</dt>
                 <dd>
                   <StatusPill
@@ -353,8 +367,10 @@ function App(): React.JSX.Element {
             </div>
 
             <p className="note">
-              Future controls for camera source, preview, and runtime preferences will live here.
-              This card is display-only and does not change runtime behavior.
+              Future controls for camera source, preview, face detector selection, and runtime
+              preferences will live here. OpenCV face detection is optional and requires an explicit
+              LVK_FACE_CASCADE_PATH configuration before Electron passes a cascade to the native
+              tracker.
             </p>
           </section>
 
@@ -390,9 +406,9 @@ function App(): React.JSX.Element {
             </ol>
 
             <p className="note">
-              Desktop can start dummy or OpenCV camera source for the development native MotionFrame
-              pipeline. OpenCV source is capture-only for now. DummyMotionTracker still produces
-              MotionFrame values, and real face tracking is still out of scope.
+              Desktop can start dummy, OpenCV camera capture-only, or an explicitly configured
+              OpenCV face detection development pipeline. Camera frames stay local, Electron only
+              manages native processes, and MotionFrame bridge URLs stay unchanged.
             </p>
           </section>
         </div>
