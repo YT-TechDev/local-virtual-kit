@@ -10,10 +10,11 @@
     "dev:motion-bridge": "node tools/motion-ws-bridge.mjs",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm test:motion-validator-import && pnpm -r --if-present test",
+    "test": "pnpm test:native-diagnostics-summarize && pnpm test:motion-validator-import && pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test:native-diagnostics-summarize": "node tools/check-native-diagnostics-summarizer.mjs",
     "test:motion-validator-import": "node tools/check-motion-frame-validator-import.mjs",
     "diagnostics:summarize": "node tools/summarize-native-diagnostics.mjs"
   },
