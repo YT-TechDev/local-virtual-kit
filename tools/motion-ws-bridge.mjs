@@ -2,6 +2,7 @@
 import crypto from "node:crypto";
 import net from "node:net";
 import readline from "node:readline";
+import { parseNativeMotionFrameJson } from "../packages/motion-protocol/src/motion-frame-validation.js";
 
 const HOST = "127.0.0.1";
 const PORT = 45731;
@@ -12,98 +13,12 @@ const clients = new Set();
 let latestFrameText = null;
 let latestTimestampMs = -Infinity;
 
-const isRecord = (value) =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-const isFiniteNumber = (value) =>
-  typeof value === "number" && Number.isFinite(value);
-const isTrackingStatus = (value) =>
-  value === "not_started" || value === "tracking" || value === "lost";
-
-const isVector2 = (value) => {
-  return isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
-};
-
-const isVector3 = (value) => {
-  return (
-    isRecord(value) &&
-    isFiniteNumber(value.x) &&
-    isFiniteNumber(value.y) &&
-    isFiniteNumber(value.z)
-  );
-};
-
-const isEulerRotation = (value) => {
-  return (
-    isRecord(value) &&
-    isFiniteNumber(value.pitch) &&
-    isFiniteNumber(value.yaw) &&
-    isFiniteNumber(value.roll)
-  );
-};
-
-const isMotionFrame = (value) => {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  if (
-    value.schemaVersion !== 1 ||
-    value.source !== "native" ||
-    !isFiniteNumber(value.timestampMs)
-  ) {
-    return false;
-  }
-
-  if (!isRecord(value.tracking) || !isTrackingStatus(value.tracking.status)) {
-    return false;
-  }
-
-  if (!isFiniteNumber(value.tracking.confidence)) {
-    return false;
-  }
-
-  if (
-    !isRecord(value.face) ||
-    !isVector3(value.face.position) ||
-    !isEulerRotation(value.face.rotation)
-  ) {
-    return false;
-  }
-
-  if (
-    !isRecord(value.eyes) ||
-    !isFiniteNumber(value.eyes.leftOpen) ||
-    !isFiniteNumber(value.eyes.rightOpen)
-  ) {
-    return false;
-  }
-
-  if (!isVector2(value.eyes.gaze)) {
-    return false;
-  }
-
-  if (
-    !isRecord(value.mouth) ||
-    !isFiniteNumber(value.mouth.open) ||
-    !isFiniteNumber(value.mouth.smile)
-  ) {
-    return false;
-  }
-
-  return true;
-};
-
 const parseMotionFrameLine = (line) => {
   if (line.trim() === "") {
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(line);
-    return isMotionFrame(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return parseNativeMotionFrameJson(line);
 };
 
 const createWebSocketAccept = (key) => {

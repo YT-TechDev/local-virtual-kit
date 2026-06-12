@@ -12,8 +12,10 @@
     "rootDir": "src",
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true
+    "exactOptionalPropertyTypes": true,
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.js"],
   "exclude": ["src/**/*.test.ts", "src/**/__tests__/**", "dist"]
 }
