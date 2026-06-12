@@ -1,0 +1,138 @@
+#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+
+const logPath = process.argv[2];
+
+if (!logPath) {
+  console.error(
+    "Usage: node tools/summarize-native-diagnostics.mjs <stderr-log-path>",
+  );
+  process.exit(1);
+}
+
+let logText;
+
+try {
+  logText = readFileSync(logPath, "utf8");
+} catch (error) {
+  console.error(
+    `Unable to read diagnostics log at ${JSON.stringify(logPath)}: ${error.message}`,
+  );
+  process.exit(1);
+}
+
+const pipelineMetricNames = [
+  "captureDurationMs",
+  "preprocessDurationMs",
+  "trackingDurationMs",
+  "writeDurationMs",
+  "totalFrameDurationMs",
+];
+const faceMetricNames = ["detectionDurationMs"];
+
+const pipelineValues = Object.fromEntries(
+  pipelineMetricNames.map((metricName) => [metricName, []]),
+);
+const faceValues = Object.fromEntries(
+  faceMetricNames.map((metricName) => [metricName, []]),
+);
+
+let pipelineCount = 0;
+let faceCount = 0;
+let hasFaceCount = 0;
+let lostOrNoFaceCount = 0;
+
+function extractNumber(line, fieldName) {
+  const match = line.match(
+    new RegExp(
+      `(?:^|[, ])${fieldName}=(-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?)(?=,|$)`,
+    ),
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseBooleanField(line, fieldName) {
+  const match = line.match(
+    new RegExp(`(?:^|[, ])${fieldName}=(true|false)(?=,|$)`),
+  );
+  return match ? match[1] === "true" : null;
+}
+
+function roundMetric(value) {
+  return Number(value.toFixed(6));
+}
+
+function summarizeNumbers(values) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const sum = values.reduce((total, value) => total + value, 0);
+
+  return {
+    min: roundMetric(Math.min(...values)),
+    avg: roundMetric(sum / values.length),
+    max: roundMetric(Math.max(...values)),
+  };
+}
+
+for (const line of logText.split(/\r?\n/)) {
+  if (line.startsWith("[pipeline] periodic:")) {
+    pipelineCount += 1;
+
+    for (const metricName of pipelineMetricNames) {
+      const value = extractNumber(line, metricName);
+
+      if (value !== null) {
+        pipelineValues[metricName].push(value);
+      }
+    }
+
+    continue;
+  }
+
+  if (line.startsWith("[face] periodic:")) {
+    faceCount += 1;
+
+    for (const metricName of faceMetricNames) {
+      const value = extractNumber(line, metricName);
+
+      if (value !== null) {
+        faceValues[metricName].push(value);
+      }
+    }
+
+    const hasFace = parseBooleanField(line, "hasFace");
+
+    if (hasFace === true) {
+      hasFaceCount += 1;
+    } else if (hasFace === false) {
+      lostOrNoFaceCount += 1;
+    }
+  }
+}
+
+const summary = {
+  pipeline: {
+    count: pipelineCount,
+    captureDurationMs: summarizeNumbers(pipelineValues.captureDurationMs),
+    preprocessDurationMs: summarizeNumbers(pipelineValues.preprocessDurationMs),
+    trackingDurationMs: summarizeNumbers(pipelineValues.trackingDurationMs),
+    writeDurationMs: summarizeNumbers(pipelineValues.writeDurationMs),
+    totalFrameDurationMs: summarizeNumbers(pipelineValues.totalFrameDurationMs),
+  },
+  face: {
+    count: faceCount,
+    detectionDurationMs: summarizeNumbers(faceValues.detectionDurationMs),
+    hasFaceCount,
+    lostOrNoFaceCount,
+  },
+};
+
+console.log(JSON.stringify(summary, null, 2));
