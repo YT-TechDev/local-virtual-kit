@@ -36,6 +36,8 @@ constexpr int kMaxCameraIndex = 16;
 constexpr int kMaxCameraStatusInterval = 100000;
 constexpr int kDefaultFaceStatusInterval = 60;
 constexpr int kMaxFaceStatusInterval = 100000;
+constexpr int kDefaultPipelineStatusInterval = 60;
+constexpr int kMaxPipelineStatusInterval = 100000;
 constexpr double kMinCameraFps = 1.0;
 constexpr double kMaxCameraFps = 240.0;
 
@@ -49,6 +51,8 @@ struct TrackerOptions {
   int cameraStatusInterval = 0;
   bool logFaceStatus = false;
   int faceStatusInterval = kDefaultFaceStatusInterval;
+  bool logPipelineStatus = false;
+  int pipelineStatusInterval = kDefaultPipelineStatusInterval;
   lvk::tracker::CameraSourceOptions camera;
   std::string faceDetectorName = "noop";
   std::string faceCascadePath;
@@ -132,6 +136,7 @@ void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
             "[--log-camera-status] [--camera-status-interval N] "
             "[--log-face-status] [--face-status-interval N] "
+            "[--log-pipeline-status] [--pipeline-status-interval N] "
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH]\n";
@@ -147,6 +152,10 @@ void printUsage(std::ostream &output) {
   output << "--face-status-interval N writes periodic face diagnostics every N "
          << "emitted frames when --log-face-status is set. N must be between 1 "
          << "and " << kMaxFaceStatusInterval << ".\n";
+  output << "--log-pipeline-status writes safe pipeline timing diagnostics to stderr.\n";
+  output << "--pipeline-status-interval N writes periodic pipeline diagnostics every N "
+         << "emitted frames when --log-pipeline-status is set. N must be "
+         << "between 1 and " << kMaxPipelineStatusInterval << ".\n";
   output << "--camera-source selects the camera source; supported values are 'dummy' and 'opencv'.\n";
   output << "--camera-index N must be an integer between 0 and "
          << kMaxCameraIndex << ".\n";
@@ -206,6 +215,35 @@ void writeFaceStatus(
          << (diagnostics.usedFallbackTracking ? "true" : "false") << "\n";
 }
 
+struct PipelineTimingDiagnostics {
+  long long emittedFrameCount;
+  double captureDurationMs;
+  double preprocessDurationMs;
+  double trackingDurationMs;
+  double writeDurationMs;
+  double totalFrameDurationMs;
+};
+
+double elapsedMilliseconds(
+    const std::chrono::steady_clock::time_point &startedAt,
+    const std::chrono::steady_clock::time_point &stoppedAt) {
+  return std::chrono::duration<double, std::milli>(stoppedAt - startedAt)
+      .count();
+}
+
+void writePipelineStatus(
+    std::ostream &output,
+    const std::string &label,
+    const PipelineTimingDiagnostics &diagnostics) {
+  output << "[pipeline] " << label << ": "
+         << "emittedFrameCount=" << diagnostics.emittedFrameCount << ", "
+         << "captureDurationMs=" << diagnostics.captureDurationMs << ", "
+         << "preprocessDurationMs=" << diagnostics.preprocessDurationMs << ", "
+         << "trackingDurationMs=" << diagnostics.trackingDurationMs << ", "
+         << "writeDurationMs=" << diagnostics.writeDurationMs << ", "
+         << "totalFrameDurationMs=" << diagnostics.totalFrameDurationMs << "\n";
+}
+
 bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
   for (int argIndex = 1; argIndex < argc; ++argIndex) {
     const std::string argument = argv[argIndex];
@@ -227,6 +265,34 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
 
     if (argument == "--log-face-status") {
       options.logFaceStatus = true;
+      continue;
+    }
+
+    if (argument == "--log-pipeline-status") {
+      options.logPipelineStatus = true;
+      continue;
+    }
+
+    if (argument == "--pipeline-status-interval") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --pipeline-status-interval.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int pipelineStatusInterval = 0;
+      if (!parsePositiveIntegerInRange(
+              argv[argIndex + 1],
+              kMaxPipelineStatusInterval,
+              pipelineStatusInterval)) {
+        std::cerr << "Invalid value for --pipeline-status-interval: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.pipelineStatusInterval = pipelineStatusInterval;
+      ++argIndex;
       continue;
     }
 
@@ -529,6 +595,7 @@ int main(int argc, char *argv[]) {
        (options.continuous || frameIndex < options.frameCount);
        ++frameIndex) {
     lvk::tracker::CameraFrame cameraFrame{};
+    const auto captureStartedAt = std::chrono::steady_clock::now();
     if (!cameraSource->nextFrame(cameraFrame)) {
       std::cerr << "Local camera source stopped before all frames were "
                    "emitted.\n";
@@ -539,26 +606,49 @@ int main(int argc, char *argv[]) {
       cameraSource->stop();
       return 1;
     }
+    const auto captureStoppedAt = std::chrono::steady_clock::now();
 
+    const auto preprocessStartedAt = std::chrono::steady_clock::now();
     const auto preprocessedFrame = framePreprocessor.process(cameraFrame);
-    lvk::tracker::writeMotionFrameJson(
-        std::cout, trackingPipeline.track(preprocessedFrame));
+    const auto preprocessStoppedAt = std::chrono::steady_clock::now();
+
+    const auto trackingStartedAt = std::chrono::steady_clock::now();
+    const auto trackingSample = trackingPipeline.track(preprocessedFrame);
+    const auto trackingStoppedAt = std::chrono::steady_clock::now();
+
+    const auto writeStartedAt = std::chrono::steady_clock::now();
+    lvk::tracker::writeMotionFrameJson(std::cout, trackingSample);
+    const auto writeStoppedAt = std::chrono::steady_clock::now();
+
+    const auto frameStoppedAt = std::chrono::steady_clock::now();
+    const auto cameraDiagnostics = cameraSource->diagnostics();
+    const PipelineTimingDiagnostics pipelineDiagnostics{
+        cameraDiagnostics.emittedFrameCount,
+        elapsedMilliseconds(captureStartedAt, captureStoppedAt),
+        elapsedMilliseconds(preprocessStartedAt, preprocessStoppedAt),
+        elapsedMilliseconds(trackingStartedAt, trackingStoppedAt),
+        elapsedMilliseconds(writeStartedAt, writeStoppedAt),
+        elapsedMilliseconds(captureStartedAt, frameStoppedAt)};
+
+    if (options.logPipelineStatus &&
+        pipelineDiagnostics.emittedFrameCount %
+                options.pipelineStatusInterval ==
+            0) {
+      writePipelineStatus(std::cerr, "periodic", pipelineDiagnostics);
+    }
 
     if (options.logFaceStatus &&
-        cameraSource->diagnostics().emittedFrameCount %
-                options.faceStatusInterval ==
-            0) {
+        cameraDiagnostics.emittedFrameCount % options.faceStatusInterval == 0) {
       writeFaceStatus(
           std::cerr, "periodic",
           trackingPipeline.lastDetectionDiagnostics());
     }
 
     if (options.logCameraStatus && options.cameraStatusInterval > 0 &&
-        cameraSource->diagnostics().emittedFrameCount %
-                options.cameraStatusInterval ==
+        cameraDiagnostics.emittedFrameCount % options.cameraStatusInterval ==
             0) {
       writeCameraStatus(
-          std::cerr, "periodic", cameraSource->diagnostics());
+          std::cerr, "periodic", cameraDiagnostics);
     }
 
     if (options.realtime) {
