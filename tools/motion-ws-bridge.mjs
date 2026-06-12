@@ -2,6 +2,8 @@
 import crypto from "node:crypto";
 import net from "node:net";
 import readline from "node:readline";
+// Import the source JS validator so this development bridge can run directly with
+// `node tools/motion-ws-bridge.mjs` before @lvk/motion-protocol/dist exists.
 import { parseNativeMotionFrameJson } from "../packages/motion-protocol/src/motion-frame-validation.js";
 
 const HOST = "127.0.0.1";
