@@ -24,6 +24,7 @@ struct FaceDetectionDiagnostics {
   bool hasFace;
   double confidence;
   FaceBounds bounds;
+  double detectionDurationMs;
   bool usedFallbackTracking;
 };
 
