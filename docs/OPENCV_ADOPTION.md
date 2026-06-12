@@ -2,33 +2,41 @@
 
 ## Status
 
-Proposed / not implemented yet.
-This is a documentation-only design note. It does not add OpenCV as a dependency, does not modify CMake, and does not implement real camera capture, face detection, or landmark extraction.
+Current implementation state, source-grounded as of this planning note:
+
+- Native Core has a safe default `dummy` camera source and `noop` face detector path for deterministic development output.
+- Native Core can optionally build an OpenCV camera source when CMake finds OpenCV `core` + `videoio`. This path opens a local camera through Native Core only and preserves the existing MotionFrame JSON output path.
+- Native Core can optionally build an OpenCV Haar-cascade face detector when CMake finds OpenCV `core` + `imgproc` + `objdetect` and the user provides a local cascade XML path at run time.
+- The generic `FaceDetector` / `FaceTrackingPipeline` seam exists between frame preprocessing and MotionFrame sample generation, but product-quality landmark tracking is not implemented yet.
+- Landmark extraction, head pose estimation, gaze, eye openness, mouth/expression tracking, smoothing, and calibration-quality tracking are still future work.
+- Codex, cloud runners, CI, WSL, and other headless environments may build or test dummy paths without validating real camera hardware, OS camera permissions, camera backend behavior, or local cascade availability. Do not claim real camera validation unless it was actually run on a machine with the target camera setup.
+
+This remains a documentation-only design note. It does not add dependencies, model files, cascade files, generated assets, or runtime behavior.
 
 ## Summary Decision
 
 Recommended approach:
 
-- Use OpenCV first for local camera capture and basic preprocessing in the Native Core only.
-- Do not rely on OpenCV alone as the final face landmark or VTuber tracking solution.
-- Keep the real tracking model choice separate from the camera capture decision.
-- Keep the current dummy camera and dummy tracker path available for tests and development.
-- Do not add OpenCV until the next implementation PR that actually adds `OpenCvCameraSource`.
-  OpenCV is a good candidate for Phase 6 camera input and early preprocessing. Phase 7 face tracking should still evaluate a dedicated strategy such as MediaPipe, ONNX Runtime, or another local model pipeline.
+- Treat OpenCV as useful Native Core infrastructure for local camera capture, frame metadata, basic preprocessing, and a baseline/smoke detector only.
+- Do not rely on Haar cascade face boxes or OpenCV alone as the final face landmark or VTuber tracking solution.
+- Evaluate a dedicated local landmark/model backend before product-grade face tracking work.
+- Keep the current dummy camera and dummy/noop tracker paths available for tests, development, and fallback behavior.
+- Keep the backend choice behind Native Core abstractions so Electron, Web Preview, and `packages/motion-protocol` do not gain OpenCV or model-runtime ownership.
 
 ## Current LVK Native State
 
-The current native tracker core is already split into small replacement points:
+The current native tracker core is split into replacement points that let LVK improve tracking quality without crossing architecture boundaries:
 
-- `CameraSource` / `DummyCameraSource` define a camera input abstraction. The current source emits synthetic frame metadata only.
-- `CameraSourceOptions` and `createCameraSource(...)` make camera-source selection explicit. Only `dummy` is currently supported.
-- `MotionTracker` / `DummyMotionTracker` convert a `CameraFrame` into a native `TrackingSample`.
-- `motion_frame_writer` serializes `TrackingSample` into the current MotionFrame JSON shape.
+- `CameraSource` / `DummyCameraSource` define a camera input abstraction. `dummy` remains the default and safest development source.
+- Optional `OpenCvCameraSource` support is available only in native builds where CMake found the required OpenCV camera components. It reads local webcam frames into Native Core memory and does not expose raw frames to stdout, Electron, or Web Preview.
+- `CameraSourceOptions` and `createCameraSource(...)` keep camera-source selection explicit.
+- `FramePreprocessor`, `FaceDetector`, and `FaceTrackingPipeline` provide seams for local preprocessing and detector/model work.
+- `NoopFaceDetector` remains the default detector. The optional OpenCV detector is an opt-in Haar-cascade smoke/baseline path that requires a user-provided local cascade XML file.
+- `MotionTracker` / `DummyMotionTracker` and `motion_frame_writer` preserve the current MotionFrame JSON shape.
 - `main.cpp` owns CLI parsing, camera source lifecycle, realtime pacing, stop signals, diagnostics, and stdout emission.
-- Electron owns the development native pipeline lifecycle and keeps the renderer sandboxed.
-  This state is ready for an OpenCV adoption decision because the camera source and tracker abstractions exist. It is not yet ready for broad face-tracking implementation because real frames, preprocessing, model choice, calibration, and diagnostics still need to be added in stages.
+- Electron owns development native process lifecycle and status/settings surfaces; it must not own tracking algorithms.
 
-The Native Core now also has a generic `FaceDetector` / `FaceTrackingPipeline` seam between `FramePreprocessor` and MotionFrame sample generation. The current detector is a no-op and intentionally does not add OpenCV face detection, landmark extraction, or real tracking values yet.
+This state is ready for backend evaluation and local smoke testing. It is not yet product-quality face tracking.
 
 ## OpenCV Research Notes
 
@@ -55,7 +63,7 @@ Official sources:
 - Keep OpenCV usage inside `native/tracker-core`.
 - Prefer a minimal component set such as `core`, `imgproc`, and `videoio` if the installed OpenCV package supports component-based discovery.
 - Do not add OpenCV to Electron, Web Preview, or `packages/motion-protocol`.
-- Add CMake dependency configuration only in the implementation PR that adds a real OpenCV-backed source.
+- Keep OpenCV dependency configuration scoped to `native/tracker-core`; do not add OpenCV to Electron, Web Preview, or `packages/motion-protocol`.
 
 ### Webcam Capture Capabilities
 
@@ -71,12 +79,12 @@ Official source:
 
 ### Relevant Modules
 
-Likely useful modules for LVK Phase 6:
+Useful OpenCV modules for LVK camera/preprocessing work:
 
 - `opencv_core`: `cv::Mat`, timing/data primitives.
 - `opencv_videoio`: camera and video capture.
 - `opencv_imgproc`: color conversion, resize, crop, grayscale, histogram/equalization if needed.
-  Potential but not final tracking modules:
+  Baseline or experimental modules, not final tracking decisions by themselves:
 - `opencv_objdetect`: possible basic Haar/LBP-style face detection experiments.
 - `opencv_dnn`: possible local model inference experiments, but not a tracking strategy by itself.
 
@@ -111,6 +119,37 @@ Official sources:
 | Face detection                | Maybe, as a temporary baseline only | Useful for early experiments, but not enough for expressive VTuber tracking.                    |
 | Landmark extraction           | No, not by OpenCV alone             | Final landmark quality should be decided separately with a dedicated model/strategy.            |
 | All tracking responsibilities | No                                  | OpenCV should not define MotionFrame, renderer mapping, Electron lifecycle, or avatar behavior. |
+
+## Quality-first face tracking direction
+
+LVK should optimize for stable, product-grade local face tracking rather than accepting the first detector that returns a face rectangle. The OpenCV Haar-cascade path is useful for smoke testing camera capture, detector wiring, diagnostics, and fallback behavior, but Haar boxes must not be treated as the final tracking solution.
+
+Decisions for future tracking work:
+
+- OpenCV remains useful for local camera capture, frame metadata, basic preprocessing, and baseline/smoke face detection.
+- A dedicated landmark/model backend should be evaluated before the Face Tracking MVP is considered product-grade.
+- Candidate future backends include:
+  - MediaPipe Face Landmarker.
+  - ONNX Runtime with a local face landmark or expression model.
+  - Other local-only model pipelines if they preserve LVK's process, privacy, and package boundaries.
+- Backend selection must stay behind Native Core abstractions such as the camera, preprocessing, detector/tracker, and MotionFrame writer seams.
+- Raw camera frames must remain local to Native Core memory.
+- LVK must not add cloud upload, telemetry, analytics, or external frame processing for camera frames.
+
+### Quality bar for the future Face Tracking MVP
+
+A future Face Tracking MVP should meet reviewable quality criteria before it is presented as product-grade tracking:
+
+- Stable face lock under normal desktop lighting and framing, without frequent false lost-face transitions.
+- Low visible jitter in normalized head, eye, and mouth values after any Native Core smoothing/calibration.
+- Predictable lost-face behavior, including clear confidence/lost-state handling and a safe fallback when tracking cannot continue.
+- Usable FPS and timing diagnostics for capture, preprocessing, backend inference/detection, and emitted MotionFrame output.
+- Head rotation support sufficient for common VTuber preview movement, rather than only a 2D face box center.
+- Eye openness and blink support with documented calibration or threshold behavior.
+- Mouth open and smile or expression support good enough to drive the existing MotionFrame fields intentionally.
+- Local-only handling for raw and derived camera frames.
+- Clear fallback behavior when the selected backend, model file, cascade file, camera, or native feature flag is unavailable.
+- No MotionFrame schema changes unless they are intentionally coordinated through Motion Protocol documentation, validation, and renderer compatibility work.
 
 ## What OpenCV Should Not Own in LVK
 
@@ -243,12 +282,13 @@ Future module layout, not implemented in this PR:
 ```txt
 native/tracker-core/src/
   camera_source.h/.cpp
-  opencv_camera_source.h/.cpp        (future)
-  frame_preprocessor.h/.cpp          (future)
+  opencv_camera_source.h/.cpp
+  frame_preprocessor.h/.cpp
   tracker.h/.cpp
-  face_tracker.h/.cpp                (future)
+  face_tracker.h/.cpp                (future backend/model work)
   motion_frame_writer.h/.cpp
   main.cpp
+```
 
 Why this separation helps:
 
@@ -258,82 +298,80 @@ Why this separation helps:
 * Keeps privacy boundaries local and explicit.
 * Keeps main.cpp focused on CLI, lifecycle, pacing, diagnostics, and pipeline wiring.
 
-Recommended Staged Plan
+## Recommended Staged Plan
 
-Stage 1: OpenCV Capture Source
+### Stage 1: OpenCV Capture Source
 
-* Add OpenCV dependency to native/tracker-core only.
-* Add OpenCvCameraSource behind the existing CameraSource interface.
-* Add --camera-source opencv or a clearer device-specific source name.
-* Keep dummy as the default if this is safer for CI and development.
-* Do not add face tracking yet.
-* Emit dummy tracking values from real camera frame metadata to prove capture/lifecycle/diagnostics.
+* Current state: optional OpenCV camera capture exists in Native Core builds where the required OpenCV components are found.
+* Keep `DummyCameraSource` as the default and safe fallback for CI, development, and environments without a real camera.
+* Continue validating that raw camera frames stay local, stdout remains MotionFrame JSON only, and Electron/Web Preview do not gain OpenCV dependencies.
 * Preserve current MotionFrame schema.
 
-Stage 2: Local Frame Preprocessing
+### Stage 2: Local Frame Preprocessing
 
 * Add FramePreprocessor behind a native-only abstraction.
 * Add basic resize/crop/color conversion only when needed.
 * Add diagnostics for capture FPS, preprocessing time, dropped frames, and frame dimensions.
 * Keep all raw and derived frame buffers local.
 
-Stage 3: Face Tracking Strategy
+### Stage 3: Tracking Backend Evaluation
 
-* Add FaceTracker or replace DummyMotionTracker behind the existing tracker abstraction.
-* Evaluate OpenCV detection, MediaPipe, ONNX Runtime, or another local model path separately.
-* Emit only the current MotionFrame schema.
-* Do not expose model internals to Web Preview.
+* Treat OpenCV Haar detection as a baseline/smoke detector only.
+* Evaluate MediaPipe Face Landmarker, ONNX Runtime with a local landmark/expression model, or another local-only model path behind Native Core abstractions.
+* Keep dummy/noop mode and current MotionFrame output working throughout evaluation.
+* Emit only the current MotionFrame schema unless a schema change is intentionally coordinated.
+* Do not expose raw frames, model internals, or backend runtime details to Web Preview.
 
-Stage 4: Smoothing and Calibration
+### Stage 4: Smoothing and Calibration
 
 * Add smoothing only after real tracking values exist.
 * Add neutral pose, eye open baseline, mouth closed baseline, and camera framing calibration.
 * Keep Electron responsible for calibration UI and Native Core responsible for local calibration application.
 
-Decision Matrix
+## Decision Matrix
 
-Option	Local-first fit	Build complexity	Tracking quality potential	Packaging risk	v0.1 suitability
-OpenCV for capture/preprocessing	High	Medium	Low by itself, but enables pipeline	Medium	Good for Phase 6
-OpenCV for face detection	High	Medium	Low to medium	Medium	Temporary baseline only
-MediaPipe	High if local-only	Medium to high	High for landmarks	Medium to high	Better for Phase 7 evaluation
-ONNX Runtime	High if local model only	Medium	Depends on selected model	Medium	Good only after model choice
-Platform APIs	High	High per platform	Capture only	Medium	Not smallest Phase 6 path
-No external dependency yet	High	Low	None for real camera/tracking	Low	Good for docs/dummy-only, not enough for Phase 6
+| Option | Local-first fit | Build complexity | Tracking quality potential | Packaging risk | v0.1 suitability |
+| --- | --- | --- | --- | --- | --- |
+| OpenCV for capture/preprocessing | High | Medium | Low by itself, but enables pipeline | Medium | Good for Phase 6 |
+| OpenCV for face detection | High | Medium | Low to medium | Medium | Temporary baseline only |
+| MediaPipe | High if local-only | Medium to high | High for landmarks | Medium to high | Better for backend evaluation |
+| ONNX Runtime | High if local model only | Medium | Depends on selected model | Medium | Good only after model choice |
+| Platform APIs | High | High per platform | Capture only | Medium | Not smallest Phase 6 path |
+| No external dependency yet | High | Low | None for real camera/tracking | Low | Good for docs/dummy-only, not enough for real camera/tracking |
 
-Risks and Mitigations
+## Risks and Mitigations
 
-Risk	Mitigation
-Dependency size grows quickly	Add minimal OpenCV modules only; avoid broad dependency upgrades.
-Build complexity increases	Keep OpenCV in one native PR; document local setup and CI behavior clearly.
-Packaging becomes fragile	Verify runtime library discovery on Windows first, then Linux/macOS separately.
-Platform camera permission issues	Treat permissions/backend behavior as explicit diagnostics, not silent failure.
-WSL camera behavior differs from real Windows	Use WSL for development only; validate real capture on host OS.
-Latency or dropped frames	Add capture FPS and dropped-frame diagnostics before tracking.
-False sense that OpenCV solves landmarks	Keep capture/preprocessing separate from face tracking/model selection.
-Privacy regression	Keep raw frames in Native Core memory only; never add upload/telemetry/network behavior.
+| Risk | Mitigation |
+| --- | --- |
+| Dependency size grows quickly | Keep optional dependencies scoped to Native Core and avoid broad dependency upgrades. |
+| Build complexity increases | Keep feature detection and local setup documentation clear; preserve dummy builds. |
+| Packaging becomes fragile | Verify runtime library discovery on Windows first, then Linux/macOS separately. |
+| Platform camera permission issues | Treat permissions/backend behavior as explicit diagnostics, not silent failure. |
+| WSL camera behavior differs from real Windows | Use WSL for development only; validate real capture on host OS. |
+| Latency or dropped frames | Add capture FPS and dropped-frame diagnostics before tracking. |
+| False sense that OpenCV solves landmarks | Keep capture/preprocessing and Haar smoke detection separate from product-quality landmark/backend selection. |
+| Privacy regression | Keep raw frames in Native Core memory only; never add upload/telemetry/network behavior. |
 
-Non-goals
+## Non-goals
 
-* No real camera implementation in this PR.
 * No dependency changes in this PR.
 * No CMake dependency configuration changes in this PR.
 * No MotionFrame schema changes.
 * No Web Preview changes.
 * No Electron behavior changes.
-* No face detection implementation.
+* No new face detection implementation.
 * No landmark extraction implementation.
 * No telemetry, analytics, cloud upload, or external runtime behavior.
 
-Final Recommendation
+## Final Recommendation
 
-The next implementation PR should add OpenCV only as a Native Core dependency and implement OpenCvCameraSource behind the existing CameraSource interface. It should keep DummyCameraSource available, preserve the current MotionFrame schema, and avoid face detection or landmark extraction.
+The next tracking implementation work should evaluate a product-quality local landmark/model backend behind Native Core abstractions before expanding the Face Tracking MVP. OpenCV should continue to serve capture, preprocessing, frame metadata, and baseline/smoke detection needs, while dummy/noop mode and the current MotionFrame output remain stable.
 
-The success criteria for that next PR should be:
+The success criteria for that evaluation should be:
 
-* --camera-source opencv opens a local webcam on at least one primary target platform.
+* Candidate backends are compared on local-only operation, tracking quality, latency/FPS diagnostics, packaging risk, and fit with LVK boundaries.
+* OpenCV Haar detection remains clearly labeled as a baseline/smoke path, not final VTuber-grade tracking.
 * Raw frames remain local to the native process.
-* The native pipeline still emits current MotionFrame JSON.
-* Tracking values remain dummy or metadata-derived until Phase 7.
-* Diagnostics clearly report camera open/read failures, dimensions, FPS, and frame counts.
-* Electron and Web Preview do not gain OpenCV dependencies.
-```
+* The native pipeline still emits current MotionFrame JSON unless schema work is intentionally coordinated.
+* Dummy mode remains available for CI and development.
+* Electron and Web Preview do not gain OpenCV, MediaPipe, ONNX Runtime, or model-specific dependencies.
