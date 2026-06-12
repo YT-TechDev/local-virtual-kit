@@ -107,6 +107,17 @@ Goal:
 
 ---
 
+## Phase 6.5 - Tracking Backend Evaluation
+
+Goal:
+
+- evaluate a product-quality local tracking backend before the full Face Tracking MVP
+- treat OpenCV Haar detection as a baseline/smoke path only
+- compare dedicated local landmark/model options behind Native Core abstractions
+- keep dummy mode and current MotionFrame output working during evaluation
+
+---
+
 ## Phase 7 - Face Tracking MVP
 
 Goal:
