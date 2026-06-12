@@ -618,9 +618,12 @@ int main(int argc, char *argv[]) {
 
     const auto writeStartedAt = std::chrono::steady_clock::now();
     lvk::tracker::writeMotionFrameJson(std::cout, trackingSample);
+    if (options.realtime) {
+      std::cout.flush();
+    }
     const auto writeStoppedAt = std::chrono::steady_clock::now();
 
-    const auto frameStoppedAt = std::chrono::steady_clock::now();
+    const auto frameStoppedAt = writeStoppedAt;
     const auto cameraDiagnostics = cameraSource->diagnostics();
     const PipelineTimingDiagnostics pipelineDiagnostics{
         cameraDiagnostics.emittedFrameCount,
@@ -652,8 +655,6 @@ int main(int argc, char *argv[]) {
     }
 
     if (options.realtime) {
-      std::cout.flush();
-
       if (options.continuous || frameIndex + 1 < options.frameCount) {
         paceNextFrame(nextFrameTime, cameraFrame);
       }
