@@ -10,7 +10,7 @@
     "dev:motion-bridge": "node tools/motion-ws-bridge.mjs",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm test:motion-validator-import && pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
