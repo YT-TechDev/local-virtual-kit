@@ -69,6 +69,130 @@ For desktop-managed development pipelines that should keep running until stopped
 ./native/tracker-core/build/lvk-tracker-core --continuous --realtime
 ```
 
+## Local OpenCV face detection smoke workflow
+
+Use this workflow when manually verifying the optional OpenCV camera and face-detection pipeline before deeper native camera or tracking work. It is intentionally smoke-test oriented: confirm the process boundaries, CLI flags, Electron-started pipeline behavior, and MotionFrame-compatible output without adding new tracking behavior.
+
+### Local-first privacy expectations
+
+- Raw camera frames stay local to Native Core memory.
+- LVK does not upload camera frames, cascade files, or MotionFrame data to external services.
+- The development bridge uses localhost WebSocket transport only at `ws://127.0.0.1:45731/motion`.
+- Keep cascade XML files outside the repository; provide the local path at run time.
+
+### Prerequisites
+
+- Install workspace dependencies: `pnpm install --frozen-lockfile`.
+- Build the native tracker before Electron tries to start it.
+- OpenCV must be available locally for `--camera-source opencv` and `--face-detector opencv` smoke checks.
+- A Haar cascade XML path is user-provided for face detection and must not be committed. Use placeholder paths in docs and scripts, for example `/path/to/haarcascade.xml`.
+
+### Build
+
+```bash
+pnpm install --frozen-lockfile
+cmake -S native/tracker-core -B native/tracker-core/build
+cmake --build native/tracker-core/build
+```
+
+### 1. Dummy native smoke
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --frames 3
+```
+
+Expected result: exactly 3 newline-delimited MotionFrame JSON lines on stdout. This uses the safe dummy camera source and default `noop` face detector.
+
+### 2. OpenCV camera capture-only smoke
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --frames 3 --log-camera-status
+```
+
+Expected result when OpenCV and a camera are available: MotionFrame JSON lines on stdout and camera status logs on stderr. This may fail in Codex/cloud, CI, WSL without camera forwarding, or on machines without local OpenCV/camera permission. A failure in those environments is not proof that local camera capture is broken.
+
+### 3. Optional OpenCV face detection smoke
+
+Direct CLI runs must pass the cascade path with `--face-cascade`:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --camera-source opencv \
+  --face-detector opencv \
+  --face-cascade /path/to/haarcascade.xml \
+  --frames 3 \
+  --log-face-status
+```
+
+Electron-started runs read `LVK_FACE_CASCADE_PATH` and pass it to Native Core only when the OpenCV camera source is selected:
+
+```bash
+LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml pnpm dev:desktop
+```
+
+The environment variable alone is not a direct CLI substitute; direct CLI validation still requires `--face-cascade /path/to/haarcascade.xml`.
+
+### 4. Local bridge smoke
+
+Terminal 1:
+
+```bash
+pnpm dev:web
+```
+
+Terminal 2:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime | node tools/motion-ws-bridge.mjs
+```
+
+Browser:
+
+```text
+http://localhost:5173/?source=native
+```
+
+Expected result: Web Preview connects to the localhost bridge and consumes native MotionFrame JSON. Only MotionFrame JSON is piped to the bridge; raw frames are not piped.
+
+### 5. Electron-started native pipeline smoke
+
+Terminal 1:
+
+```bash
+pnpm dev:web
+```
+
+Terminal 2:
+
+```bash
+pnpm dev:desktop
+```
+
+In the desktop shell, start the native pipeline and verify:
+
+- Native tracker status changes from `Not started`/`Starting` to `Running`, or reports a clear error.
+- Motion bridge status changes from `Manual dev tool`/`Starting` to `Running`, or reports a clear error.
+- Face detector status is `Noop face detector` by default.
+- With `LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml` set before `pnpm dev:desktop` and `OpenCV camera` selected, the desktop can report `OpenCV face detection` mode.
+
+### Troubleshooting
+
+- **OpenCV reported OFF during CMake**: install or expose local OpenCV development files, then re-run CMake configure. Dummy mode should still build.
+- **Camera permission denied**: grant OS camera permission to the terminal/Electron host process, then retry.
+- **Camera index not found**: try a different `--camera-index` value; Electron currently starts OpenCV with index `0`.
+- **Cascade path missing**: locate a trusted local Haar cascade XML and pass it with `--face-cascade` for CLI runs or `LVK_FACE_CASCADE_PATH` for Electron-started runs. Do not commit cascade XML assets.
+- **Bridge port already in use**: stop the existing `tools/motion-ws-bridge.mjs` process using `127.0.0.1:45731`, then restart the smoke flow.
+- **Web Preview not running**: start `pnpm dev:web` before opening `http://localhost:5173/?source=native` or before using the desktop preview links.
+
+### Explicit limitations
+
+- No landmark extraction yet.
+- No head pose estimation yet.
+- No eye, gaze, or mouth tracking yet.
+- Face bounds may only drive coarse MotionFrame-compatible values.
+- Real tracking quality is not the goal of this smoke workflow.
+- This workflow does not change the MotionFrame schema, native tracking behavior, Electron APIs, renderer behavior, dependencies, CI, or camera automation.
+
 ## OpenCV camera source
 
 `--camera-source opencv` is available only in native builds where CMake found OpenCV. In those builds it opens a local webcam through OpenCV `VideoCapture`, reads frames inside the native process, and emits the existing MotionFrame JSON schema through the unchanged dummy tracker pipeline. Raw frame pixels remain local to Native Core memory; they are not written to disk and are not printed to stdout or stderr.
