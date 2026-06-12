@@ -23,21 +23,25 @@ FaceTrackingPipeline::FaceTrackingPipeline(
 
 TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
   const auto faceDetection = faceDetector_.detect(frame);
+  const bool shouldUseFallbackTracking =
+      detectorName_ == "noop" && !faceDetection.hasFace;
   latestDiagnostics_ = FaceDetectionDiagnostics{
       detectorName_,
       faceDetection.hasFace,
       faceDetection.confidence,
       faceDetection.bounds,
-      !faceDetection.hasFace,
+      shouldUseFallbackTracking,
   };
 
   if (faceDetection.hasFace) {
     return createTrackingSampleFromFaceDetection(frame, faceDetection);
   }
 
-  // No-face policy is intentionally deferred; keep the current no-op detector
-  // path on deterministic dummy MotionFrame output through the fallback tracker.
-  return fallbackTracker_.track(frame);
+  if (shouldUseFallbackTracking) {
+    return fallbackTracker_.track(frame);
+  }
+
+  return createLostTrackingSample(frame);
 }
 
 const FaceDetectionDiagnostics&
