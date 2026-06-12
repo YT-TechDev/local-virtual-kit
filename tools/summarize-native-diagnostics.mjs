@@ -73,12 +73,26 @@ function summarizeNumbers(values) {
     return null;
   }
 
-  const sum = values.reduce((total, value) => total + value, 0);
+  let min = values[0];
+  let max = values[0];
+  let sum = 0;
+
+  for (const value of values) {
+    if (value < min) {
+      min = value;
+    }
+
+    if (value > max) {
+      max = value;
+    }
+
+    sum += value;
+  }
 
   return {
-    min: roundMetric(Math.min(...values)),
+    min: roundMetric(min),
     avg: roundMetric(sum / values.length),
-    max: roundMetric(Math.max(...values)),
+    max: roundMetric(max),
   };
 }
 
