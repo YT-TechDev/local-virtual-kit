@@ -308,6 +308,7 @@ export class NativePipelineManager {
           nativeTrackerStatus: 'error',
           lastError: `Native tracker failed: ${truncateStatusMessage(error.message)}`
         }
+        this.terminateBridgeAfterTrackerExit(childProcess)
       } else {
         this.status = {
           ...this.status,
@@ -321,39 +322,57 @@ export class NativePipelineManager {
       if (kind === 'tracker' && this.trackerProcess === childProcess) {
         this.trackerProcess = null
         if (!this.isStopping) {
+          const trackerExitMessage = `Native tracker exited unexpectedly with code ${code ?? 'null'} and signal ${signal ?? 'none'}.`
           this.status = {
             ...this.status,
             nativeTrackerStatus: code === 0 ? 'exited' : 'error',
             lastMessage:
-              code === 0
-                ? `Native tracker exited after emitting development ${getCameraSourceLabel(this.status.pipelineCameraSource ?? 'dummy')} frames.`
-                : this.status.lastMessage,
-            lastError:
-              code === 0
-                ? this.status.lastError
-                : `Native tracker exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}.`
+              'Native tracker stopped unexpectedly. Stopping the paired MotionFrame bridge.',
+            lastError: trackerExitMessage
           }
+          this.terminateBridgeAfterTrackerExit(childProcess)
         }
       }
 
       if (kind === 'bridge' && this.bridgeProcess === childProcess) {
         this.bridgeProcess = null
         if (!this.isStopping) {
+          const bridgeWasStopping = this.status.motionBridgeStatus === 'stopping'
           this.status = {
             ...this.status,
-            motionBridgeStatus: code === 0 ? 'exited' : 'error',
+            motionBridgeStatus: code === 0 || bridgeWasStopping ? 'exited' : 'error',
             lastError:
-              code === 0
+              code === 0 || bridgeWasStopping
                 ? this.status.lastError
                 : `Motion bridge exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}.`
           }
 
-          if (code !== 0 && this.trackerProcess) {
+          if (code !== 0 && !bridgeWasStopping && this.trackerProcess) {
             void this.terminateProcess(this.trackerProcess)
           }
         }
       }
     })
+  }
+
+  private terminateBridgeAfterTrackerExit(trackerProcess: ChildProcessWithoutNullStreams): void {
+    if (!this.bridgeProcess || this.isStopping) {
+      return
+    }
+
+    trackerProcess.stdout.unpipe(this.bridgeProcess.stdin)
+
+    if (this.bridgeProcess.stdin.writable) {
+      this.bridgeProcess.stdin.end()
+    }
+
+    this.status = {
+      ...this.status,
+      motionBridgeStatus: 'stopping',
+      lastMessage: 'Native tracker stopped unexpectedly. Stopping the paired MotionFrame bridge.'
+    }
+
+    void this.terminateProcess(this.bridgeProcess)
   }
 
   private async terminateProcess(
