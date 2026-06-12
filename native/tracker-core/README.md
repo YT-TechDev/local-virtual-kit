@@ -65,6 +65,25 @@ For example:
 
 The dummy source is still a metadata-only source with dummy tracking values. The OpenCV source reads local webcam frames into Native Core memory. The default face detector remains `noop`, so dummy tracking values are preserved unless the optional OpenCV face detector is explicitly selected with an external cascade path. Face diagnostics include detector name, face presence, confidence, coarse bounds, fallback usage, and `detectionDurationMs` safe metadata for local backend evaluation. Pipeline diagnostics provide stderr-only safe timing metadata for comparing current frame-stage costs before selecting or adding a product-quality tracking backend; see `docs/TRACKING_BACKEND_EVALUATION.md` for the Phase 6.5 scorecard context. Diagnostics never log raw frames, raw pixels, frame buffers, cascade file contents, model paths, MotionFrame JSON, or image dumps. Raw frames are not logged, written, uploaded, or exposed outside Native Core memory. Landmark extraction, head pose, gaze, mouth, expression, and full VTuber tracking are not implemented yet.
 
+## Summarize stderr diagnostics logs
+
+Native Core pipeline and face diagnostics can be captured as a stderr-only log and summarized with the local dependency-free Node.js utility for Phase 6.5 backend evaluation comparisons:
+
+```bash
+./native/tracker-core/build/lvk-tracker-core \
+  --frames 120 \
+  --realtime \
+  --log-pipeline-status \
+  --pipeline-status-interval 10 \
+  --log-face-status \
+  --face-status-interval 10 \
+  2>/tmp/lvk-native-diagnostics.log
+
+node tools/summarize-native-diagnostics.mjs /tmp/lvk-native-diagnostics.log
+```
+
+The summarizer consumes only safe `[pipeline] periodic:` and `[face] periodic:` stderr diagnostics lines, then prints compact JSON with counts and min/avg/max timing summaries for fields such as `captureDurationMs`, `trackingDurationMs`, `totalFrameDurationMs`, and `detectionDurationMs`. It ignores unrelated stderr lines and does not consume raw frames, raw pixels, frame buffers, image dumps, or MotionFrame stdout JSON. Keep stdout separate when generating diagnostics logs so MotionFrame JSON can continue to flow to the bridge or other protocol consumers unchanged.
+
 For desktop-managed development pipelines that should keep running until stopped by the parent process, use continuous realtime mode:
 
 ```bash
