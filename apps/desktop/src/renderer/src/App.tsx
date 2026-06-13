@@ -49,6 +49,9 @@ const bridgeLabels: Record<RuntimeStatus['motionBridgeStatus'], string> = {
   error: 'Error'
 }
 
+const isNativePipelineRunning = (status: RuntimeStatus): boolean =>
+  status.nativeTrackerStatus === 'running' && status.motionBridgeStatus === 'running'
+
 const getStatusTone = (status: NativeTrackerStatus | MotionBridgeStatus): StatusTone => {
   if (status === 'running') {
     return 'success'
@@ -167,6 +170,30 @@ function App(): React.JSX.Element {
     }
   }
 
+  const startNativePipelineAndOpenPreview = async (): Promise<void> => {
+    if (!desktopApi) {
+      return
+    }
+
+    setOpenError(null)
+    setPipelineError(null)
+
+    try {
+      const status = await desktopApi.startNativePipeline({ cameraSource: selectedCameraSource })
+      setRuntimeStatus(status)
+
+      if (!isNativePipelineRunning(status)) {
+        return
+      }
+
+      await desktopApi.openExternalUrl(status.previewNativeUrl)
+    } catch (error) {
+      setPipelineError(
+        error instanceof Error ? error.message : 'Failed to start native pipeline and open preview.'
+      )
+    }
+  }
+
   const stopNativePipeline = async (): Promise<void> => {
     if (!desktopApi) {
       return
@@ -185,7 +212,7 @@ function App(): React.JSX.Element {
     ? ['starting', 'running', 'stopping'].includes(runtimeStatus.nativeTrackerStatus) ||
       ['starting', 'running', 'stopping'].includes(runtimeStatus.motionBridgeStatus)
     : false
-  const canStartNativePipeline = runtimeStatus ? !isPipelineBusy : false
+  const canStartNativePipeline = Boolean(desktopApi && runtimeStatus && !isPipelineBusy)
   const canStopNativePipeline = runtimeStatus
     ? ['starting', 'running'].includes(runtimeStatus.nativeTrackerStatus) ||
       ['starting', 'running'].includes(runtimeStatus.motionBridgeStatus)
@@ -339,6 +366,13 @@ function App(): React.JSX.Element {
                 disabled={!canStartNativePipeline}
               >
                 Start native pipeline
+              </button>
+              <button
+                type="button"
+                onClick={startNativePipelineAndOpenPreview}
+                disabled={!canStartNativePipeline}
+              >
+                Start and open native preview
               </button>
               <button type="button" onClick={stopNativePipeline} disabled={!canStopNativePipeline}>
                 Stop native pipeline
