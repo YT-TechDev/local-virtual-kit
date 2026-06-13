@@ -40,48 +40,68 @@ function assertMetricSummary(value, label) {
   assertNumber(value.max, `${label}.max`);
 }
 
+function readSummary(label) {
+  const result = spawnSync(process.execPath, [summarizerPath, tempLogPath], {
+    encoding: "utf8",
+  });
+
+  if (result.error) {
+    fail(
+      `failed to run diagnostics summarizer for ${label}: ${result.error.message}`,
+    );
+  }
+
+  if (result.status !== 0) {
+    fail(
+      `diagnostics summarizer for ${label} exited with status ${result.status}
+stdout:
+${result.stdout}
+stderr:
+${result.stderr}`,
+    );
+  }
+
+  try {
+    return JSON.parse(result.stdout);
+  } catch (error) {
+    fail(
+      `diagnostics summarizer for ${label} did not print valid JSON: ${error.message}
+stdout:
+${result.stdout}`,
+    );
+  }
+}
+
 try {
   writeFileSync(
     tempLogPath,
     [
       "[camera] status: source=opencv, frame=1",
       "[pipeline] periodic: frame=1, captureDurationMs=1.5, preprocessDurationMs=0.25, trackingDurationMs=2.75, writeDurationMs=0.1, totalFrameDurationMs=4.6",
-      "[face] periodic: detector=opencv, hasFace=true, confidence=0.91, detectionDurationMs=3.25",
+      "[face] periodic: detectorName=opencv, hasFace=true, confidence=0.91, detectionDurationMs=3.25",
       "[pipeline] periodic: frame=2, captureDurationMs=2.5, preprocessDurationMs=0.5, trackingDurationMs=3.25, writeDurationMs=0.2, totalFrameDurationMs=6.45",
-      "[face] periodic: detector=opencv, hasFace=false, confidence=0, detectionDurationMs=1.75",
+      "[face] periodic: detectorName=opencv, hasFace=false, confidence=0, detectionDurationMs=1.75",
+      "[face] periodic: hasFace=false, confidence=0, detectionDurationMs=2.25",
       "[motion] emitted frame=2",
       "",
     ].join("\n"),
     "utf8",
   );
 
-  const result = spawnSync(process.execPath, [summarizerPath, tempLogPath], {
-    encoding: "utf8",
-  });
-
-  if (result.error) {
-    fail(`failed to run diagnostics summarizer: ${result.error.message}`);
-  }
-
-  if (result.status !== 0) {
-    fail(
-      `diagnostics summarizer exited with status ${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-    );
-  }
-
-  let summary;
-  try {
-    summary = JSON.parse(result.stdout);
-  } catch (error) {
-    fail(
-      `diagnostics summarizer did not print valid JSON: ${error.message}\nstdout:\n${result.stdout}`,
-    );
-  }
+  const summary = readSummary("diagnostics fixture");
 
   assertEqual(summary?.pipeline?.count, 2, "pipeline.count");
-  assertEqual(summary?.face?.count, 2, "face.count");
+  assertEqual(summary?.face?.count, 3, "face.count");
   assertEqual(summary?.face?.hasFaceCount, 1, "face.hasFaceCount");
-  assertEqual(summary?.face?.lostOrNoFaceCount, 1, "face.lostOrNoFaceCount");
+  assertEqual(summary?.face?.lostOrNoFaceCount, 2, "face.lostOrNoFaceCount");
+  assertEqual(summary?.face?.hasFaceRate, 0.333333, "face.hasFaceRate");
+  assertEqual(
+    summary?.face?.lostOrNoFaceRate,
+    0.666667,
+    "face.lostOrNoFaceRate",
+  );
+  assertEqual(summary?.face?.detectors?.opencv, 2, "face.detectors.opencv");
+  assertEqual(summary?.face?.detectors?.unknown, 1, "face.detectors.unknown");
   assertMetricSummary(
     summary?.pipeline?.totalFrameDurationMs,
     "pipeline.totalFrameDurationMs",
@@ -89,6 +109,16 @@ try {
   assertMetricSummary(
     summary?.face?.detectionDurationMs,
     "face.detectionDurationMs",
+  );
+
+  writeFileSync(tempLogPath, "", "utf8");
+  const emptySummary = readSummary("empty fixture");
+  assertEqual(emptySummary?.face?.count, 0, "empty.face.count");
+  assertEqual(emptySummary?.face?.hasFaceRate, null, "empty.face.hasFaceRate");
+  assertEqual(
+    emptySummary?.face?.lostOrNoFaceRate,
+    null,
+    "empty.face.lostOrNoFaceRate",
   );
 
   console.log("native diagnostics summarizer smoke check passed");
