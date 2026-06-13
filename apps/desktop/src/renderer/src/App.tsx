@@ -11,6 +11,7 @@ type RuntimeStatus = LvkRuntimeStatus
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
+const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
 
 const developmentCommands = [
   'pnpm dev:web',
@@ -24,6 +25,31 @@ const developmentCommands = [
 const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {
   dummy: 'Dummy source',
   opencv: 'OpenCV camera'
+}
+
+const isNativePipelineCameraSource = (value: string | null): value is NativePipelineCameraSource =>
+  value === 'dummy' || value === 'opencv'
+
+const getStoredCameraSource = (): NativePipelineCameraSource => {
+  try {
+    const storedCameraSource = window.localStorage.getItem(CAMERA_SOURCE_STORAGE_KEY)
+
+    if (isNativePipelineCameraSource(storedCameraSource)) {
+      return storedCameraSource
+    }
+  } catch {
+    // Keep the desktop UI usable if localStorage is unavailable.
+  }
+
+  return 'dummy'
+}
+
+const persistCameraSource = (cameraSource: NativePipelineCameraSource): void => {
+  try {
+    window.localStorage.setItem(CAMERA_SOURCE_STORAGE_KEY, cameraSource)
+  } catch {
+    // Persistence is best-effort; the selected value remains active in React state.
+  }
 }
 
 const faceDetectorLabels: Record<NativePipelineFaceDetector, string> = {
@@ -82,7 +108,7 @@ function App(): React.JSX.Element {
   const desktopApi = window.lvk
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [selectedCameraSource, setSelectedCameraSource] =
-    useState<NativePipelineCameraSource>('dummy')
+    useState<NativePipelineCameraSource>(getStoredCameraSource)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -192,6 +218,11 @@ function App(): React.JSX.Element {
         error instanceof Error ? error.message : 'Failed to start native pipeline and open preview.'
       )
     }
+  }
+
+  const updateSelectedCameraSource = (cameraSource: NativePipelineCameraSource): void => {
+    setSelectedCameraSource(cameraSource)
+    persistCameraSource(cameraSource)
   }
 
   const stopNativePipeline = async (): Promise<void> => {
@@ -350,9 +381,13 @@ function App(): React.JSX.Element {
                 id="camera-source"
                 value={selectedCameraSource}
                 disabled={isPipelineBusy}
-                onChange={(event) =>
-                  setSelectedCameraSource(event.currentTarget.value as NativePipelineCameraSource)
-                }
+                onChange={(event) => {
+                  const cameraSource = event.currentTarget.value
+
+                  if (isNativePipelineCameraSource(cameraSource)) {
+                    updateSelectedCameraSource(cameraSource)
+                  }
+                }}
               >
                 <option value="dummy">Dummy source</option>
                 <option value="opencv">OpenCV camera</option>
