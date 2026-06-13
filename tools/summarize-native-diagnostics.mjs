@@ -41,6 +41,7 @@ let pipelineCount = 0;
 let faceCount = 0;
 let hasFaceCount = 0;
 let lostOrNoFaceCount = 0;
+const detectorCounts = new Map();
 
 function extractNumber(line, fieldName) {
   const match = line.match(
@@ -64,8 +65,23 @@ function parseBooleanField(line, fieldName) {
   return match ? match[1] === "true" : null;
 }
 
+function parseSafeTextField(line, fieldName) {
+  const match = line.match(
+    new RegExp(`(?:^|[, ])${fieldName}=([A-Za-z0-9._-]+)(?=,|$)`),
+  );
+  return match ? match[1] : null;
+}
+
 function roundMetric(value) {
   return Number(value.toFixed(6));
+}
+
+function countDetector(detectorName) {
+  detectorCounts.set(detectorName, (detectorCounts.get(detectorName) ?? 0) + 1);
+}
+
+function rateForCount(count, total) {
+  return total > 0 ? roundMetric(count / total) : null;
 }
 
 function summarizeNumbers(values) {
@@ -122,6 +138,9 @@ for (const line of logText.split(/\r?\n/)) {
       }
     }
 
+    const detectorName = parseSafeTextField(line, "detector") ?? "unknown";
+    countDetector(detectorName);
+
     const hasFace = parseBooleanField(line, "hasFace");
 
     if (hasFace === true) {
@@ -146,6 +165,9 @@ const summary = {
     detectionDurationMs: summarizeNumbers(faceValues.detectionDurationMs),
     hasFaceCount,
     lostOrNoFaceCount,
+    hasFaceRate: rateForCount(hasFaceCount, faceCount),
+    lostOrNoFaceRate: rateForCount(lostOrNoFaceCount, faceCount),
+    detectors: Object.fromEntries([...detectorCounts.entries()].sort()),
   },
 };
 
