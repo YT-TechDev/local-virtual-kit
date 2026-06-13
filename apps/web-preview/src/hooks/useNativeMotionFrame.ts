@@ -5,8 +5,22 @@ import type { MotionFrame } from "@lvk/motion-protocol";
 const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 const RECONNECT_DELAY_MS = 1000;
 
-export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
+export type NativeMotionConnectionStatus =
+  | "disabled"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "fallback";
+
+type NativeMotionFrameState = {
+  latestFrame: MotionFrame | null;
+  connectionStatus: NativeMotionConnectionStatus;
+};
+
+export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
   const [latestFrame, setLatestFrame] = useState<MotionFrame | null>(null);
+  const [connectionStatus, setConnectionStatus] =
+    useState<NativeMotionConnectionStatus>("disabled");
   const latestTimestampRef = useRef(-Infinity);
 
   useEffect(() => {
@@ -16,6 +30,7 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
     let reconnectTimer: number | undefined;
     let resetFrameTimer: number | undefined;
     let isUnmounted = false;
+    let hasAttemptedConnection = false;
 
     const clearReconnectTimer = () => {
       if (reconnectTimer !== undefined) {
@@ -55,19 +70,30 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
         return;
       }
 
+      setConnectionStatus("reconnecting");
       reconnectTimer = window.setTimeout(() => {
         reconnectTimer = undefined;
         connect();
       }, RECONNECT_DELAY_MS);
     };
 
-    const connect = () => {
+    function connect() {
       if (isUnmounted) {
         return;
       }
 
       latestTimestampRef.current = -Infinity;
+      setConnectionStatus(
+        hasAttemptedConnection ? "reconnecting" : "connecting",
+      );
+      hasAttemptedConnection = true;
       websocket = new WebSocket(NATIVE_MOTION_WS_URL);
+
+      websocket.onopen = () => {
+        if (!isUnmounted && latestTimestampRef.current === -Infinity) {
+          setConnectionStatus("fallback");
+        }
+      };
 
       websocket.onmessage = (event: MessageEvent<unknown>) => {
         const frame = parseNativeMotionFrameJson(event.data);
@@ -82,6 +108,7 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
 
         latestTimestampRef.current = frame.timestampMs;
         setLatestFrame(frame);
+        setConnectionStatus("connected");
       };
 
       websocket.onerror = () => {
@@ -91,7 +118,7 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
       websocket.onclose = () => {
         scheduleReconnect();
       };
-    };
+    }
 
     connect();
 
@@ -104,5 +131,8 @@ export function useNativeMotionFrame(enabled: boolean): MotionFrame | null {
     };
   }, [enabled]);
 
-  return latestFrame;
+  return {
+    latestFrame: enabled ? latestFrame : null,
+    connectionStatus: enabled ? connectionStatus : "disabled",
+  };
 }

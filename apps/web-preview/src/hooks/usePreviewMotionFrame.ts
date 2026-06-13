@@ -1,13 +1,12 @@
 import { useMemo } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
-import { useNativeMotionFrame } from "./useNativeMotionFrame";
 import type { PreviewSource } from "../preview/previewSource";
 
 export function usePreviewMotionFrame(
   source: PreviewSource,
   timestampMs: number,
+  nativeFrame: MotionFrame | null,
 ): MotionFrame {
-  const nativeFrame = useNativeMotionFrame(source === "native");
   const stableNativeFallbackFrame = useMemo(
     () => createDummyMotionFrame(0),
     [],
