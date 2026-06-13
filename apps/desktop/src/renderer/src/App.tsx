@@ -9,6 +9,7 @@ import type {
 
 type RuntimeStatus = LvkRuntimeStatus
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
+type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
@@ -75,6 +76,12 @@ const bridgeLabels: Record<RuntimeStatus['motionBridgeStatus'], string> = {
   error: 'Error'
 }
 
+const pipelineActionPendingMessages: Record<Exclude<PipelineActionPending, null>, string> = {
+  start: 'Starting native pipeline...',
+  'start-and-open': 'Starting native pipeline and opening preview...',
+  stop: 'Stopping native pipeline...'
+}
+
 const isNativePipelineRunning = (status: RuntimeStatus): boolean =>
   status.nativeTrackerStatus === 'running' && status.motionBridgeStatus === 'running'
 
@@ -112,6 +119,7 @@ function App(): React.JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
+  const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
 
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
@@ -183,26 +191,30 @@ function App(): React.JSX.Element {
   }
 
   const startNativePipeline = async (): Promise<void> => {
-    if (!desktopApi) {
+    if (!desktopApi || pipelineActionPending) {
       return
     }
 
     setPipelineError(null)
+    setPipelineActionPending('start')
 
     try {
       setRuntimeStatus(await desktopApi.startNativePipeline({ cameraSource: selectedCameraSource }))
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to start native pipeline.')
+    } finally {
+      setPipelineActionPending(null)
     }
   }
 
   const startNativePipelineAndOpenPreview = async (): Promise<void> => {
-    if (!desktopApi) {
+    if (!desktopApi || pipelineActionPending) {
       return
     }
 
     setOpenError(null)
     setPipelineError(null)
+    setPipelineActionPending('start-and-open')
 
     try {
       const status = await desktopApi.startNativePipeline({ cameraSource: selectedCameraSource })
@@ -217,6 +229,8 @@ function App(): React.JSX.Element {
       setPipelineError(
         error instanceof Error ? error.message : 'Failed to start native pipeline and open preview.'
       )
+    } finally {
+      setPipelineActionPending(null)
     }
   }
 
@@ -226,16 +240,19 @@ function App(): React.JSX.Element {
   }
 
   const stopNativePipeline = async (): Promise<void> => {
-    if (!desktopApi) {
+    if (!desktopApi || pipelineActionPending) {
       return
     }
 
     setPipelineError(null)
+    setPipelineActionPending('stop')
 
     try {
       setRuntimeStatus(await desktopApi.stopNativePipeline())
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to stop native pipeline.')
+    } finally {
+      setPipelineActionPending(null)
     }
   }
 
@@ -243,10 +260,14 @@ function App(): React.JSX.Element {
     ? ['starting', 'running', 'stopping'].includes(runtimeStatus.nativeTrackerStatus) ||
       ['starting', 'running', 'stopping'].includes(runtimeStatus.motionBridgeStatus)
     : false
-  const canStartNativePipeline = Boolean(desktopApi && runtimeStatus && !isPipelineBusy)
+  const isPipelineActionPending = pipelineActionPending !== null
+  const canStartNativePipeline = Boolean(
+    desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending
+  )
   const canStopNativePipeline = runtimeStatus
-    ? ['starting', 'running'].includes(runtimeStatus.nativeTrackerStatus) ||
-      ['starting', 'running'].includes(runtimeStatus.motionBridgeStatus)
+    ? !isPipelineActionPending &&
+      (['starting', 'running'].includes(runtimeStatus.nativeTrackerStatus) ||
+        ['starting', 'running'].includes(runtimeStatus.motionBridgeStatus))
     : false
   const activeCameraSource = runtimeStatus?.pipelineCameraSource ?? 'dummy'
   const activeFaceDetector = runtimeStatus?.pipelineFaceDetector ?? 'noop'
@@ -380,7 +401,7 @@ function App(): React.JSX.Element {
               <select
                 id="camera-source"
                 value={selectedCameraSource}
-                disabled={isPipelineBusy}
+                disabled={isPipelineBusy || isPipelineActionPending}
                 onChange={(event) => {
                   const cameraSource = event.currentTarget.value
 
@@ -416,6 +437,12 @@ function App(): React.JSX.Element {
                 Refresh status
               </button>
             </div>
+
+            {pipelineActionPending ? (
+              <p className="runtime-message compact" role="status">
+                {pipelineActionPendingMessages[pipelineActionPending]}
+              </p>
+            ) : null}
 
             {runtimeStatus.lastError ? (
               <p className="error-message compact">{runtimeStatus.lastError}</p>
