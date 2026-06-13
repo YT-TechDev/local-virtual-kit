@@ -54,6 +54,7 @@ If documents conflict, prefer this order:
 - Prefer 1 to 3 changed files per PR when possible.
 - If requirements are unclear, stop and ask before editing.
 - If a tool, API, or repository state appears stale or inconsistent, stop and report the issue instead of guessing.
+- For MotionFrame-related work, inspect the current protocol document and source before editing, and do not invent stale protocol fields.
 - If an implementation conflicts with documentation, inspect the current code first, then propose the smallest documentation or code adjustment needed.
 - Do not treat documentation as more authoritative than working source code when the two differ.
 - Do not claim that checks passed unless they were actually run.
@@ -76,6 +77,7 @@ These are fixed unless the project owner explicitly changes them:
 
 - Keep LVK local-first.
 - Camera frames must stay local and must not be sent to external servers in v0.1.
+- Do not add telemetry, analytics, cloud upload, or new network behavior unless explicitly requested.
 - C++ Native Core is the tracking/performance layer.
 - Electron is the desktop shell, settings, calibration, and native process manager.
 - React / Three.js / React Three Fiber are the Web Preview and avatar renderer layer.
