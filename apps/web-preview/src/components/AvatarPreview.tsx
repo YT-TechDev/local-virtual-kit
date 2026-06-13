@@ -15,6 +15,12 @@ type AvatarSceneProps = {
   source: PreviewSource;
 };
 
+function getAvatarPreviewLabel(source: PreviewSource) {
+  return source === "native"
+    ? "Native MotionFrame avatar preview"
+    : "Dummy MotionFrame avatar preview";
+}
+
 function getSourceBadgeContent(source: PreviewSource) {
   if (source === "native") {
     return {
@@ -51,6 +57,7 @@ function AvatarScene({ source }: AvatarSceneProps) {
 
 export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
   const isObsMode = mode === "obs";
+  const avatarPreviewLabel = getAvatarPreviewLabel(source);
   const sourceBadgeContent = getSourceBadgeContent(source);
   const shellClassName = `preview-shell preview-shell--${mode}`;
   const panelClassName = `preview-panel preview-panel--${mode}`;
@@ -72,10 +79,7 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           )}
         </aside>
       )}
-      <section
-        className={panelClassName}
-        aria-label="Dummy MotionFrame avatar preview"
-      >
+      <section className={panelClassName} aria-label={avatarPreviewLabel}>
         <Canvas
           camera={{ position: [0, 0, 5], fov: 45 }}
           gl={{ alpha: isObsMode }}
