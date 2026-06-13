@@ -1,22 +1,12 @@
 import { useMemo } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
-import {
-  useNativeMotionFrame,
-  type NativeMotionConnectionStatus,
-} from "./useNativeMotionFrame";
 import type { PreviewSource } from "../preview/previewSource";
-
-type PreviewMotionFrameState = {
-  frame: MotionFrame;
-  nativeStatus: NativeMotionConnectionStatus;
-};
 
 export function usePreviewMotionFrame(
   source: PreviewSource,
   timestampMs: number,
-): PreviewMotionFrameState {
-  const { latestFrame: nativeFrame, connectionStatus: nativeStatus } =
-    useNativeMotionFrame(source === "native");
+  nativeFrame: MotionFrame | null,
+): MotionFrame {
   const stableNativeFallbackFrame = useMemo(
     () => createDummyMotionFrame(0),
     [],
@@ -24,8 +14,8 @@ export function usePreviewMotionFrame(
 
   switch (source) {
     case "native":
-      return { frame: nativeFrame ?? stableNativeFallbackFrame, nativeStatus };
+      return nativeFrame ?? stableNativeFallbackFrame;
     case "dummy":
-      return { frame: createDummyMotionFrame(timestampMs), nativeStatus };
+      return createDummyMotionFrame(timestampMs);
   }
 }

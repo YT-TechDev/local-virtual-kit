@@ -59,8 +59,6 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
     }, 0);
 
     if (!enabled) {
-      setConnectionStatus("disabled");
-
       return () => {
         isUnmounted = true;
         clearResetFrameTimer();
@@ -126,7 +124,6 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
 
     return () => {
       isUnmounted = true;
-      setConnectionStatus("disabled");
       clearReconnectTimer();
       clearResetFrameTimer();
       websocket?.close();
@@ -134,5 +131,8 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
     };
   }, [enabled]);
 
-  return { latestFrame, connectionStatus };
+  return {
+    latestFrame: enabled ? latestFrame : null,
+    connectionStatus: enabled ? connectionStatus : "disabled",
+  };
 }

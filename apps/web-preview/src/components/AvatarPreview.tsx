@@ -1,8 +1,12 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import type { MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import { usePreviewMotionFrame } from "../hooks/usePreviewMotionFrame";
-import type { NativeMotionConnectionStatus } from "../hooks/useNativeMotionFrame";
+import {
+  useNativeMotionFrame,
+  type NativeMotionConnectionStatus,
+} from "../hooks/useNativeMotionFrame";
 import { mapMotionFrameToAvatar } from "../motion/mapMotionFrameToAvatar";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
@@ -13,8 +17,8 @@ type AvatarPreviewProps = {
 };
 
 type AvatarSceneProps = {
+  nativeFrame: MotionFrame | null;
   source: PreviewSource;
-  onNativeStatusChange: (status: NativeMotionConnectionStatus) => void;
 };
 
 function getAvatarPreviewLabel(source: PreviewSource) {
@@ -70,19 +74,15 @@ function getSourceBadgeContent(
   };
 }
 
-function AvatarScene({ source, onNativeStatusChange }: AvatarSceneProps) {
+function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
   const [timestampMs, setTimestampMs] = useState(0);
 
   useFrame(({ clock }) => {
     setTimestampMs(clock.elapsedTime * 1000);
   });
 
-  const { frame, nativeStatus } = usePreviewMotionFrame(source, timestampMs);
+  const frame = usePreviewMotionFrame(source, timestampMs, nativeFrame);
   const motion = mapMotionFrameToAvatar(frame);
-
-  useEffect(() => {
-    onNativeStatusChange(nativeStatus);
-  }, [nativeStatus, onNativeStatusChange]);
 
   return (
     <>
@@ -94,8 +94,8 @@ function AvatarScene({ source, onNativeStatusChange }: AvatarSceneProps) {
 }
 
 export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
-  const [nativeStatus, setNativeStatus] =
-    useState<NativeMotionConnectionStatus>("disabled");
+  const { latestFrame: nativeFrame, connectionStatus: nativeStatus } =
+    useNativeMotionFrame(source === "native");
   const isObsMode = mode === "obs";
   const avatarPreviewLabel = getAvatarPreviewLabel(source);
   const sourceBadgeContent = getSourceBadgeContent(source, nativeStatus);
@@ -124,7 +124,7 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           camera={{ position: [0, 0, 5], fov: 45 }}
           gl={{ alpha: isObsMode }}
         >
-          <AvatarScene source={source} onNativeStatusChange={setNativeStatus} />
+          <AvatarScene nativeFrame={nativeFrame} source={source} />
         </Canvas>
       </section>
     </main>
