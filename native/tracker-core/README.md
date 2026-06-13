@@ -381,7 +381,7 @@ Camera frames remain local to Native Core memory. Raw frames are not written to 
 - No eye tracking.
 - No mouth or expression tracking.
 - No smoothing or calibration yet.
-- No-face currently falls back to `DummyMotionTracker`.
+- No-face behavior depends on the selected detector: only the default `noop` detector path falls back to `DummyMotionTracker`; explicit non-noop detectors such as `opencv` emit `tracking.status: "lost"` with confidence `0` when no face is detected.
 - Desktop UI does not yet expose OpenCV face detector settings.
 - Desktop integration should happen after Native CLI local validation.
 
