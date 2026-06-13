@@ -4,6 +4,7 @@ import type { MotionFrame } from "@lvk/motion-protocol";
 
 const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 const RECONNECT_DELAY_MS = 1000;
+const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
 
 export type NativeMotionConnectionStatus =
   | "disabled"
@@ -28,7 +29,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
 
     let websocket: WebSocket | null = null;
     let reconnectTimer: number | undefined;
-    let resetFrameTimer: number | undefined;
+    let staleFrameTimer: number | undefined;
     let isUnmounted = false;
     let hasAttemptedConnection = false;
 
@@ -39,10 +40,10 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
       }
     };
 
-    const clearResetFrameTimer = () => {
-      if (resetFrameTimer !== undefined) {
-        window.clearTimeout(resetFrameTimer);
-        resetFrameTimer = undefined;
+    const clearStaleFrameTimer = () => {
+      if (staleFrameTimer !== undefined) {
+        window.clearTimeout(staleFrameTimer);
+        staleFrameTimer = undefined;
       }
     };
 
@@ -50,26 +51,38 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
       setLatestFrame(null);
     };
 
-    resetFrameTimer = window.setTimeout(() => {
-      resetFrameTimer = undefined;
-
-      if (!isUnmounted && latestTimestampRef.current === -Infinity) {
-        clearNativeFrame();
-      }
-    }, 0);
-
     if (!enabled) {
       return () => {
         isUnmounted = true;
-        clearResetFrameTimer();
+        clearReconnectTimer();
+        clearStaleFrameTimer();
       };
     }
+
+    const markFallbackIfSocketIsOpen = () => {
+      if (isUnmounted || websocket?.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      clearNativeFrame();
+      setConnectionStatus("fallback");
+    };
+
+    const resetStaleFrameTimer = () => {
+      clearStaleFrameTimer();
+      staleFrameTimer = window.setTimeout(() => {
+        staleFrameTimer = undefined;
+        markFallbackIfSocketIsOpen();
+      }, NATIVE_FRAME_STALE_TIMEOUT_MS);
+    };
 
     const scheduleReconnect = () => {
       if (isUnmounted || reconnectTimer !== undefined) {
         return;
       }
 
+      clearStaleFrameTimer();
+      clearNativeFrame();
       setConnectionStatus("reconnecting");
       reconnectTimer = window.setTimeout(() => {
         reconnectTimer = undefined;
@@ -82,7 +95,9 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
         return;
       }
 
+      clearStaleFrameTimer();
       latestTimestampRef.current = -Infinity;
+      clearNativeFrame();
       setConnectionStatus(
         hasAttemptedConnection ? "reconnecting" : "connecting",
       );
@@ -90,9 +105,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
       websocket = new WebSocket(NATIVE_MOTION_WS_URL);
 
       websocket.onopen = () => {
-        if (!isUnmounted && latestTimestampRef.current === -Infinity) {
-          setConnectionStatus("fallback");
-        }
+        markFallbackIfSocketIsOpen();
       };
 
       websocket.onmessage = (event: MessageEvent<unknown>) => {
@@ -109,6 +122,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
         latestTimestampRef.current = frame.timestampMs;
         setLatestFrame(frame);
         setConnectionStatus("connected");
+        resetStaleFrameTimer();
       };
 
       websocket.onerror = () => {
@@ -125,7 +139,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
     return () => {
       isUnmounted = true;
       clearReconnectTimer();
-      clearResetFrameTimer();
+      clearStaleFrameTimer();
       websocket?.close();
       websocket = null;
     };
