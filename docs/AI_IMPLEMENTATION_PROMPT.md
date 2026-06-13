@@ -32,35 +32,36 @@ Core rules:
 - Never push directly to main.
 - Use a dedicated branch.
 - Keep PRs small and reviewable.
-- Do not change unrelated files.
-- Do not add dependencies unless the task requires them.
+- Do not change unrelated files or add dependencies unless the task requires them.
 - Do not claim checks passed unless they were actually run.
 - If requirements, repository state, or tool behavior is unclear, stop and report it.
+
+Codex Cloud git policy:
+- Use the current Codex checkout as provided.
+- Do not run git fetch, git pull, git remote add, git push, or gh commands.
+- Use the Codex UI / provided workflow to push changes and open the PR.
 
 LVK constraints:
 - Keep LVK local-first.
 - Keep camera frames local in v0.1.
+- Do not add telemetry, analytics, cloud upload, or new network behavior unless explicitly requested.
 - Keep packages/motion-protocol framework-independent.
 - Do not make the user's separate R3F flow library a required v0.1 dependency.
 - MotionFrame is the contract between Native Core and Renderer.
 
 MotionFrame implementation:
-- Follow packages/motion-protocol and docs/MOTION_PROTOCOL.md when working on protocol fields.
+- Before MotionFrame-related edits, inspect current protocol docs and source.
 - Do not invent stale fields unless the protocol is intentionally changed in the same PR.
 - Keep renderer mapping typed, readable, and source-grounded.
 
-Final report in Japanese must include:
-- 作業ブランチ
-- PR URL
-- 作業概要
-- 変更ファイル
-- 修正箇所
-- 実行した確認
-- エラー・未解決事項
-- Notion記録
-- 次にやるべきこと
+PR and final report:
+- Include the PR URL, summary of changes, changed files, checks run, and known limitations or follow-up items.
+- Final responses to the project owner must use the Japanese AGENTS.md report headings.
+- If Notion is unavailable, include a Japanese Notion-ready work log instead of claiming it was updated.
 
-If Notion is unavailable, provide a Japanese Notion-ready work log instead.
+PR review/comment:
+- After opening the PR, provide a short review note/comment text summarizing what changed, what was checked, and known risks.
+- If the environment cannot post the comment, include the exact comment text in the final response for the project owner to paste.
 ```
 
 ---
