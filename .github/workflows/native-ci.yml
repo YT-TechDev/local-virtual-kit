@@ -7,4 +7,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: cmake -S native/tracker-core -B native/tracker-core/build
       - run: cmake --build native/tracker-core/build
-      - run: ./native/tracker-core/build/lvk-tracker-core --frames 3
+      - run: node tools/check-native-tracker-output.mjs native/tracker-core/build/lvk-tracker-core
