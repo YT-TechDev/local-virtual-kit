@@ -66,6 +66,41 @@ Use this checklist when a future PR evaluates a candidate on local hardware. Mar
 - Do not commit model files or cascade files.
 - Mark untested hardware/backend assumptions clearly.
 
+## Diagnostics Evidence Workflow
+
+Use this workflow in a future backend evaluation PR after collecting real local measurements. The template below is evidence scaffolding only; leaving it blank or filling it with assumptions is not a validation result by itself.
+
+- Capture diagnostics from stderr-only `[pipeline] periodic:` and `[face] periodic:` lines. Keep stdout reserved for newline-delimited MotionFrame JSON so bridges and protocol consumers remain unchanged.
+- Summarize the captured stderr log with `node tools/summarize-native-diagnostics.mjs <stderr-log-path>`. This summarizer reads safe metadata such as pipeline timing fields, `detectionDurationMs`, `hasFace`, and lost/no-face counts; it must not consume raw frames, pixels, image dumps, or MotionFrame stdout.
+- Run `pnpm test:native-diagnostics-summarize` before relying on the summarizer in an evaluation PR.
+- Confirm in the PR notes that raw camera frames stayed local to Native Core memory, no uploads or telemetry occurred, no external frame processing was used, and no model files, cascade XML files, raw frames, generated binaries, or build artifacts were committed.
+- Treat OpenCV Haar as a smoke/baseline path only. It can provide local detector wiring and diagnostics evidence when OpenCV, a local camera, and a local cascade path are available, but it is not product-quality VTuber tracking and must not be selected as the final backend by this template.
+
+Copy this Markdown block into a future backend evaluation PR only after real local evidence has been collected:
+
+```md
+## Diagnostics Evidence
+
+- Date:
+- Machine / OS:
+- Candidate:
+- Camera source:
+- Detector / backend:
+- Frame count:
+- Command used:
+- Summarizer command: node tools/summarize-native-diagnostics.mjs <stderr-log-path>
+- Summarizer output:
+  - pipeline:
+  - face:
+- Notes / assumptions:
+- Raw frame handling confirmation:
+  - Raw camera frames stayed local to Native Core memory:
+  - No uploads, telemetry, or external frame processing occurred:
+  - No raw frames, screenshots, model files, cascade XML files, generated binaries, or build artifacts were committed:
+  - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata:
+- Decision impact:
+```
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
