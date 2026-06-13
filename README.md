@@ -54,40 +54,34 @@ Install dependencies:
 pnpm install
 ```
 
-Run the desktop app:
-
-```bash
-pnpm dev:desktop
-```
-
 Run the web preview:
 
 ```bash
 pnpm dev:web
 ```
 
-Open the normal preview at the Vite dev server root URL.
+Open one of the local preview URLs:
 
-For an OBS Browser Source friendly preview, use the same local URL with `?mode=obs`:
+- `http://localhost:5173/?source=dummy` uses frontend dummy `MotionFrame` data.
+- `http://localhost:5173/?source=native` connects to the local `MotionFrame` endpoint at `ws://127.0.0.1:45731/motion`.
+- `http://localhost:5173/?mode=obs&source=native` uses the native source with the OBS-friendly preview layout.
 
-```txt
-http://localhost:5173/?mode=obs
+Run the desktop app:
+
+```bash
+pnpm dev:desktop
 ```
 
-This currently renders the dummy MotionFrame avatar preview with a clean viewport and transparent-friendly background for capture.
+The Electron desktop app shows these preview URLs and can start or stop the development native pipeline after the native tracker has been built.
 
-Build the native tracker skeleton:
+Build the native tracker:
 
 ```bash
 cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
 ```
 
-Run the native tracker skeleton:
-
-```bash
-./native/tracker-core/build/lvk-tracker-core
-```
+For native preview development, build the tracker, start `pnpm dev:web`, then use `pnpm dev:desktop` to start or stop the development native pipeline. Raw camera frames stay local, and `MotionFrame` transport is localhost-only.
 
 Build all packages:
 
