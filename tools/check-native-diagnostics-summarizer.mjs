@@ -78,9 +78,9 @@ try {
     [
       "[camera] status: source=opencv, frame=1",
       "[pipeline] periodic: frame=1, captureDurationMs=1.5, preprocessDurationMs=0.25, trackingDurationMs=2.75, writeDurationMs=0.1, totalFrameDurationMs=4.6",
-      "[face] periodic: detector=opencv, hasFace=true, confidence=0.91, detectionDurationMs=3.25",
+      "[face] periodic: detectorName=opencv, hasFace=true, confidence=0.91, detectionDurationMs=3.25",
       "[pipeline] periodic: frame=2, captureDurationMs=2.5, preprocessDurationMs=0.5, trackingDurationMs=3.25, writeDurationMs=0.2, totalFrameDurationMs=6.45",
-      "[face] periodic: detector=opencv, hasFace=false, confidence=0, detectionDurationMs=1.75",
+      "[face] periodic: detectorName=opencv, hasFace=false, confidence=0, detectionDurationMs=1.75",
       "[face] periodic: hasFace=false, confidence=0, detectionDurationMs=2.25",
       "[motion] emitted frame=2",
       "",

@@ -80,6 +80,14 @@ function countDetector(detectorName) {
   detectorCounts.set(detectorName, (detectorCounts.get(detectorName) ?? 0) + 1);
 }
 
+function parseDetectorName(line) {
+  return (
+    parseSafeTextField(line, "detectorName") ??
+    parseSafeTextField(line, "detector") ??
+    "unknown"
+  );
+}
+
 function rateForCount(count, total) {
   return total > 0 ? roundMetric(count / total) : null;
 }
@@ -138,8 +146,7 @@ for (const line of logText.split(/\r?\n/)) {
       }
     }
 
-    const detectorName = parseSafeTextField(line, "detector") ?? "unknown";
-    countDetector(detectorName);
+    countDetector(parseDetectorName(line));
 
     const hasFace = parseBooleanField(line, "hasFace");
 
