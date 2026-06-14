@@ -1,0 +1,67 @@
+name: Documentation task
+description: Improve LVK documentation without changing runtime behavior.
+title: "docs: "
+labels: ["type:docs", "area:docs", "status:ready"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for focused documentation updates. Avoid broad rewrites unless they are explicitly requested.
+
+        Before editing, read `docs/AGENTS.md` and only the focused docs relevant to this documentation task.
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What documentation problem should be solved?
+      placeholder: Describe the missing, stale, or unclear information.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which docs should change, and which docs should not change?
+      placeholder: Keep the documentation update small and source-grounded.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      value: |
+        - Use English for repository-facing documentation.
+        - Keep LVK local-first.
+        - Camera frames stay local.
+        - Do not add telemetry, analytics, cloud upload, or new network behavior.
+        - Do not change application/runtime code.
+        - Do not change the MotionFrame schema unless this issue explicitly approves it.
+        - Keep the PR small and reviewable.
+        - Do not push directly to `main`.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - [ ] Documentation matches the current implementation.
+        - [ ] Related commands or references are accurate.
+        - [ ] Verification steps are documented.
+    validations:
+      required: true
+  - type: input
+    id: suggested-labels
+    attributes:
+      label: Suggested Labels
+      placeholder: type:docs, area:docs, status:ready
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: v0.1
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Add links, source files, decisions, or follow-up ideas.

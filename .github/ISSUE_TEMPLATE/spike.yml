@@ -1,0 +1,66 @@
+name: Spike / research task
+description: Research a focused LVK question before implementation.
+title: "spike: "
+labels: ["type:spike", "status:needs-design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for bounded research. A spike should produce findings and a recommended next step, not broad implementation.
+
+        Before researching, read `docs/AGENTS.md` and only the focused docs relevant to the question.
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What decision or unknown should this spike resolve?
+      placeholder: State the focused research question.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What should be investigated, and what is out of scope?
+      placeholder: Keep the spike bounded and time-boxed.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      value: |
+        - Keep LVK local-first.
+        - Camera frames stay local.
+        - No telemetry, analytics, cloud upload, or new network behavior unless explicitly approved.
+        - Do not change runtime behavior as part of the spike unless explicitly requested.
+        - Do not change the MotionFrame schema unless this issue explicitly approves it.
+        - Keep any follow-up PR small and reviewable.
+        - Do not push directly to `main`.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - [ ] Findings are summarized.
+        - [ ] Recommendation is documented.
+        - [ ] Follow-up issues or PRs are proposed if needed.
+    validations:
+      required: true
+  - type: input
+    id: suggested-labels
+    attributes:
+      label: Suggested Labels
+      placeholder: type:spike, area:native-core, status:needs-design
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: v0.1
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Add references, options considered, constraints, or open questions.

@@ -1,0 +1,66 @@
+name: Feature task
+description: Plan a small LVK feature or product improvement.
+title: "feat: "
+labels: ["type:feat", "status:ready"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve LVK. Keep feature work local-first, small, and reviewable.
+
+        Before implementation, read `docs/AGENTS.md` and only the focused docs relevant to this task.
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What user or project need does this feature address?
+      placeholder: Describe the problem, goal, or user value.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included, and what is intentionally out of scope?
+      placeholder: Keep the change small and focused.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: List the expected behavior and LVK-specific guardrails.
+      value: |
+        - Keep LVK local-first.
+        - Camera frames stay local.
+        - No telemetry, analytics, cloud upload, or new network behavior unless explicitly approved.
+        - Do not change the MotionFrame schema unless this issue explicitly approves it.
+        - Keep the PR small and reviewable.
+        - Do not push directly to `main`.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will reviewers know this is done?
+      placeholder: |
+        - [ ] ...
+        - [ ] Verification steps are documented.
+    validations:
+      required: true
+  - type: input
+    id: suggested-labels
+    attributes:
+      label: Suggested Labels
+      placeholder: type:feat, area:web-preview, status:ready
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: v0.1
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Add links, context, constraints, or follow-up ideas.
