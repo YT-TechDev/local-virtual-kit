@@ -38,12 +38,15 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
     throw new Error('Native pipeline start options must be an object when provided.')
   }
 
-  const { cameraSource, faceDetector, cameraIndex, cameraFps } = options as {
-    cameraSource?: unknown
-    faceDetector?: unknown
-    cameraIndex?: unknown
-    cameraFps?: unknown
-  }
+  const { cameraSource, faceDetector, cameraIndex, cameraFps, cameraWidth, cameraHeight } =
+    options as {
+      cameraSource?: unknown
+      faceDetector?: unknown
+      cameraIndex?: unknown
+      cameraFps?: unknown
+      cameraWidth?: unknown
+      cameraHeight?: unknown
+    }
   const parsedOptions: NativePipelineStartOptions = {}
 
   if (cameraSource !== undefined) {
@@ -88,6 +91,38 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
     }
 
     parsedOptions.cameraFps = cameraFps
+  }
+
+  if (cameraWidth !== undefined) {
+    if (
+      typeof cameraWidth !== 'number' ||
+      !Number.isFinite(cameraWidth) ||
+      !Number.isInteger(cameraWidth)
+    ) {
+      throw new Error('Native pipeline camera width must be a finite integer.')
+    }
+
+    if (cameraWidth < 1 || cameraWidth > 7680) {
+      throw new Error('Native pipeline camera width must be between 1 and 7680.')
+    }
+
+    parsedOptions.cameraWidth = cameraWidth
+  }
+
+  if (cameraHeight !== undefined) {
+    if (
+      typeof cameraHeight !== 'number' ||
+      !Number.isFinite(cameraHeight) ||
+      !Number.isInteger(cameraHeight)
+    ) {
+      throw new Error('Native pipeline camera height must be a finite integer.')
+    }
+
+    if (cameraHeight < 1 || cameraHeight > 4320) {
+      throw new Error('Native pipeline camera height must be between 1 and 4320.')
+    }
+
+    parsedOptions.cameraHeight = cameraHeight
   }
 
   return parsedOptions

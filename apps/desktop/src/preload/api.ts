@@ -21,6 +21,8 @@ export interface NativePipelineStartOptions {
   faceDetector?: NativePipelineFaceDetector
   cameraIndex?: number
   cameraFps?: number
+  cameraWidth?: number
+  cameraHeight?: number
 }
 
 export interface LvkRuntimeStatus {
@@ -34,6 +36,8 @@ export interface LvkRuntimeStatus {
   pipelineFaceDetector?: NativePipelineFaceDetector
   pipelineCameraIndex?: number
   pipelineCameraFps?: number
+  pipelineCameraWidth?: number
+  pipelineCameraHeight?: number
   lastError?: string
   lastMessage?: string
 }

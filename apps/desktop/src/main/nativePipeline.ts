@@ -17,6 +17,8 @@ const MOTION_ENDPOINT = 'ws://127.0.0.1:45731/motion'
 const FORCE_KILL_TIMEOUT_MS = 1_500
 const MAX_STATUS_MESSAGE_LENGTH = 360
 const DEFAULT_CAMERA_FPS = 60
+const DEFAULT_CAMERA_WIDTH = 640
+const DEFAULT_CAMERA_HEIGHT = 480
 
 function getConfiguredFaceCascadePath(): string | null {
   const cascadePath = nodeProcess.env.LVK_FACE_CASCADE_PATH?.trim()
@@ -38,7 +40,9 @@ function createTrackerArgs(
   cameraSource: NativePipelineCameraSource,
   faceDetector: NativePipelineFaceDetector,
   cameraIndex: number,
-  cameraFps: number
+  cameraFps: number,
+  cameraWidth: number,
+  cameraHeight: number
 ): string[] {
   const baseArgs = [
     '--camera-source',
@@ -49,6 +53,10 @@ function createTrackerArgs(
     '--realtime',
     '--camera-fps',
     String(cameraFps),
+    '--camera-width',
+    String(cameraWidth),
+    '--camera-height',
+    String(cameraHeight),
     '--log-pipeline-status',
     '--pipeline-status-interval',
     '60'
@@ -93,7 +101,9 @@ function createInitialStatus(): LvkRuntimeStatus {
     pipelineCameraSource: 'dummy',
     pipelineFaceDetector: 'noop',
     pipelineCameraIndex: 0,
-    pipelineCameraFps: DEFAULT_CAMERA_FPS
+    pipelineCameraFps: DEFAULT_CAMERA_FPS,
+    pipelineCameraWidth: DEFAULT_CAMERA_WIDTH,
+    pipelineCameraHeight: DEFAULT_CAMERA_HEIGHT
   }
 }
 
@@ -167,12 +177,16 @@ export class NativePipelineManager {
     cameraSource = 'dummy',
     faceDetector: requestedFaceDetector,
     cameraIndex = 0,
-    cameraFps = DEFAULT_CAMERA_FPS
+    cameraFps = DEFAULT_CAMERA_FPS,
+    cameraWidth = DEFAULT_CAMERA_WIDTH,
+    cameraHeight = DEFAULT_CAMERA_HEIGHT
   }: {
     cameraSource?: NativePipelineCameraSource
     faceDetector?: NativePipelineFaceDetector
     cameraIndex?: number
     cameraFps?: number
+    cameraWidth?: number
+    cameraHeight?: number
   } = {}): LvkRuntimeStatus {
     if (
       isActiveStatus(this.status.nativeTrackerStatus) ||
@@ -199,13 +213,22 @@ export class NativePipelineManager {
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
         pipelineCameraFps: cameraFps,
+        pipelineCameraWidth: cameraWidth,
+        pipelineCameraHeight: cameraHeight,
         lastError:
           'OpenCV face detection requires LVK_FACE_CASCADE_PATH to point to a Haar cascade XML file before starting the native pipeline.'
       }
       return this.getStatus()
     }
 
-    const trackerArgs = createTrackerArgs(cameraSource, faceDetector, cameraIndex, cameraFps)
+    const trackerArgs = createTrackerArgs(
+      cameraSource,
+      faceDetector,
+      cameraIndex,
+      cameraFps,
+      cameraWidth,
+      cameraHeight
+    )
 
     if (!existsSync(bridgeScriptPath)) {
       this.status = {
@@ -216,6 +239,8 @@ export class NativePipelineManager {
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
         pipelineCameraFps: cameraFps,
+        pipelineCameraWidth: cameraWidth,
+        pipelineCameraHeight: cameraHeight,
         lastError: `Development MotionFrame bridge was not found at ${bridgeScriptPath}. Run this from the LVK repository checkout.`
       }
       return this.getStatus()
@@ -230,6 +255,8 @@ export class NativePipelineManager {
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
         pipelineCameraFps: cameraFps,
+        pipelineCameraWidth: cameraWidth,
+        pipelineCameraHeight: cameraHeight,
         lastError: `Native tracker executable was not found. Build it first with: cmake -S native/tracker-core -B native/tracker-core/build && cmake --build native/tracker-core/build. Candidate locations checked: ${trackerExecutableCandidates.join(', ')}`
       }
       return this.getStatus()
@@ -244,6 +271,8 @@ export class NativePipelineManager {
       pipelineFaceDetector: faceDetector,
       pipelineCameraIndex: cameraIndex,
       pipelineCameraFps: cameraFps,
+      pipelineCameraWidth: cameraWidth,
+      pipelineCameraHeight: cameraHeight,
       lastMessage: `Starting development native MotionFrame pipeline with ${cameraSourceLabel} source and ${faceDetectorLabel}.`
     }
 
@@ -282,6 +311,8 @@ export class NativePipelineManager {
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
         pipelineCameraFps: cameraFps,
+        pipelineCameraWidth: cameraWidth,
+        pipelineCameraHeight: cameraHeight,
         lastMessage: `Development native pipeline started with ${cameraSourceLabel} source and ${faceDetectorLabel}. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
       }
     } catch (error) {
