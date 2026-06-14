@@ -404,20 +404,20 @@ For local Web Preview development with `?source=native`, pipe the native dummy s
 ```bash
 cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
-./native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime | node tools/motion-ws-bridge.mjs
+./native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs
 ```
 
 For OpenCV-backed local capture in builds configured with OpenCV support:
 
 ```bash
-./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs
+./native/tracker-core/build/lvk-tracker-core --camera-source opencv --camera-index 0 --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs
 ```
 
 The bridge binds only to `ws://127.0.0.1:45731/motion`, accepts newline-delimited MotionFrame JSON from stdin, and broadcasts valid native frames to connected browser previews. It is temporary development tooling, not the final production native transport.
 
 ## Desktop Shell development pipeline
 
-After the native tracker has been built, the LVK Desktop Shell can start and stop the current development native pipeline from Electron Main Process. The shell can choose either `--camera-source dummy` or the Native Core-only `--camera-source opencv --camera-index 0` path, adds `--camera-status-interval 60` for OpenCV diagnostics, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
+After the native tracker has been built, the LVK Desktop Shell can start and stop the current development native pipeline from Electron Main Process. The shell can choose either `--camera-source dummy` or the Native Core-only `--camera-source opencv --camera-index 0` path, adds `--log-pipeline-status --pipeline-status-interval 60` for safe timing diagnostics, keeps `--camera-status-interval 60` for OpenCV camera diagnostics, pipes stdout into `tools/motion-ws-bridge.mjs`, and serves frames at `ws://127.0.0.1:45731/motion` for the Web Preview native source URL.
 
 This Desktop Shell control is development-only. With the default `noop` face detector, `DummyMotionTracker` still provides deterministic MotionFrame values. Explicit non-noop face detectors can report existing-schema lost tracking when no face is detected, but product-quality face tracking and the final production native transport remain out of scope.
 

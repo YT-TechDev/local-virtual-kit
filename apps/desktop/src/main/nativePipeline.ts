@@ -44,7 +44,10 @@ function createTrackerArgs(
     '--face-detector',
     faceDetector,
     '--continuous',
-    '--realtime'
+    '--realtime',
+    '--log-pipeline-status',
+    '--pipeline-status-interval',
+    '60'
   ]
 
   if (faceDetector === 'opencv') {
