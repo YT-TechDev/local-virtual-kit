@@ -104,23 +104,73 @@ const runSmokeCheck = async () => {
   const child = spawn(process.execPath, ["tools/motion-ws-bridge.mjs"], {
     stdio: ["pipe", "ignore", "pipe"],
   });
-  const socket = new net.Socket();
+  let activeSocket = null;
   let stderr = "";
   let settled = false;
+  let retryTimer = null;
+  let shutdownTimer = null;
   let handshakeComplete = false;
   let connected = false;
   let received = Buffer.alloc(0);
+  const webSocketKey = crypto.randomBytes(16).toString("base64");
 
-  const cleanup = () => {
-    socket.destroy();
-    if (!child.killed) {
-      child.kill("SIGINT");
-      setTimeout(() => {
-        if (!child.killed) {
+  const clearRetryTimer = () => {
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
+
+  const destroyActiveSocket = () => {
+    if (activeSocket !== null) {
+      activeSocket.destroy();
+      activeSocket = null;
+    }
+  };
+
+  const waitForChildExit = async () => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      const finish = () => {
+        if (shutdownTimer !== null) {
+          clearTimeout(shutdownTimer);
+          shutdownTimer = null;
+        }
+        resolve();
+      };
+
+      child.once("exit", finish);
+
+      if (child.exitCode !== null || child.signalCode !== null) {
+        finish();
+        return;
+      }
+
+      shutdownTimer = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) {
           child.kill("SIGKILL");
         }
-      }, 500).unref();
+      }, 500);
+      shutdownTimer.unref();
+    });
+  };
+
+  const cleanup = async () => {
+    clearRetryTimer();
+    destroyActiveSocket();
+
+    if (!child.stdin.destroyed) {
+      child.stdin.end();
     }
+
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGINT");
+    }
+
+    await waitForChildExit();
   };
 
   try {
@@ -132,6 +182,7 @@ const runSmokeCheck = async () => {
 
         settled = true;
         clearTimeout(timer);
+        clearRetryTimer();
         if (error) {
           reject(error);
         } else {
@@ -146,6 +197,105 @@ const runSmokeCheck = async () => {
           ),
         );
       }, TIMEOUT_MS);
+
+      const connect = () => {
+        if (settled) {
+          return;
+        }
+
+        connected = false;
+        destroyActiveSocket();
+
+        const socket = new net.Socket();
+        activeSocket = socket;
+
+        socket.on("error", (error) => {
+          if (!connected && error.code === "ECONNREFUSED") {
+            socket.destroy();
+            if (activeSocket === socket) {
+              activeSocket = null;
+            }
+            retryTimer = setTimeout(connect, 50);
+            retryTimer.unref();
+            return;
+          }
+
+          finish(
+            new Error(
+              `MotionFrame WebSocket bridge smoke check failed: socket error: ${error.message}`,
+            ),
+          );
+        });
+
+        socket.on("data", (chunk) => {
+          try {
+            received = Buffer.concat([received, chunk]);
+
+            if (!handshakeComplete) {
+              const headerEnd = received.indexOf("\r\n\r\n");
+              if (headerEnd === -1) {
+                return;
+              }
+
+              const headers = received.subarray(0, headerEnd).toString("utf8");
+              if (!headers.startsWith("HTTP/1.1 101 ")) {
+                fail(
+                  `invalid WebSocket handshake status: ${headers.split("\r\n")[0]}`,
+                );
+              }
+
+              const acceptHeader = headers
+                .split("\r\n")
+                .find((line) =>
+                  line.toLowerCase().startsWith("sec-websocket-accept:"),
+                );
+              const expectedAccept = createWebSocketAccept(webSocketKey);
+              const actualAccept = acceptHeader
+                ?.slice(acceptHeader.indexOf(":") + 1)
+                .trim();
+
+              if (actualAccept !== expectedAccept) {
+                fail(
+                  "invalid Sec-WebSocket-Accept header in handshake response",
+                );
+              }
+
+              handshakeComplete = true;
+              received = received.subarray(headerEnd + 4);
+              child.stdin.write(`${JSON.stringify(validNativeMotionFrame)}\n`);
+            }
+
+            const decoded = decodeTextFrame(received);
+            if (decoded === null) {
+              return;
+            }
+
+            const frame = parseNativeMotionFrameJson(decoded.text);
+            if (frame === null) {
+              fail(`received invalid native MotionFrame JSON: ${decoded.text}`);
+            }
+
+            finish();
+          } catch (error) {
+            finish(error);
+          }
+        });
+
+        socket.on("connect", () => {
+          connected = true;
+          socket.write(
+            `GET ${PATH} HTTP/1.1\r\n` +
+              `Host: ${HOST}:${PORT}\r\n` +
+              "Upgrade: websocket\r\n" +
+              "Connection: Upgrade\r\n" +
+              `Sec-WebSocket-Key: ${webSocketKey}\r\n` +
+              "Sec-WebSocket-Version: 13\r\n" +
+              "\r\n",
+          );
+        });
+
+        socket.connect(PORT, HOST);
+      };
 
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk) => {
@@ -177,94 +327,10 @@ const runSmokeCheck = async () => {
         }
       });
 
-      socket.on("error", (error) => {
-        if (!connected && error.code === "ECONNREFUSED") {
-          setTimeout(() => {
-            if (!settled) {
-              socket.connect(PORT, HOST);
-            }
-          }, 50);
-          return;
-        }
-
-        finish(
-          new Error(
-            `MotionFrame WebSocket bridge smoke check failed: socket error: ${error.message}`,
-          ),
-        );
-      });
-
-      socket.on("data", (chunk) => {
-        try {
-          received = Buffer.concat([received, chunk]);
-
-          if (!handshakeComplete) {
-            const headerEnd = received.indexOf("\r\n\r\n");
-            if (headerEnd === -1) {
-              return;
-            }
-
-            const headers = received.subarray(0, headerEnd).toString("utf8");
-            if (!headers.startsWith("HTTP/1.1 101 ")) {
-              fail(
-                `invalid WebSocket handshake status: ${headers.split("\r\n")[0]}`,
-              );
-            }
-
-            const acceptHeader = headers
-              .split("\r\n")
-              .find((line) =>
-                line.toLowerCase().startsWith("sec-websocket-accept:"),
-              );
-            const expectedAccept = createWebSocketAccept(webSocketKey);
-            const actualAccept = acceptHeader
-              ?.slice(acceptHeader.indexOf(":") + 1)
-              .trim();
-
-            if (actualAccept !== expectedAccept) {
-              fail("invalid Sec-WebSocket-Accept header in handshake response");
-            }
-
-            handshakeComplete = true;
-            received = received.subarray(headerEnd + 4);
-            child.stdin.write(`${JSON.stringify(validNativeMotionFrame)}\n`);
-          }
-
-          const decoded = decodeTextFrame(received);
-          if (decoded === null) {
-            return;
-          }
-
-          const frame = parseNativeMotionFrameJson(decoded.text);
-          if (frame === null) {
-            fail(`received invalid native MotionFrame JSON: ${decoded.text}`);
-          }
-
-          finish();
-        } catch (error) {
-          finish(error);
-        }
-      });
-
-      const webSocketKey = crypto.randomBytes(16).toString("base64");
-
-      socket.on("connect", () => {
-        connected = true;
-        socket.write(
-          `GET ${PATH} HTTP/1.1\r\n` +
-            `Host: ${HOST}:${PORT}\r\n` +
-            "Upgrade: websocket\r\n" +
-            "Connection: Upgrade\r\n" +
-            `Sec-WebSocket-Key: ${webSocketKey}\r\n` +
-            "Sec-WebSocket-Version: 13\r\n" +
-            "\r\n",
-        );
-      });
-
-      socket.connect(PORT, HOST);
+      connect();
     });
   } finally {
-    cleanup();
+    await cleanup();
   }
 };
 
