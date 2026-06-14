@@ -15,16 +15,20 @@ const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
 const FACE_DETECTOR_STORAGE_KEY = 'lvk.desktop.faceDetector'
 const CAMERA_INDEX_STORAGE_KEY = 'lvk.desktop.cameraIndex'
+const CAMERA_FPS_STORAGE_KEY = 'lvk.desktop.cameraFps'
 const MIN_CAMERA_INDEX = 0
 const MAX_CAMERA_INDEX = 16
+const DEFAULT_CAMERA_FPS = 60
+const MIN_CAMERA_FPS = 1
+const MAX_CAMERA_FPS = 240
 
 const developmentCommands = [
   'pnpm dev:web',
   'cmake -S native/tracker-core -B native/tracker-core/build',
   'cmake --build native/tracker-core/build',
-  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs',
-  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
-  'LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector opencv --face-cascade /path/to/haarcascade.xml --frames 3 --log-face-status'
+  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime --camera-fps 60 --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --camera-fps 60 --log-pipeline-status --pipeline-status-interval 60 --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  'LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector opencv --face-cascade /path/to/haarcascade.xml --frames 3 --camera-fps 60 --log-face-status'
 ]
 
 const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {
@@ -84,6 +88,38 @@ const getStoredCameraIndex = (): number => {
 const persistCameraIndex = (cameraIndex: number): void => {
   try {
     window.localStorage.setItem(CAMERA_INDEX_STORAGE_KEY, String(cameraIndex))
+  } catch {
+    // Persistence is best-effort; the selected value remains active in React state.
+  }
+}
+
+const coerceCameraFps = (value: unknown): number => {
+  const numericValue = typeof value === 'number' ? value : Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_CAMERA_FPS
+  }
+
+  return Math.min(MAX_CAMERA_FPS, Math.max(MIN_CAMERA_FPS, numericValue))
+}
+
+const getStoredCameraFps = (): number => {
+  try {
+    const storedCameraFps = window.localStorage.getItem(CAMERA_FPS_STORAGE_KEY)
+
+    if (storedCameraFps !== null) {
+      return coerceCameraFps(storedCameraFps)
+    }
+  } catch {
+    // Keep the desktop UI usable if localStorage is unavailable.
+  }
+
+  return DEFAULT_CAMERA_FPS
+}
+
+const persistCameraFps = (cameraFps: number): void => {
+  try {
+    window.localStorage.setItem(CAMERA_FPS_STORAGE_KEY, String(cameraFps))
   } catch {
     // Persistence is best-effort; the selected value remains active in React state.
   }
@@ -180,6 +216,7 @@ function App(): React.JSX.Element {
   const [selectedFaceDetector, setSelectedFaceDetector] =
     useState<NativePipelineFaceDetector>(getStoredFaceDetector)
   const [selectedCameraIndex, setSelectedCameraIndex] = useState<number>(getStoredCameraIndex)
+  const [selectedCameraFps, setSelectedCameraFps] = useState<number>(getStoredCameraFps)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -267,7 +304,8 @@ function App(): React.JSX.Element {
         await desktopApi.startNativePipeline({
           cameraSource: selectedCameraSource,
           faceDetector: selectedFaceDetector,
-          cameraIndex: coerceCameraIndex(selectedCameraIndex)
+          cameraIndex: coerceCameraIndex(selectedCameraIndex),
+          cameraFps: coerceCameraFps(selectedCameraFps)
         })
       )
     } catch (error) {
@@ -290,7 +328,8 @@ function App(): React.JSX.Element {
       const status = await desktopApi.startNativePipeline({
         cameraSource: selectedCameraSource,
         faceDetector: selectedFaceDetector,
-        cameraIndex: coerceCameraIndex(selectedCameraIndex)
+        cameraIndex: coerceCameraIndex(selectedCameraIndex),
+        cameraFps: coerceCameraFps(selectedCameraFps)
       })
       setRuntimeStatus(status)
 
@@ -322,6 +361,12 @@ function App(): React.JSX.Element {
     const cameraIndex = coerceCameraIndex(cameraIndexValue)
     setSelectedCameraIndex(cameraIndex)
     persistCameraIndex(cameraIndex)
+  }
+
+  const updateSelectedCameraFps = (cameraFpsValue: string): void => {
+    const cameraFps = coerceCameraFps(cameraFpsValue)
+    setSelectedCameraFps(cameraFps)
+    persistCameraFps(cameraFps)
   }
 
   const stopNativePipeline = async (): Promise<void> => {
@@ -357,6 +402,7 @@ function App(): React.JSX.Element {
   const activeCameraSource = runtimeStatus?.pipelineCameraSource ?? 'dummy'
   const activeFaceDetector = runtimeStatus?.pipelineFaceDetector ?? 'noop'
   const activeCameraIndex = runtimeStatus?.pipelineCameraIndex ?? MIN_CAMERA_INDEX
+  const activeCameraFps = runtimeStatus?.pipelineCameraFps ?? DEFAULT_CAMERA_FPS
 
   return (
     <main className="desktop-shell">
@@ -463,6 +509,10 @@ function App(): React.JSX.Element {
                 </div>
               ) : null}
               <div>
+                <dt>Camera FPS</dt>
+                <dd>{activeCameraFps}</dd>
+              </div>
+              <div>
                 <dt>Face detector</dt>
                 <dd>
                   <StatusPill label={faceDetectorLabels[activeFaceDetector]} />
@@ -521,6 +571,20 @@ function App(): React.JSX.Element {
                 }
                 onChange={(event) => updateSelectedCameraIndex(event.currentTarget.value)}
                 onBlur={(event) => updateSelectedCameraIndex(event.currentTarget.value)}
+              />
+            </label>
+
+            <label className="field-row" htmlFor="camera-fps">
+              <span>Camera FPS</span>
+              <input
+                id="camera-fps"
+                type="number"
+                min={MIN_CAMERA_FPS}
+                max={MAX_CAMERA_FPS}
+                value={selectedCameraFps}
+                disabled={isPipelineBusy || isPipelineActionPending}
+                onChange={(event) => updateSelectedCameraFps(event.currentTarget.value)}
+                onBlur={(event) => updateSelectedCameraFps(event.currentTarget.value)}
               />
             </label>
 

@@ -16,6 +16,7 @@ const PREVIEW_OBS_NATIVE_URL = 'http://localhost:5173/?mode=obs&source=native'
 const MOTION_ENDPOINT = 'ws://127.0.0.1:45731/motion'
 const FORCE_KILL_TIMEOUT_MS = 1_500
 const MAX_STATUS_MESSAGE_LENGTH = 360
+const DEFAULT_CAMERA_FPS = 60
 
 function getConfiguredFaceCascadePath(): string | null {
   const cascadePath = nodeProcess.env.LVK_FACE_CASCADE_PATH?.trim()
@@ -36,7 +37,8 @@ function getFaceDetector(
 function createTrackerArgs(
   cameraSource: NativePipelineCameraSource,
   faceDetector: NativePipelineFaceDetector,
-  cameraIndex: number
+  cameraIndex: number,
+  cameraFps: number
 ): string[] {
   const baseArgs = [
     '--camera-source',
@@ -45,6 +47,8 @@ function createTrackerArgs(
     faceDetector,
     '--continuous',
     '--realtime',
+    '--camera-fps',
+    String(cameraFps),
     '--log-pipeline-status',
     '--pipeline-status-interval',
     '60'
@@ -88,7 +92,8 @@ function createInitialStatus(): LvkRuntimeStatus {
     motionBridgeStatus: 'manual_dev_tool',
     pipelineCameraSource: 'dummy',
     pipelineFaceDetector: 'noop',
-    pipelineCameraIndex: 0
+    pipelineCameraIndex: 0,
+    pipelineCameraFps: DEFAULT_CAMERA_FPS
   }
 }
 
@@ -161,11 +166,13 @@ export class NativePipelineManager {
   start({
     cameraSource = 'dummy',
     faceDetector: requestedFaceDetector,
-    cameraIndex = 0
+    cameraIndex = 0,
+    cameraFps = DEFAULT_CAMERA_FPS
   }: {
     cameraSource?: NativePipelineCameraSource
     faceDetector?: NativePipelineFaceDetector
     cameraIndex?: number
+    cameraFps?: number
   } = {}): LvkRuntimeStatus {
     if (
       isActiveStatus(this.status.nativeTrackerStatus) ||
@@ -191,13 +198,14 @@ export class NativePipelineManager {
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
+        pipelineCameraFps: cameraFps,
         lastError:
           'OpenCV face detection requires LVK_FACE_CASCADE_PATH to point to a Haar cascade XML file before starting the native pipeline.'
       }
       return this.getStatus()
     }
 
-    const trackerArgs = createTrackerArgs(cameraSource, faceDetector, cameraIndex)
+    const trackerArgs = createTrackerArgs(cameraSource, faceDetector, cameraIndex, cameraFps)
 
     if (!existsSync(bridgeScriptPath)) {
       this.status = {
@@ -207,6 +215,7 @@ export class NativePipelineManager {
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
+        pipelineCameraFps: cameraFps,
         lastError: `Development MotionFrame bridge was not found at ${bridgeScriptPath}. Run this from the LVK repository checkout.`
       }
       return this.getStatus()
@@ -220,6 +229,7 @@ export class NativePipelineManager {
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
+        pipelineCameraFps: cameraFps,
         lastError: `Native tracker executable was not found. Build it first with: cmake -S native/tracker-core -B native/tracker-core/build && cmake --build native/tracker-core/build. Candidate locations checked: ${trackerExecutableCandidates.join(', ')}`
       }
       return this.getStatus()
@@ -233,6 +243,7 @@ export class NativePipelineManager {
       pipelineCameraSource: cameraSource,
       pipelineFaceDetector: faceDetector,
       pipelineCameraIndex: cameraIndex,
+      pipelineCameraFps: cameraFps,
       lastMessage: `Starting development native MotionFrame pipeline with ${cameraSourceLabel} source and ${faceDetectorLabel}.`
     }
 
@@ -270,6 +281,7 @@ export class NativePipelineManager {
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
+        pipelineCameraFps: cameraFps,
         lastMessage: `Development native pipeline started with ${cameraSourceLabel} source and ${faceDetectorLabel}. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
       }
     } catch (error) {
