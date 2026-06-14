@@ -22,8 +22,8 @@ const developmentCommands = [
   'pnpm dev:web',
   'cmake -S native/tracker-core -B native/tracker-core/build',
   'cmake --build native/tracker-core/build',
-  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime | node tools/motion-ws-bridge.mjs',
-  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
   'LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector opencv --face-cascade /path/to/haarcascade.xml --frames 3 --log-face-status'
 ]
 
