@@ -22,12 +22,21 @@ function getConfiguredFaceCascadePath(): string | null {
   return cascadePath ? cascadePath : null
 }
 
-function getFaceDetector(cameraSource: NativePipelineCameraSource): NativePipelineFaceDetector {
+function getFaceDetector(
+  cameraSource: NativePipelineCameraSource,
+  faceDetector?: NativePipelineFaceDetector
+): NativePipelineFaceDetector {
+  if (faceDetector) {
+    return faceDetector
+  }
+
   return cameraSource === 'opencv' && getConfiguredFaceCascadePath() ? 'opencv' : 'noop'
 }
 
-function createTrackerArgs(cameraSource: NativePipelineCameraSource): string[] {
-  const faceDetector = getFaceDetector(cameraSource)
+function createTrackerArgs(
+  cameraSource: NativePipelineCameraSource,
+  faceDetector: NativePipelineFaceDetector
+): string[] {
   const baseArgs = [
     '--camera-source',
     cameraSource,
@@ -138,7 +147,13 @@ export class NativePipelineManager {
     return { ...this.status }
   }
 
-  start(cameraSource: NativePipelineCameraSource = 'dummy'): LvkRuntimeStatus {
+  start({
+    cameraSource = 'dummy',
+    faceDetector: requestedFaceDetector
+  }: {
+    cameraSource?: NativePipelineCameraSource
+    faceDetector?: NativePipelineFaceDetector
+  } = {}): LvkRuntimeStatus {
     if (
       isActiveStatus(this.status.nativeTrackerStatus) ||
       isActiveStatus(this.status.motionBridgeStatus)
@@ -146,14 +161,29 @@ export class NativePipelineManager {
       return this.getStatus()
     }
 
-    const trackerArgs = createTrackerArgs(cameraSource)
+    const faceDetector = getFaceDetector(cameraSource, requestedFaceDetector)
     const cameraSourceLabel = getCameraSourceLabel(cameraSource)
-    const faceDetector = getFaceDetector(cameraSource)
     const faceDetectorLabel = getFaceDetectorLabel(faceDetector)
     const repoRoot = findRepoRoot()
+    const faceCascadePath = getConfiguredFaceCascadePath()
     const bridgeScriptPath = join(repoRoot, 'tools', 'motion-ws-bridge.mjs')
     const trackerExecutableCandidates = getTrackerExecutableCandidates(repoRoot)
     const trackerExecutablePath = resolveTrackerExecutable(repoRoot)
+
+    if (requestedFaceDetector === 'opencv' && !faceCascadePath) {
+      this.status = {
+        ...this.status,
+        nativeTrackerStatus: 'error',
+        motionBridgeStatus: 'manual_dev_tool',
+        pipelineCameraSource: cameraSource,
+        pipelineFaceDetector: faceDetector,
+        lastError:
+          'OpenCV face detection requires LVK_FACE_CASCADE_PATH to point to a Haar cascade XML file before starting the native pipeline.'
+      }
+      return this.getStatus()
+    }
+
+    const trackerArgs = createTrackerArgs(cameraSource, faceDetector)
 
     if (!existsSync(bridgeScriptPath)) {
       this.status = {

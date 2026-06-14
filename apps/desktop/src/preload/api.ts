@@ -17,7 +17,8 @@ export type NativePipelineCameraSource = 'dummy' | 'opencv'
 export type NativePipelineFaceDetector = 'noop' | 'opencv'
 
 export interface NativePipelineStartOptions {
-  cameraSource: NativePipelineCameraSource
+  cameraSource?: NativePipelineCameraSource
+  faceDetector?: NativePipelineFaceDetector
 }
 
 export interface LvkRuntimeStatus {

@@ -3,7 +3,12 @@ import { join } from 'path'
 import { NativePipelineManager } from './nativePipeline'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { LVK_IPC_CHANNELS, type NativePipelineCameraSource } from '../preload/api'
+import {
+  LVK_IPC_CHANNELS,
+  type NativePipelineCameraSource,
+  type NativePipelineFaceDetector,
+  type NativePipelineStartOptions
+} from '../preload/api'
 
 const nativePipeline = new NativePipelineManager()
 
@@ -24,27 +29,44 @@ function isSafeLocalPreviewUrl(url: string): boolean {
   }
 }
 
-function parseNativePipelineCameraSource(options: unknown): NativePipelineCameraSource {
+function parseNativePipelineStartOptions(options: unknown): NativePipelineStartOptions {
   if (options === undefined) {
-    return 'dummy'
+    return {}
   }
 
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
     throw new Error('Native pipeline start options must be an object when provided.')
   }
 
-  const cameraSource = (options as { cameraSource?: unknown }).cameraSource
-  if (cameraSource === 'dummy' || cameraSource === 'opencv') {
-    return cameraSource
+  const { cameraSource, faceDetector } = options as {
+    cameraSource?: unknown
+    faceDetector?: unknown
+  }
+  const parsedOptions: NativePipelineStartOptions = {}
+
+  if (cameraSource !== undefined) {
+    if (cameraSource !== 'dummy' && cameraSource !== 'opencv') {
+      throw new Error('Native pipeline camera source must be either dummy or opencv.')
+    }
+
+    parsedOptions.cameraSource = cameraSource satisfies NativePipelineCameraSource
   }
 
-  throw new Error('Native pipeline camera source must be either dummy or opencv.')
+  if (faceDetector !== undefined) {
+    if (faceDetector !== 'noop' && faceDetector !== 'opencv') {
+      throw new Error('Native pipeline face detector must be either noop or opencv.')
+    }
+
+    parsedOptions.faceDetector = faceDetector satisfies NativePipelineFaceDetector
+  }
+
+  return parsedOptions
 }
 
 function registerLvkIpcHandlers(): void {
   ipcMain.handle(LVK_IPC_CHANNELS.getRuntimeStatus, () => nativePipeline.getStatus())
   ipcMain.handle(LVK_IPC_CHANNELS.startNativePipeline, (_event, options: unknown) =>
-    nativePipeline.start(parseNativePipelineCameraSource(options))
+    nativePipeline.start(parseNativePipelineStartOptions(options))
   )
   ipcMain.handle(LVK_IPC_CHANNELS.stopNativePipeline, () => nativePipeline.stop())
   ipcMain.handle(LVK_IPC_CHANNELS.openExternalUrl, async (_event, url: unknown) => {
