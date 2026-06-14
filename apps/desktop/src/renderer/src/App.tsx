@@ -16,19 +16,27 @@ const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
 const FACE_DETECTOR_STORAGE_KEY = 'lvk.desktop.faceDetector'
 const CAMERA_INDEX_STORAGE_KEY = 'lvk.desktop.cameraIndex'
 const CAMERA_FPS_STORAGE_KEY = 'lvk.desktop.cameraFps'
+const CAMERA_WIDTH_STORAGE_KEY = 'lvk.desktop.cameraWidth'
+const CAMERA_HEIGHT_STORAGE_KEY = 'lvk.desktop.cameraHeight'
 const MIN_CAMERA_INDEX = 0
 const MAX_CAMERA_INDEX = 16
 const DEFAULT_CAMERA_FPS = 60
 const MIN_CAMERA_FPS = 1
 const MAX_CAMERA_FPS = 240
+const DEFAULT_CAMERA_WIDTH = 640
+const DEFAULT_CAMERA_HEIGHT = 480
+const MIN_CAMERA_WIDTH = 1
+const MAX_CAMERA_WIDTH = 7680
+const MIN_CAMERA_HEIGHT = 1
+const MAX_CAMERA_HEIGHT = 4320
 
 const developmentCommands = [
   'pnpm dev:web',
   'cmake -S native/tracker-core -B native/tracker-core/build',
   'cmake --build native/tracker-core/build',
-  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime --camera-fps 60 --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs',
-  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --camera-fps 60 --log-pipeline-status --pipeline-status-interval 60 --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
-  'LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector opencv --face-cascade /path/to/haarcascade.xml --frames 3 --camera-fps 60 --log-face-status'
+  './native/tracker-core/build/lvk-tracker-core --camera-source dummy --face-detector noop --continuous --realtime --camera-fps 60 --camera-width 640 --camera-height 480 --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  './native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector noop --camera-index 0 --continuous --realtime --camera-fps 60 --camera-width 640 --camera-height 480 --log-pipeline-status --pipeline-status-interval 60 --log-camera-status --camera-status-interval 60 | node tools/motion-ws-bridge.mjs',
+  'LVK_FACE_CASCADE_PATH=/path/to/haarcascade.xml ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --face-detector opencv --face-cascade /path/to/haarcascade.xml --frames 3 --camera-fps 60 --camera-width 640 --camera-height 480 --log-face-status'
 ]
 
 const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {
@@ -120,6 +128,70 @@ const getStoredCameraFps = (): number => {
 const persistCameraFps = (cameraFps: number): void => {
   try {
     window.localStorage.setItem(CAMERA_FPS_STORAGE_KEY, String(cameraFps))
+  } catch {
+    // Persistence is best-effort; the selected value remains active in React state.
+  }
+}
+
+const coerceCameraWidth = (value: unknown): number => {
+  const numericValue = typeof value === 'number' ? value : Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_CAMERA_WIDTH
+  }
+
+  return Math.min(MAX_CAMERA_WIDTH, Math.max(MIN_CAMERA_WIDTH, Math.trunc(numericValue)))
+}
+
+const getStoredCameraWidth = (): number => {
+  try {
+    const storedCameraWidth = window.localStorage.getItem(CAMERA_WIDTH_STORAGE_KEY)
+
+    if (storedCameraWidth !== null) {
+      return coerceCameraWidth(storedCameraWidth)
+    }
+  } catch {
+    // Keep the desktop UI usable if localStorage is unavailable.
+  }
+
+  return DEFAULT_CAMERA_WIDTH
+}
+
+const persistCameraWidth = (cameraWidth: number): void => {
+  try {
+    window.localStorage.setItem(CAMERA_WIDTH_STORAGE_KEY, String(cameraWidth))
+  } catch {
+    // Persistence is best-effort; the selected value remains active in React state.
+  }
+}
+
+const coerceCameraHeight = (value: unknown): number => {
+  const numericValue = typeof value === 'number' ? value : Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_CAMERA_HEIGHT
+  }
+
+  return Math.min(MAX_CAMERA_HEIGHT, Math.max(MIN_CAMERA_HEIGHT, Math.trunc(numericValue)))
+}
+
+const getStoredCameraHeight = (): number => {
+  try {
+    const storedCameraHeight = window.localStorage.getItem(CAMERA_HEIGHT_STORAGE_KEY)
+
+    if (storedCameraHeight !== null) {
+      return coerceCameraHeight(storedCameraHeight)
+    }
+  } catch {
+    // Keep the desktop UI usable if localStorage is unavailable.
+  }
+
+  return DEFAULT_CAMERA_HEIGHT
+}
+
+const persistCameraHeight = (cameraHeight: number): void => {
+  try {
+    window.localStorage.setItem(CAMERA_HEIGHT_STORAGE_KEY, String(cameraHeight))
   } catch {
     // Persistence is best-effort; the selected value remains active in React state.
   }
@@ -217,6 +289,8 @@ function App(): React.JSX.Element {
     useState<NativePipelineFaceDetector>(getStoredFaceDetector)
   const [selectedCameraIndex, setSelectedCameraIndex] = useState<number>(getStoredCameraIndex)
   const [selectedCameraFps, setSelectedCameraFps] = useState<number>(getStoredCameraFps)
+  const [selectedCameraWidth, setSelectedCameraWidth] = useState<number>(getStoredCameraWidth)
+  const [selectedCameraHeight, setSelectedCameraHeight] = useState<number>(getStoredCameraHeight)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -305,7 +379,9 @@ function App(): React.JSX.Element {
           cameraSource: selectedCameraSource,
           faceDetector: selectedFaceDetector,
           cameraIndex: coerceCameraIndex(selectedCameraIndex),
-          cameraFps: coerceCameraFps(selectedCameraFps)
+          cameraFps: coerceCameraFps(selectedCameraFps),
+          cameraWidth: coerceCameraWidth(selectedCameraWidth),
+          cameraHeight: coerceCameraHeight(selectedCameraHeight)
         })
       )
     } catch (error) {
@@ -329,7 +405,9 @@ function App(): React.JSX.Element {
         cameraSource: selectedCameraSource,
         faceDetector: selectedFaceDetector,
         cameraIndex: coerceCameraIndex(selectedCameraIndex),
-        cameraFps: coerceCameraFps(selectedCameraFps)
+        cameraFps: coerceCameraFps(selectedCameraFps),
+        cameraWidth: coerceCameraWidth(selectedCameraWidth),
+        cameraHeight: coerceCameraHeight(selectedCameraHeight)
       })
       setRuntimeStatus(status)
 
@@ -369,6 +447,18 @@ function App(): React.JSX.Element {
     persistCameraFps(cameraFps)
   }
 
+  const updateSelectedCameraWidth = (cameraWidthValue: string): void => {
+    const cameraWidth = coerceCameraWidth(cameraWidthValue)
+    setSelectedCameraWidth(cameraWidth)
+    persistCameraWidth(cameraWidth)
+  }
+
+  const updateSelectedCameraHeight = (cameraHeightValue: string): void => {
+    const cameraHeight = coerceCameraHeight(cameraHeightValue)
+    setSelectedCameraHeight(cameraHeight)
+    persistCameraHeight(cameraHeight)
+  }
+
   const stopNativePipeline = async (): Promise<void> => {
     if (!desktopApi || pipelineActionPending) {
       return
@@ -403,6 +493,8 @@ function App(): React.JSX.Element {
   const activeFaceDetector = runtimeStatus?.pipelineFaceDetector ?? 'noop'
   const activeCameraIndex = runtimeStatus?.pipelineCameraIndex ?? MIN_CAMERA_INDEX
   const activeCameraFps = runtimeStatus?.pipelineCameraFps ?? DEFAULT_CAMERA_FPS
+  const activeCameraWidth = runtimeStatus?.pipelineCameraWidth ?? DEFAULT_CAMERA_WIDTH
+  const activeCameraHeight = runtimeStatus?.pipelineCameraHeight ?? DEFAULT_CAMERA_HEIGHT
 
   return (
     <main className="desktop-shell">
@@ -513,6 +605,10 @@ function App(): React.JSX.Element {
                 <dd>{activeCameraFps}</dd>
               </div>
               <div>
+                <dt>Camera resolution</dt>
+                <dd>{`${activeCameraWidth} × ${activeCameraHeight}`}</dd>
+              </div>
+              <div>
                 <dt>Face detector</dt>
                 <dd>
                   <StatusPill label={faceDetectorLabels[activeFaceDetector]} />
@@ -585,6 +681,36 @@ function App(): React.JSX.Element {
                 disabled={isPipelineBusy || isPipelineActionPending}
                 onChange={(event) => updateSelectedCameraFps(event.currentTarget.value)}
                 onBlur={(event) => updateSelectedCameraFps(event.currentTarget.value)}
+              />
+            </label>
+
+            <label className="field-row" htmlFor="camera-width">
+              <span>Camera width</span>
+              <input
+                id="camera-width"
+                type="number"
+                min={MIN_CAMERA_WIDTH}
+                max={MAX_CAMERA_WIDTH}
+                step={1}
+                value={selectedCameraWidth}
+                disabled={isPipelineBusy || isPipelineActionPending}
+                onChange={(event) => updateSelectedCameraWidth(event.currentTarget.value)}
+                onBlur={(event) => updateSelectedCameraWidth(event.currentTarget.value)}
+              />
+            </label>
+
+            <label className="field-row" htmlFor="camera-height">
+              <span>Camera height</span>
+              <input
+                id="camera-height"
+                type="number"
+                min={MIN_CAMERA_HEIGHT}
+                max={MAX_CAMERA_HEIGHT}
+                step={1}
+                value={selectedCameraHeight}
+                disabled={isPipelineBusy || isPipelineActionPending}
+                onChange={(event) => updateSelectedCameraHeight(event.currentTarget.value)}
+                onBlur={(event) => updateSelectedCameraHeight(event.currentTarget.value)}
               />
             </label>
 
