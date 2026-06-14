@@ -13,6 +13,7 @@ type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
+const FACE_DETECTOR_STORAGE_KEY = 'lvk.desktop.faceDetector'
 
 const developmentCommands = [
   'pnpm dev:web',
@@ -48,6 +49,31 @@ const getStoredCameraSource = (): NativePipelineCameraSource => {
 const persistCameraSource = (cameraSource: NativePipelineCameraSource): void => {
   try {
     window.localStorage.setItem(CAMERA_SOURCE_STORAGE_KEY, cameraSource)
+  } catch {
+    // Persistence is best-effort; the selected value remains active in React state.
+  }
+}
+
+const isNativePipelineFaceDetector = (value: string | null): value is NativePipelineFaceDetector =>
+  value === 'noop' || value === 'opencv'
+
+const getStoredFaceDetector = (): NativePipelineFaceDetector => {
+  try {
+    const storedFaceDetector = window.localStorage.getItem(FACE_DETECTOR_STORAGE_KEY)
+
+    if (isNativePipelineFaceDetector(storedFaceDetector)) {
+      return storedFaceDetector
+    }
+  } catch {
+    // Keep the desktop UI usable if localStorage is unavailable.
+  }
+
+  return 'noop'
+}
+
+const persistFaceDetector = (faceDetector: NativePipelineFaceDetector): void => {
+  try {
+    window.localStorage.setItem(FACE_DETECTOR_STORAGE_KEY, faceDetector)
   } catch {
     // Persistence is best-effort; the selected value remains active in React state.
   }
@@ -116,6 +142,8 @@ function App(): React.JSX.Element {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [selectedCameraSource, setSelectedCameraSource] =
     useState<NativePipelineCameraSource>(getStoredCameraSource)
+  const [selectedFaceDetector, setSelectedFaceDetector] =
+    useState<NativePipelineFaceDetector>(getStoredFaceDetector)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -199,7 +227,12 @@ function App(): React.JSX.Element {
     setPipelineActionPending('start')
 
     try {
-      setRuntimeStatus(await desktopApi.startNativePipeline({ cameraSource: selectedCameraSource }))
+      setRuntimeStatus(
+        await desktopApi.startNativePipeline({
+          cameraSource: selectedCameraSource,
+          faceDetector: selectedFaceDetector
+        })
+      )
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to start native pipeline.')
     } finally {
@@ -217,7 +250,10 @@ function App(): React.JSX.Element {
     setPipelineActionPending('start-and-open')
 
     try {
-      const status = await desktopApi.startNativePipeline({ cameraSource: selectedCameraSource })
+      const status = await desktopApi.startNativePipeline({
+        cameraSource: selectedCameraSource,
+        faceDetector: selectedFaceDetector
+      })
       setRuntimeStatus(status)
 
       if (!isNativePipelineRunning(status)) {
@@ -237,6 +273,11 @@ function App(): React.JSX.Element {
   const updateSelectedCameraSource = (cameraSource: NativePipelineCameraSource): void => {
     setSelectedCameraSource(cameraSource)
     persistCameraSource(cameraSource)
+  }
+
+  const updateSelectedFaceDetector = (faceDetector: NativePipelineFaceDetector): void => {
+    setSelectedFaceDetector(faceDetector)
+    persistFaceDetector(faceDetector)
   }
 
   const stopNativePipeline = async (): Promise<void> => {
@@ -415,6 +456,25 @@ function App(): React.JSX.Element {
               </select>
             </label>
 
+            <label className="field-row" htmlFor="face-detector">
+              <span>Face detector</span>
+              <select
+                id="face-detector"
+                value={selectedFaceDetector}
+                disabled={isPipelineBusy || isPipelineActionPending}
+                onChange={(event) => {
+                  const faceDetector = event.currentTarget.value
+
+                  if (isNativePipelineFaceDetector(faceDetector)) {
+                    updateSelectedFaceDetector(faceDetector)
+                  }
+                }}
+              >
+                <option value="noop">Noop face detector</option>
+                <option value="opencv">OpenCV face detection</option>
+              </select>
+            </label>
+
             <div className="button-row" aria-label="Development native pipeline controls">
               <button
                 type="button"
@@ -463,10 +523,10 @@ function App(): React.JSX.Element {
             </div>
 
             <p className="note">
-              Future controls for camera source, preview, face detector selection, and runtime
-              preferences will live here. OpenCV face detection is optional and requires an explicit
-              LVK_FACE_CASCADE_PATH configuration before Electron passes a cascade to the native
-              tracker.
+              Future controls for preview and runtime preferences will live here. Camera source and
+              face detector selection are available in the Runtime controls. OpenCV face detection
+              is optional and requires an explicit LVK_FACE_CASCADE_PATH configuration before
+              Electron passes a cascade to the native tracker.
             </p>
           </section>
 
