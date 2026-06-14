@@ -80,14 +80,16 @@ pnpm --filter @lvk/web-preview build
 pnpm --filter @lvk/web-preview typecheck
 ```
 
-Native checks later:
+Current native and local transport checks:
 
 ```bash
 cmake -S native/tracker-core -B native/tracker-core/build
 cmake --build native/tracker-core/build
+node tools/check-native-tracker-output.mjs native/tracker-core/build/lvk-tracker-core
+pnpm test:motion-ws-bridge
 ```
 
-If a script does not exist, say so clearly.
+Use targeted smoke checks when they match the change. If a script does not exist, say so clearly.
 
 ---
 
