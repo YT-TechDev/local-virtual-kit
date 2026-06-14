@@ -23,20 +23,21 @@ This document defines technology choices, package boundaries, and dependency pol
 apps/
   desktop/
   web-preview/
+native/
+  tracker-core/
 packages/
   motion-protocol/
 ```
 
-Planned future areas:
+Future-only areas:
 
 ```txt
-native/tracker-core/
 packages/avatar-renderer/
 examples/basic-r3f-avatar/
 examples/flow-avatar/
 ```
 
-Do not create future packages until the current task needs them.
+Do not create future packages or examples until the current task needs them.
 
 ---
 
@@ -144,6 +145,15 @@ pnpm --filter @lvk/motion-protocol build
 pnpm --filter @lvk/motion-protocol typecheck
 pnpm --filter @lvk/web-preview build
 pnpm --filter @lvk/web-preview typecheck
+```
+
+Native and local transport examples:
+
+```bash
+cmake -S native/tracker-core -B native/tracker-core/build
+cmake --build native/tracker-core/build
+node tools/check-native-tracker-output.mjs native/tracker-core/build/lvk-tracker-core
+pnpm test:motion-ws-bridge
 ```
 
 If a command is unavailable or not run, report that honestly.
