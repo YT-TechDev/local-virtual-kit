@@ -1,7 +1,7 @@
 name: Spike / research task
 description: Research a focused LVK question before implementation.
 title: "spike: "
-labels: ["spike"]
+labels: ["type:spike", "status:needs-design"]
 body:
   - type: markdown
     attributes:
@@ -53,7 +53,7 @@ body:
     id: suggested-labels
     attributes:
       label: Suggested Labels
-      placeholder: spike, research, planning
+      placeholder: type:spike, area:native-core, status:needs-design
   - type: input
     id: milestone
     attributes:

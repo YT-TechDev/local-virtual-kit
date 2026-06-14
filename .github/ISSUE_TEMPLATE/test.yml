@@ -1,7 +1,7 @@
 name: Test / verification task
 description: Add or improve tests, checks, or manual verification coverage.
 title: "test: "
-labels: ["test"]
+labels: ["type:test", "area:tooling", "status:ready"]
 body:
   - type: markdown
     attributes:
@@ -53,7 +53,7 @@ body:
     id: suggested-labels
     attributes:
       label: Suggested Labels
-      placeholder: test, verification, chore
+      placeholder: type:test, area:tooling, status:ready
   - type: input
     id: milestone
     attributes:

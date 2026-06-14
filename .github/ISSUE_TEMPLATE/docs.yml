@@ -1,7 +1,7 @@
 name: Documentation task
 description: Improve LVK documentation without changing runtime behavior.
 title: "docs: "
-labels: ["documentation"]
+labels: ["type:docs", "area:docs", "status:ready"]
 body:
   - type: markdown
     attributes:
@@ -54,7 +54,7 @@ body:
     id: suggested-labels
     attributes:
       label: Suggested Labels
-      placeholder: documentation, chore
+      placeholder: type:docs, area:docs, status:ready
   - type: input
     id: milestone
     attributes:
