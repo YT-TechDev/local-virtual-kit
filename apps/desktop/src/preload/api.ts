@@ -19,6 +19,7 @@ export type NativePipelineFaceDetector = 'noop' | 'opencv'
 export interface NativePipelineStartOptions {
   cameraSource?: NativePipelineCameraSource
   faceDetector?: NativePipelineFaceDetector
+  cameraIndex?: number
 }
 
 export interface LvkRuntimeStatus {
@@ -30,6 +31,7 @@ export interface LvkRuntimeStatus {
   motionBridgeStatus: MotionBridgeStatus
   pipelineCameraSource?: NativePipelineCameraSource
   pipelineFaceDetector?: NativePipelineFaceDetector
+  pipelineCameraIndex?: number
   lastError?: string
   lastMessage?: string
 }

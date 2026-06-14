@@ -14,6 +14,9 @@ type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
 const FACE_DETECTOR_STORAGE_KEY = 'lvk.desktop.faceDetector'
+const CAMERA_INDEX_STORAGE_KEY = 'lvk.desktop.cameraIndex'
+const MIN_CAMERA_INDEX = 0
+const MAX_CAMERA_INDEX = 16
 
 const developmentCommands = [
   'pnpm dev:web',
@@ -49,6 +52,38 @@ const getStoredCameraSource = (): NativePipelineCameraSource => {
 const persistCameraSource = (cameraSource: NativePipelineCameraSource): void => {
   try {
     window.localStorage.setItem(CAMERA_SOURCE_STORAGE_KEY, cameraSource)
+  } catch {
+    // Persistence is best-effort; the selected value remains active in React state.
+  }
+}
+
+const coerceCameraIndex = (value: unknown): number => {
+  const numericValue = typeof value === 'number' ? value : Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return MIN_CAMERA_INDEX
+  }
+
+  return Math.min(MAX_CAMERA_INDEX, Math.max(MIN_CAMERA_INDEX, Math.trunc(numericValue)))
+}
+
+const getStoredCameraIndex = (): number => {
+  try {
+    const storedCameraIndex = window.localStorage.getItem(CAMERA_INDEX_STORAGE_KEY)
+
+    if (storedCameraIndex !== null) {
+      return coerceCameraIndex(storedCameraIndex)
+    }
+  } catch {
+    // Keep the desktop UI usable if localStorage is unavailable.
+  }
+
+  return MIN_CAMERA_INDEX
+}
+
+const persistCameraIndex = (cameraIndex: number): void => {
+  try {
+    window.localStorage.setItem(CAMERA_INDEX_STORAGE_KEY, String(cameraIndex))
   } catch {
     // Persistence is best-effort; the selected value remains active in React state.
   }
@@ -144,6 +179,7 @@ function App(): React.JSX.Element {
     useState<NativePipelineCameraSource>(getStoredCameraSource)
   const [selectedFaceDetector, setSelectedFaceDetector] =
     useState<NativePipelineFaceDetector>(getStoredFaceDetector)
+  const [selectedCameraIndex, setSelectedCameraIndex] = useState<number>(getStoredCameraIndex)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -230,7 +266,8 @@ function App(): React.JSX.Element {
       setRuntimeStatus(
         await desktopApi.startNativePipeline({
           cameraSource: selectedCameraSource,
-          faceDetector: selectedFaceDetector
+          faceDetector: selectedFaceDetector,
+          cameraIndex: coerceCameraIndex(selectedCameraIndex)
         })
       )
     } catch (error) {
@@ -252,7 +289,8 @@ function App(): React.JSX.Element {
     try {
       const status = await desktopApi.startNativePipeline({
         cameraSource: selectedCameraSource,
-        faceDetector: selectedFaceDetector
+        faceDetector: selectedFaceDetector,
+        cameraIndex: coerceCameraIndex(selectedCameraIndex)
       })
       setRuntimeStatus(status)
 
@@ -278,6 +316,12 @@ function App(): React.JSX.Element {
   const updateSelectedFaceDetector = (faceDetector: NativePipelineFaceDetector): void => {
     setSelectedFaceDetector(faceDetector)
     persistFaceDetector(faceDetector)
+  }
+
+  const updateSelectedCameraIndex = (cameraIndexValue: string): void => {
+    const cameraIndex = coerceCameraIndex(cameraIndexValue)
+    setSelectedCameraIndex(cameraIndex)
+    persistCameraIndex(cameraIndex)
   }
 
   const stopNativePipeline = async (): Promise<void> => {
@@ -312,6 +356,7 @@ function App(): React.JSX.Element {
     : false
   const activeCameraSource = runtimeStatus?.pipelineCameraSource ?? 'dummy'
   const activeFaceDetector = runtimeStatus?.pipelineFaceDetector ?? 'noop'
+  const activeCameraIndex = runtimeStatus?.pipelineCameraIndex ?? MIN_CAMERA_INDEX
 
   return (
     <main className="desktop-shell">
@@ -411,6 +456,12 @@ function App(): React.JSX.Element {
                   <StatusPill label={cameraSourceLabels[activeCameraSource]} />
                 </dd>
               </div>
+              {activeCameraSource === 'opencv' ? (
+                <div>
+                  <dt>Camera index</dt>
+                  <dd>{activeCameraIndex}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Face detector</dt>
                 <dd>
@@ -454,6 +505,23 @@ function App(): React.JSX.Element {
                 <option value="dummy">Dummy source</option>
                 <option value="opencv">OpenCV camera</option>
               </select>
+            </label>
+
+            <label className="field-row" htmlFor="camera-index">
+              <span>Camera index</span>
+              <input
+                id="camera-index"
+                type="number"
+                min={MIN_CAMERA_INDEX}
+                max={MAX_CAMERA_INDEX}
+                step={1}
+                value={selectedCameraIndex}
+                disabled={
+                  selectedCameraSource === 'dummy' || isPipelineBusy || isPipelineActionPending
+                }
+                onChange={(event) => updateSelectedCameraIndex(event.currentTarget.value)}
+                onBlur={(event) => updateSelectedCameraIndex(event.currentTarget.value)}
+              />
             </label>
 
             <label className="field-row" htmlFor="face-detector">

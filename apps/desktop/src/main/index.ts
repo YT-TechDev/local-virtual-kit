@@ -38,9 +38,10 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
     throw new Error('Native pipeline start options must be an object when provided.')
   }
 
-  const { cameraSource, faceDetector } = options as {
+  const { cameraSource, faceDetector, cameraIndex } = options as {
     cameraSource?: unknown
     faceDetector?: unknown
+    cameraIndex?: unknown
   }
   const parsedOptions: NativePipelineStartOptions = {}
 
@@ -58,6 +59,22 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
     }
 
     parsedOptions.faceDetector = faceDetector satisfies NativePipelineFaceDetector
+  }
+
+  if (cameraIndex !== undefined) {
+    if (
+      typeof cameraIndex !== 'number' ||
+      !Number.isFinite(cameraIndex) ||
+      !Number.isInteger(cameraIndex)
+    ) {
+      throw new Error('Native pipeline camera index must be a finite integer.')
+    }
+
+    if (cameraIndex < 0 || cameraIndex > 16) {
+      throw new Error('Native pipeline camera index must be between 0 and 16.')
+    }
+
+    parsedOptions.cameraIndex = cameraIndex
   }
 
   return parsedOptions
