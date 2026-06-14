@@ -328,7 +328,8 @@ function App(): React.JSX.Element {
       const status = await desktopApi.startNativePipeline({
         cameraSource: selectedCameraSource,
         faceDetector: selectedFaceDetector,
-        cameraIndex: coerceCameraIndex(selectedCameraIndex)
+        cameraIndex: coerceCameraIndex(selectedCameraIndex),
+        cameraFps: coerceCameraFps(selectedCameraFps)
       })
       setRuntimeStatus(status)
 
