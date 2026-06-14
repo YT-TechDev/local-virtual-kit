@@ -1,0 +1,66 @@
+name: Test / verification task
+description: Add or improve tests, checks, or manual verification coverage.
+title: "test: "
+labels: ["test"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for focused verification work. Keep changes practical and avoid adding new dependencies unless explicitly approved.
+
+        Before implementation, read `docs/AGENTS.md` and only the focused docs relevant to the area being verified.
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What risk or behavior needs better verification?
+      placeholder: Describe the gap in tests, checks, or manual verification.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What will be verified, and what is out of scope?
+      placeholder: Name the package, app, protocol, or workflow to verify.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      value: |
+        - Keep LVK local-first.
+        - Camera frames stay local.
+        - Do not add telemetry, analytics, cloud upload, or new network behavior.
+        - Do not change runtime behavior unless explicitly required by the test task.
+        - Do not change the MotionFrame schema unless this issue explicitly approves it.
+        - Keep the PR small and reviewable.
+        - Do not push directly to `main`.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - [ ] Test/check coverage is added or clearly documented.
+        - [ ] Commands run are reported honestly.
+        - [ ] Commands not run are explained.
+    validations:
+      required: true
+  - type: input
+    id: suggested-labels
+    attributes:
+      label: Suggested Labels
+      placeholder: test, verification, chore
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: v0.1
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Add links, flaky behavior, environment constraints, or follow-up ideas.
