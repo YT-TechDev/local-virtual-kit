@@ -103,10 +103,16 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
         hasAttemptedConnection ? "reconnecting" : "connecting",
       );
       hasAttemptedConnection = true;
-      websocket = new WebSocket(NATIVE_MOTION_WS_URL);
+      const activeWebSocket = new WebSocket(NATIVE_MOTION_WS_URL);
+      websocket = activeWebSocket;
 
-      websocket.onopen = () => {
-        if (isUnmounted || websocket?.readyState !== WebSocket.OPEN) {
+      const isActiveWebSocketOpen = () =>
+        !isUnmounted &&
+        websocket === activeWebSocket &&
+        activeWebSocket.readyState === WebSocket.OPEN;
+
+      activeWebSocket.onopen = () => {
+        if (!isActiveWebSocketOpen()) {
           return;
         }
 
@@ -114,7 +120,11 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
         resetStaleFrameTimer();
       };
 
-      websocket.onmessage = (event: MessageEvent<unknown>) => {
+      activeWebSocket.onmessage = (event: MessageEvent<unknown>) => {
+        if (!isActiveWebSocketOpen()) {
+          return;
+        }
+
         const frame = parseNativeMotionFrameJson(event.data);
 
         if (frame === null) {
@@ -131,11 +141,19 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
         resetStaleFrameTimer();
       };
 
-      websocket.onerror = () => {
-        websocket?.close();
+      activeWebSocket.onerror = () => {
+        if (websocket !== activeWebSocket) {
+          return;
+        }
+
+        activeWebSocket.close();
       };
 
-      websocket.onclose = () => {
+      activeWebSocket.onclose = () => {
+        if (websocket !== activeWebSocket) {
+          return;
+        }
+
         scheduleReconnect();
       };
     }
