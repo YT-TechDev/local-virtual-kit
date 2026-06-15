@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { NativePipelineManager } from './nativePipeline'
+import { loadRuntimeSettings, saveRuntimeSettings } from './runtimeSettingsConfig'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import {
@@ -130,6 +131,10 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
 
 function registerLvkIpcHandlers(): void {
   ipcMain.handle(LVK_IPC_CHANNELS.getRuntimeStatus, () => nativePipeline.getStatus())
+  ipcMain.handle(LVK_IPC_CHANNELS.getRuntimeSettings, () => loadRuntimeSettings())
+  ipcMain.handle(LVK_IPC_CHANNELS.saveRuntimeSettings, (_event, settings: unknown) =>
+    saveRuntimeSettings(settings)
+  )
   ipcMain.handle(LVK_IPC_CHANNELS.startNativePipeline, (_event, options: unknown) =>
     nativePipeline.start(parseNativePipelineStartOptions(options))
   )

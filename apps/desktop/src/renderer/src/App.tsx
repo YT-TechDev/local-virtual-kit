@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  DesktopRuntimeSettings,
   LvkRuntimeStatus,
   MotionBridgeStatus,
   NativePipelineCameraSource,
@@ -12,12 +13,6 @@ type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
-const CAMERA_SOURCE_STORAGE_KEY = 'lvk.desktop.cameraSource'
-const FACE_DETECTOR_STORAGE_KEY = 'lvk.desktop.faceDetector'
-const CAMERA_INDEX_STORAGE_KEY = 'lvk.desktop.cameraIndex'
-const CAMERA_FPS_STORAGE_KEY = 'lvk.desktop.cameraFps'
-const CAMERA_WIDTH_STORAGE_KEY = 'lvk.desktop.cameraWidth'
-const CAMERA_HEIGHT_STORAGE_KEY = 'lvk.desktop.cameraHeight'
 const MIN_CAMERA_INDEX = 0
 const MAX_CAMERA_INDEX = 16
 const DEFAULT_CAMERA_FPS = 60
@@ -25,6 +20,15 @@ const MIN_CAMERA_FPS = 1
 const MAX_CAMERA_FPS = 240
 const DEFAULT_CAMERA_WIDTH = 640
 const DEFAULT_CAMERA_HEIGHT = 480
+
+const DEFAULT_RUNTIME_SETTINGS: DesktopRuntimeSettings = {
+  cameraSource: 'dummy',
+  faceDetector: 'noop',
+  cameraIndex: MIN_CAMERA_INDEX,
+  cameraFps: DEFAULT_CAMERA_FPS,
+  cameraWidth: DEFAULT_CAMERA_WIDTH,
+  cameraHeight: DEFAULT_CAMERA_HEIGHT
+}
 const MIN_CAMERA_WIDTH = 1
 const MAX_CAMERA_WIDTH = 7680
 const MIN_CAMERA_HEIGHT = 1
@@ -44,31 +48,6 @@ const cameraSourceLabels: Record<NativePipelineCameraSource, string> = {
   opencv: 'OpenCV camera'
 }
 
-const isNativePipelineCameraSource = (value: string | null): value is NativePipelineCameraSource =>
-  value === 'dummy' || value === 'opencv'
-
-const getStoredCameraSource = (): NativePipelineCameraSource => {
-  try {
-    const storedCameraSource = window.localStorage.getItem(CAMERA_SOURCE_STORAGE_KEY)
-
-    if (isNativePipelineCameraSource(storedCameraSource)) {
-      return storedCameraSource
-    }
-  } catch {
-    // Keep the desktop UI usable if localStorage is unavailable.
-  }
-
-  return 'dummy'
-}
-
-const persistCameraSource = (cameraSource: NativePipelineCameraSource): void => {
-  try {
-    window.localStorage.setItem(CAMERA_SOURCE_STORAGE_KEY, cameraSource)
-  } catch {
-    // Persistence is best-effort; the selected value remains active in React state.
-  }
-}
-
 const coerceCameraIndex = (value: unknown): number => {
   const numericValue = typeof value === 'number' ? value : Number(value)
 
@@ -77,28 +56,6 @@ const coerceCameraIndex = (value: unknown): number => {
   }
 
   return Math.min(MAX_CAMERA_INDEX, Math.max(MIN_CAMERA_INDEX, Math.trunc(numericValue)))
-}
-
-const getStoredCameraIndex = (): number => {
-  try {
-    const storedCameraIndex = window.localStorage.getItem(CAMERA_INDEX_STORAGE_KEY)
-
-    if (storedCameraIndex !== null) {
-      return coerceCameraIndex(storedCameraIndex)
-    }
-  } catch {
-    // Keep the desktop UI usable if localStorage is unavailable.
-  }
-
-  return MIN_CAMERA_INDEX
-}
-
-const persistCameraIndex = (cameraIndex: number): void => {
-  try {
-    window.localStorage.setItem(CAMERA_INDEX_STORAGE_KEY, String(cameraIndex))
-  } catch {
-    // Persistence is best-effort; the selected value remains active in React state.
-  }
 }
 
 const coerceCameraFps = (value: unknown): number => {
@@ -111,28 +68,6 @@ const coerceCameraFps = (value: unknown): number => {
   return Math.min(MAX_CAMERA_FPS, Math.max(MIN_CAMERA_FPS, numericValue))
 }
 
-const getStoredCameraFps = (): number => {
-  try {
-    const storedCameraFps = window.localStorage.getItem(CAMERA_FPS_STORAGE_KEY)
-
-    if (storedCameraFps !== null) {
-      return coerceCameraFps(storedCameraFps)
-    }
-  } catch {
-    // Keep the desktop UI usable if localStorage is unavailable.
-  }
-
-  return DEFAULT_CAMERA_FPS
-}
-
-const persistCameraFps = (cameraFps: number): void => {
-  try {
-    window.localStorage.setItem(CAMERA_FPS_STORAGE_KEY, String(cameraFps))
-  } catch {
-    // Persistence is best-effort; the selected value remains active in React state.
-  }
-}
-
 const coerceCameraWidth = (value: unknown): number => {
   const numericValue = typeof value === 'number' ? value : Number(value)
 
@@ -141,28 +76,6 @@ const coerceCameraWidth = (value: unknown): number => {
   }
 
   return Math.min(MAX_CAMERA_WIDTH, Math.max(MIN_CAMERA_WIDTH, Math.trunc(numericValue)))
-}
-
-const getStoredCameraWidth = (): number => {
-  try {
-    const storedCameraWidth = window.localStorage.getItem(CAMERA_WIDTH_STORAGE_KEY)
-
-    if (storedCameraWidth !== null) {
-      return coerceCameraWidth(storedCameraWidth)
-    }
-  } catch {
-    // Keep the desktop UI usable if localStorage is unavailable.
-  }
-
-  return DEFAULT_CAMERA_WIDTH
-}
-
-const persistCameraWidth = (cameraWidth: number): void => {
-  try {
-    window.localStorage.setItem(CAMERA_WIDTH_STORAGE_KEY, String(cameraWidth))
-  } catch {
-    // Persistence is best-effort; the selected value remains active in React state.
-  }
 }
 
 const coerceCameraHeight = (value: unknown): number => {
@@ -175,52 +88,20 @@ const coerceCameraHeight = (value: unknown): number => {
   return Math.min(MAX_CAMERA_HEIGHT, Math.max(MIN_CAMERA_HEIGHT, Math.trunc(numericValue)))
 }
 
-const getStoredCameraHeight = (): number => {
-  try {
-    const storedCameraHeight = window.localStorage.getItem(CAMERA_HEIGHT_STORAGE_KEY)
-
-    if (storedCameraHeight !== null) {
-      return coerceCameraHeight(storedCameraHeight)
-    }
-  } catch {
-    // Keep the desktop UI usable if localStorage is unavailable.
-  }
-
-  return DEFAULT_CAMERA_HEIGHT
-}
-
-const persistCameraHeight = (cameraHeight: number): void => {
-  try {
-    window.localStorage.setItem(CAMERA_HEIGHT_STORAGE_KEY, String(cameraHeight))
-  } catch {
-    // Persistence is best-effort; the selected value remains active in React state.
-  }
-}
+const isNativePipelineCameraSource = (value: string | null): value is NativePipelineCameraSource =>
+  value === 'dummy' || value === 'opencv'
 
 const isNativePipelineFaceDetector = (value: string | null): value is NativePipelineFaceDetector =>
   value === 'noop' || value === 'opencv'
 
-const getStoredFaceDetector = (): NativePipelineFaceDetector => {
-  try {
-    const storedFaceDetector = window.localStorage.getItem(FACE_DETECTOR_STORAGE_KEY)
-
-    if (isNativePipelineFaceDetector(storedFaceDetector)) {
-      return storedFaceDetector
-    }
-  } catch {
-    // Keep the desktop UI usable if localStorage is unavailable.
-  }
-
-  return 'noop'
-}
-
-const persistFaceDetector = (faceDetector: NativePipelineFaceDetector): void => {
-  try {
-    window.localStorage.setItem(FACE_DETECTOR_STORAGE_KEY, faceDetector)
-  } catch {
-    // Persistence is best-effort; the selected value remains active in React state.
-  }
-}
+const normalizeRuntimeSettings = (settings: DesktopRuntimeSettings): DesktopRuntimeSettings => ({
+  cameraSource: settings.cameraSource,
+  faceDetector: settings.faceDetector,
+  cameraIndex: coerceCameraIndex(settings.cameraIndex),
+  cameraFps: coerceCameraFps(settings.cameraFps),
+  cameraWidth: coerceCameraWidth(settings.cameraWidth),
+  cameraHeight: coerceCameraHeight(settings.cameraHeight)
+})
 
 const faceDetectorLabels: Record<NativePipelineFaceDetector, string> = {
   noop: 'Noop face detector',
@@ -283,17 +164,28 @@ function StatusPill({
 function App(): React.JSX.Element {
   const desktopApi = window.lvk
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
-  const [selectedCameraSource, setSelectedCameraSource] =
-    useState<NativePipelineCameraSource>(getStoredCameraSource)
-  const [selectedFaceDetector, setSelectedFaceDetector] =
-    useState<NativePipelineFaceDetector>(getStoredFaceDetector)
-  const [selectedCameraIndex, setSelectedCameraIndex] = useState<number>(getStoredCameraIndex)
-  const [selectedCameraFps, setSelectedCameraFps] = useState<number>(getStoredCameraFps)
-  const [selectedCameraWidth, setSelectedCameraWidth] = useState<number>(getStoredCameraWidth)
-  const [selectedCameraHeight, setSelectedCameraHeight] = useState<number>(getStoredCameraHeight)
+  const [selectedCameraSource, setSelectedCameraSource] = useState<NativePipelineCameraSource>(
+    DEFAULT_RUNTIME_SETTINGS.cameraSource
+  )
+  const [selectedFaceDetector, setSelectedFaceDetector] = useState<NativePipelineFaceDetector>(
+    DEFAULT_RUNTIME_SETTINGS.faceDetector
+  )
+  const [selectedCameraIndex, setSelectedCameraIndex] = useState<number>(
+    DEFAULT_RUNTIME_SETTINGS.cameraIndex
+  )
+  const [selectedCameraFps, setSelectedCameraFps] = useState<number>(
+    DEFAULT_RUNTIME_SETTINGS.cameraFps
+  )
+  const [selectedCameraWidth, setSelectedCameraWidth] = useState<number>(
+    DEFAULT_RUNTIME_SETTINGS.cameraWidth
+  )
+  const [selectedCameraHeight, setSelectedCameraHeight] = useState<number>(
+    DEFAULT_RUNTIME_SETTINGS.cameraHeight
+  )
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
 
   const isMountedRef = useRef(false)
@@ -323,6 +215,44 @@ function App(): React.JSX.Element {
       }
     } finally {
       isRuntimeStatusRequestInFlightRef.current = false
+    }
+  }, [desktopApi])
+
+  useEffect(() => {
+    if (!desktopApi) {
+      return
+    }
+
+    let isSettingsLoadActive = true
+
+    const loadRuntimeSettings = async (): Promise<void> => {
+      try {
+        const settings = normalizeRuntimeSettings(await desktopApi.getRuntimeSettings())
+
+        if (!isSettingsLoadActive) {
+          return
+        }
+
+        setSelectedCameraSource(settings.cameraSource)
+        setSelectedFaceDetector(settings.faceDetector)
+        setSelectedCameraIndex(settings.cameraIndex)
+        setSelectedCameraFps(settings.cameraFps)
+        setSelectedCameraWidth(settings.cameraWidth)
+        setSelectedCameraHeight(settings.cameraHeight)
+        setSettingsError(null)
+      } catch (error) {
+        if (isSettingsLoadActive) {
+          setSettingsError(
+            error instanceof Error ? error.message : 'Failed to load runtime settings.'
+          )
+        }
+      }
+    }
+
+    void loadRuntimeSettings()
+
+    return () => {
+      isSettingsLoadActive = false
     }
   }, [desktopApi])
 
@@ -425,38 +355,67 @@ function App(): React.JSX.Element {
     }
   }
 
+  const saveRuntimeSettings = async (settings: DesktopRuntimeSettings): Promise<void> => {
+    if (!desktopApi) {
+      return
+    }
+
+    try {
+      const savedSettings = normalizeRuntimeSettings(await desktopApi.saveRuntimeSettings(settings))
+
+      setSelectedCameraSource(savedSettings.cameraSource)
+      setSelectedFaceDetector(savedSettings.faceDetector)
+      setSelectedCameraIndex(savedSettings.cameraIndex)
+      setSelectedCameraFps(savedSettings.cameraFps)
+      setSelectedCameraWidth(savedSettings.cameraWidth)
+      setSelectedCameraHeight(savedSettings.cameraHeight)
+      setSettingsError(null)
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Failed to save runtime settings.')
+    }
+  }
+
+  const getSelectedRuntimeSettings = (): DesktopRuntimeSettings => ({
+    cameraSource: selectedCameraSource,
+    faceDetector: selectedFaceDetector,
+    cameraIndex: coerceCameraIndex(selectedCameraIndex),
+    cameraFps: coerceCameraFps(selectedCameraFps),
+    cameraWidth: coerceCameraWidth(selectedCameraWidth),
+    cameraHeight: coerceCameraHeight(selectedCameraHeight)
+  })
+
   const updateSelectedCameraSource = (cameraSource: NativePipelineCameraSource): void => {
     setSelectedCameraSource(cameraSource)
-    persistCameraSource(cameraSource)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraSource })
   }
 
   const updateSelectedFaceDetector = (faceDetector: NativePipelineFaceDetector): void => {
     setSelectedFaceDetector(faceDetector)
-    persistFaceDetector(faceDetector)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), faceDetector })
   }
 
   const updateSelectedCameraIndex = (cameraIndexValue: string): void => {
     const cameraIndex = coerceCameraIndex(cameraIndexValue)
     setSelectedCameraIndex(cameraIndex)
-    persistCameraIndex(cameraIndex)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraIndex })
   }
 
   const updateSelectedCameraFps = (cameraFpsValue: string): void => {
     const cameraFps = coerceCameraFps(cameraFpsValue)
     setSelectedCameraFps(cameraFps)
-    persistCameraFps(cameraFps)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraFps })
   }
 
   const updateSelectedCameraWidth = (cameraWidthValue: string): void => {
     const cameraWidth = coerceCameraWidth(cameraWidthValue)
     setSelectedCameraWidth(cameraWidth)
-    persistCameraWidth(cameraWidth)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraWidth })
   }
 
   const updateSelectedCameraHeight = (cameraHeightValue: string): void => {
     const cameraHeight = coerceCameraHeight(cameraHeightValue)
     setSelectedCameraHeight(cameraHeight)
-    persistCameraHeight(cameraHeight)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraHeight })
   }
 
   const stopNativePipeline = async (): Promise<void> => {
@@ -505,6 +464,7 @@ function App(): React.JSX.Element {
       </section>
 
       {loadError ? <p className="error-message">{loadError}</p> : null}
+      {settingsError ? <p className="error-message">{settingsError}</p> : null}
 
       {!desktopApi ? (
         <section className="card fallback-card" aria-labelledby="desktop-api-unavailable-heading">

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   LVK_IPC_CHANNELS,
+  type DesktopRuntimeSettings,
   type LvkDesktopApi,
   type LvkRuntimeStatus,
   type NativePipelineStartOptions
@@ -9,6 +10,15 @@ import {
 const api: LvkDesktopApi = {
   async getRuntimeStatus(): Promise<LvkRuntimeStatus> {
     return (await ipcRenderer.invoke(LVK_IPC_CHANNELS.getRuntimeStatus)) as LvkRuntimeStatus
+  },
+  async getRuntimeSettings(): Promise<DesktopRuntimeSettings> {
+    return (await ipcRenderer.invoke(LVK_IPC_CHANNELS.getRuntimeSettings)) as DesktopRuntimeSettings
+  },
+  async saveRuntimeSettings(settings: DesktopRuntimeSettings): Promise<DesktopRuntimeSettings> {
+    return (await ipcRenderer.invoke(
+      LVK_IPC_CHANNELS.saveRuntimeSettings,
+      settings
+    )) as DesktopRuntimeSettings
   },
   async startNativePipeline(options?: NativePipelineStartOptions): Promise<LvkRuntimeStatus> {
     return (await ipcRenderer.invoke(
