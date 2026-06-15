@@ -51,6 +51,25 @@ function getAvatarPreviewLabel(source: PreviewSource) {
     : "Dummy MotionFrame avatar preview";
 }
 
+type StatusIndicatorVariant = "active" | "waiting" | "inactive";
+
+function getNativeStatusIndicatorVariant(
+  status: NativeMotionConnectionStatus,
+): StatusIndicatorVariant | null {
+  switch (status) {
+    case "connected":
+      return "active";
+    case "connecting":
+    case "connected_waiting_for_frame":
+      return "waiting";
+    case "reconnecting":
+    case "fallback":
+      return "inactive";
+    case "disabled":
+      return null;
+  }
+}
+
 function getNativeStatusText(status: NativeMotionConnectionStatus) {
   switch (status) {
     case "disabled":
@@ -64,7 +83,7 @@ function getNativeStatusText(status: NativeMotionConnectionStatus) {
     case "reconnecting":
       return "Reconnecting";
     case "fallback":
-      return "Fallback";
+      return "No frames · Bridge open";
   }
 }
 
@@ -79,7 +98,7 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
     case "reconnecting":
       return "Native connection was interrupted; retrying with safe fallback behavior.";
     case "fallback":
-      return "Using safe fallback preview data until valid native MotionFrames resume.";
+      return "Bridge WebSocket is open but no valid frames arrived in the last 1.8s; showing static fallback avatar until frames resume.";
     case "disabled":
       return "Native MotionFrame input is disabled for the current preview source.";
   }
@@ -181,6 +200,8 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
   const isObsMode = mode === "obs";
   const avatarPreviewLabel = getAvatarPreviewLabel(source);
   const sourceBadgeContent = getSourceBadgeContent(source, nativeStatus);
+  const nativeIndicatorVariant =
+    source === "native" ? getNativeStatusIndicatorVariant(nativeStatus) : null;
   const shellClassName = `preview-shell preview-shell--${mode}`;
   const panelClassName = `preview-panel preview-panel--${mode}`;
 
@@ -192,6 +213,12 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           aria-label="Preview source status"
         >
           <span className="preview-source-badge__label">
+            {nativeIndicatorVariant !== null && (
+              <span
+                className={`preview-source-badge__indicator preview-source-badge__indicator--${nativeIndicatorVariant}`}
+                aria-hidden="true"
+              />
+            )}
             {sourceBadgeContent.label}
           </span>
           {sourceBadgeContent.helper !== null && (
