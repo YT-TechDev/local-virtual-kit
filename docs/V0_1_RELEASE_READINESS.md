@@ -24,11 +24,11 @@ Keep broader system boundaries in `docs/ARCHITECTURE.md`, technology/package det
 
 ## Automated repository checks
 
-Run these commands from the repository root unless noted otherwise. If a command is unavailable or not run, report that honestly in the release notes or verification log. CMake and OpenCV availability can vary by local machine, so record the environment and any missing native prerequisites.
+Run these commands from the repository root unless noted otherwise. Use `pnpm install --frozen-lockfile` for release readiness validation so the committed lockfile is proven usable and `pnpm-lock.yaml` is not rewritten during the check. If a command is unavailable or not run, report that honestly in the release notes or verification log. CMake and OpenCV availability can vary by local machine, so record the environment and any missing native prerequisites.
 
 | Done | Check                          | Command                                                                                 | Result / note |
 | ---- | ------------------------------ | --------------------------------------------------------------------------------------- | ------------- |
-| [ ]  | Install workspace dependencies | `pnpm install`                                                                          |               |
+| [ ]  | Install workspace dependencies | `pnpm install --frozen-lockfile`                                                        |               |
 | [ ]  | Formatting                     | `pnpm format:check`                                                                     |               |
 | [ ]  | Workspace build                | `pnpm build`                                                                            |               |
 | [ ]  | Type checks                    | `pnpm typecheck`                                                                        |               |
