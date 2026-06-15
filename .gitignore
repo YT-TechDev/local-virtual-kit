@@ -23,3 +23,5 @@ pnpm-debug.log*
 yarn-debug.log*
 
 native/**/build
+
+CLAUDE.local.md
