@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-v0.1.0 has been released. For v0.2.0-era work, prefer small PRs that validate local camera / OBS workflows, improve Web Preview native-source status behavior, and collect evidence for the first real local tracking backend direction without changing the `MotionFrame` schema unless explicitly planned.
+For current v0.2.0-era work, prefer small PRs that validate local camera / OBS workflows, improve Web Preview native-source status behavior, and collect evidence for the first real local tracking backend direction without changing the `MotionFrame` schema unless explicitly planned.
 
 ---
 
