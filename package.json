@@ -17,7 +17,8 @@
     "test:native-diagnostics-summarize": "node tools/check-native-diagnostics-summarizer.mjs",
     "test:motion-validator-import": "node tools/check-motion-frame-validator-import.mjs",
     "diagnostics:summarize": "node tools/summarize-native-diagnostics.mjs",
-    "test:motion-ws-bridge": "node tools/check-motion-ws-bridge.mjs"
+    "test:motion-ws-bridge": "node tools/check-motion-ws-bridge.mjs",
+    "test:native-tracker-options": "node tools/check-native-tracker-options.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"
