@@ -25,6 +25,15 @@ export interface NativePipelineStartOptions {
   cameraHeight?: number
 }
 
+export interface DesktopRuntimeSettings {
+  cameraSource: NativePipelineCameraSource
+  faceDetector: NativePipelineFaceDetector
+  cameraIndex: number
+  cameraFps: number
+  cameraWidth: number
+  cameraHeight: number
+}
+
 export interface LvkRuntimeStatus {
   previewDummyUrl: string
   previewNativeUrl: string
@@ -44,6 +53,8 @@ export interface LvkRuntimeStatus {
 
 export interface LvkDesktopApi {
   getRuntimeStatus: () => Promise<LvkRuntimeStatus>
+  getRuntimeSettings: () => Promise<DesktopRuntimeSettings>
+  saveRuntimeSettings: (settings: DesktopRuntimeSettings) => Promise<DesktopRuntimeSettings>
   startNativePipeline: (options?: NativePipelineStartOptions) => Promise<LvkRuntimeStatus>
   stopNativePipeline: () => Promise<LvkRuntimeStatus>
   openExternalUrl: (url: string) => Promise<void>
@@ -51,6 +62,8 @@ export interface LvkDesktopApi {
 
 export const LVK_IPC_CHANNELS = {
   getRuntimeStatus: 'lvk:get-runtime-status',
+  getRuntimeSettings: 'lvk:get-runtime-settings',
+  saveRuntimeSettings: 'lvk:save-runtime-settings',
   startNativePipeline: 'lvk:start-native-pipeline',
   stopNativePipeline: 'lvk:stop-native-pipeline',
   openExternalUrl: 'lvk:open-external-url'
