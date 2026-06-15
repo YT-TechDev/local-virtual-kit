@@ -42,6 +42,11 @@ Codex Cloud git policy:
 - Do not run git fetch, git pull, git remote add, git push, or gh commands.
 - Use the Codex UI / provided workflow to push changes and open the PR.
 
+Agent routing:
+- Assign to Codex when the task is small, docs-only, TypeScript/types/build/lint/test-focused, isolated to about 1 to 3 files, and can be validated with headless commands.
+- Assign to Claude Code when the task is complex, cross-package, requires local iterative implementation, or touches Native Core, Electron, OpenCV/webcam handling, OBS/manual validation, process lifecycle, calibration, or runtime integration.
+- Assign to the project owner/human validator when the task depends on product taste, secrets, account setup, paid services, dependency approval, privacy-impacting behavior, or hardware/local manual validation.
+
 LVK constraints:
 - Keep LVK local-first.
 - Keep camera frames local during early local-first releases.
