@@ -70,6 +70,28 @@
 
 .preview-source-badge__label {
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.preview-source-badge__indicator {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.preview-source-badge__indicator--active {
+  background: #4ade80;
+}
+
+.preview-source-badge__indicator--waiting {
+  background: #fbbf24;
+}
+
+.preview-source-badge__indicator--inactive {
+  background: #f87171;
 }
 
 .preview-source-badge__helper {
