@@ -1,13 +1,17 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useState } from "react";
-import type { MotionFrame } from "@lvk/motion-protocol";
+import { useMemo, useState } from "react";
+import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
-import { usePreviewMotionFrame } from "../hooks/usePreviewMotionFrame";
 import {
   useNativeMotionFrame,
   type NativeMotionConnectionStatus,
 } from "../hooks/useNativeMotionFrame";
-import { mapMotionFrameToAvatar } from "../motion/mapMotionFrameToAvatar";
+import {
+  createNeutralAvatarMotionState,
+  lerpAvatarMotionState,
+  mapMotionFrameToAvatar,
+  type AvatarMotionState,
+} from "../motion/mapMotionFrameToAvatar";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
 
@@ -19,6 +23,26 @@ type AvatarPreviewProps = {
 type AvatarSceneProps = {
   nativeFrame: MotionFrame | null;
   source: PreviewSource;
+};
+
+const LOST_TRACKING_HOLD_MS = 300;
+const LOST_TRACKING_RETURN_TO_NEUTRAL_AMOUNT = 0.12;
+const LOST_TRACKING_FEATURE_RESET_AMOUNT = 0.35;
+
+type TrackingFallbackState = {
+  lastTrackingMotion: AvatarMotionState | null;
+  lastTrackingTimestampMs: number | null;
+  lostFallbackMotion: AvatarMotionState | null;
+  renderedMotion: AvatarMotionState;
+};
+
+const createInitialTrackingFallbackState = (): TrackingFallbackState => {
+  return {
+    lastTrackingMotion: null,
+    lastTrackingTimestampMs: null,
+    lostFallbackMotion: null,
+    renderedMotion: createNeutralAvatarMotionState("not_started"),
+  };
 };
 
 function getAvatarPreviewLabel(source: PreviewSource) {
@@ -75,20 +99,74 @@ function getSourceBadgeContent(
 }
 
 function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
-  const [timestampMs, setTimestampMs] = useState(0);
+  const [fallbackState, setFallbackState] = useState(
+    createInitialTrackingFallbackState,
+  );
+  const stableNativeFallbackFrame = useMemo(
+    () => createDummyMotionFrame(0),
+    [],
+  );
 
   useFrame(({ clock }) => {
-    setTimestampMs(clock.elapsedTime * 1000);
-  });
+    const timestampMs = clock.elapsedTime * 1000;
+    const frame =
+      source === "native"
+        ? (nativeFrame ?? stableNativeFallbackFrame)
+        : createDummyMotionFrame(timestampMs);
+    const mappedMotion = mapMotionFrameToAvatar(frame);
 
-  const frame = usePreviewMotionFrame(source, timestampMs, nativeFrame);
-  const motion = mapMotionFrameToAvatar(frame);
+    setFallbackState((previousState) => {
+      if (mappedMotion.trackingStatus === "tracking") {
+        return {
+          lastTrackingMotion: mappedMotion,
+          lastTrackingTimestampMs: timestampMs,
+          lostFallbackMotion: mappedMotion,
+          renderedMotion: mappedMotion,
+        };
+      }
+
+      if (mappedMotion.trackingStatus === "lost") {
+        const neutralLostMotion = createNeutralAvatarMotionState("lost");
+        const lastTrackingMotion = previousState.lastTrackingMotion;
+        const lastTrackingTimestampMs = previousState.lastTrackingTimestampMs;
+        const hasRecentTrackingPose =
+          lastTrackingMotion !== null &&
+          lastTrackingTimestampMs !== null &&
+          timestampMs - lastTrackingTimestampMs <= LOST_TRACKING_HOLD_MS;
+
+        const renderedMotion = hasRecentTrackingPose
+          ? lerpAvatarMotionState(
+              lastTrackingMotion,
+              neutralLostMotion,
+              LOST_TRACKING_FEATURE_RESET_AMOUNT,
+            )
+          : lerpAvatarMotionState(
+              previousState.lostFallbackMotion ?? neutralLostMotion,
+              neutralLostMotion,
+              LOST_TRACKING_RETURN_TO_NEUTRAL_AMOUNT,
+            );
+
+        return {
+          ...previousState,
+          lostFallbackMotion: renderedMotion,
+          renderedMotion,
+        };
+      }
+
+      return {
+        lastTrackingMotion: previousState.lastTrackingMotion,
+        lastTrackingTimestampMs: previousState.lastTrackingTimestampMs,
+        lostFallbackMotion: null,
+        renderedMotion: createNeutralAvatarMotionState("not_started"),
+      };
+    });
+  });
 
   return (
     <>
       <ambientLight intensity={0.8} />
       <pointLight position={[3, 3, 4]} intensity={2} />
-      <DummyAvatar motion={motion} />
+      <DummyAvatar motion={fallbackState.renderedMotion} />
     </>
   );
 }
