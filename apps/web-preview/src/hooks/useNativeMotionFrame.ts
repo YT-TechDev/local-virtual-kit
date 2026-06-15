@@ -10,6 +10,7 @@ export type NativeMotionConnectionStatus =
   | "disabled"
   | "connecting"
   | "connected"
+  | "connected_waiting_for_frame"
   | "reconnecting"
   | "fallback";
 
@@ -105,7 +106,12 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
       websocket = new WebSocket(NATIVE_MOTION_WS_URL);
 
       websocket.onopen = () => {
-        markFallbackIfSocketIsOpen();
+        if (isUnmounted || websocket?.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        setConnectionStatus("connected_waiting_for_frame");
+        resetStaleFrameTimer();
       };
 
       websocket.onmessage = (event: MessageEvent<unknown>) => {

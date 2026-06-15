@@ -59,6 +59,8 @@ function getNativeStatusText(status: NativeMotionConnectionStatus) {
       return "Connecting";
     case "connected":
       return "Connected";
+    case "connected_waiting_for_frame":
+      return "Connected · Waiting for frames";
     case "reconnecting":
       return "Reconnecting";
     case "fallback":
@@ -69,13 +71,15 @@ function getNativeStatusText(status: NativeMotionConnectionStatus) {
 function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
   switch (status) {
     case "connected":
-      return "Receiving native MotionFrame data from localhost.";
+      return "Connected to localhost and receiving valid native MotionFrames.";
+    case "connected_waiting_for_frame":
+      return "Connected to localhost, but no valid native frames have arrived yet; fallback preview remains safe.";
     case "connecting":
       return "Opening localhost MotionFrame connection; fallback preview remains safe.";
     case "reconnecting":
       return "Native connection was interrupted; retrying with safe fallback behavior.";
     case "fallback":
-      return "Connected to localhost, but no valid native frames have arrived yet; using fallback preview data.";
+      return "Using safe fallback preview data until valid native MotionFrames resume.";
     case "disabled":
       return "Native MotionFrame input is disabled for the current preview source.";
   }
