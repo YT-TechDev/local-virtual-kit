@@ -12,7 +12,7 @@ This document defines workflow, verification, reporting, and documentation maint
 - Avoid unrelated edits.
 - Make debugging easy.
 - Keep camera processing local.
-- Do not over-engineer v0.1.
+- Do not over-engineer early-release work.
 - Do not repeat completed setup work.
 
 ---
@@ -60,6 +60,10 @@ During editing:
 ## 4. Verification Policy
 
 Run available checks only. Do not claim success for commands that were not run.
+
+For documentation-only changes, `pnpm format:check` is the minimum expected check unless the task says otherwise. Runtime and hardware checks may be marked not run when they are outside the change scope.
+
+Local/manual validation claims require real local evidence. Do not claim OBS Browser Source, webcam/OpenCV, Electron GUI, OS camera permission, or native hardware validation from Codex Cloud, headless CI, or a machine without the required GUI, camera, permissions, native build, and application under test. Use `docs/LOCAL_RUNTIME_CHECKLIST.md` for local runtime evidence, `docs/OBS_BROWSER_SOURCE_GUIDE.md` for OBS Browser Source validation, and `docs/TRACKING_BACKEND_EVALUATION.md` for diagnostics evidence and backend evaluation notes.
 
 Common workspace checks:
 

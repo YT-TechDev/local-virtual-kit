@@ -22,17 +22,22 @@ Do not load every `docs/*.md` file by default. After reading this file, read onl
 
 Use this map:
 
-| Task type                              | Read next                          |
-| -------------------------------------- | ---------------------------------- |
-| Product scope, MVP, non-goals          | `docs/REQUIREMENTS.md`             |
-| App/process boundaries                 | `docs/ARCHITECTURE.md`             |
-| Dependencies, package layout, commands | `docs/TECH_STACK.md`               |
-| Native tracking values                 | `docs/TRACKING_SPEC.md`            |
-| MotionFrame schema/compatibility       | `docs/MOTION_PROTOCOL.md`          |
-| Renderer mapping from MotionFrame      | `docs/MOTION_MAPPING.md`           |
-| Planning the next implementation unit  | `docs/ROADMAP.md`                  |
-| Git, checks, PR, reporting             | `docs/DEVELOPMENT_POLICY.md`       |
-| Copy-ready coding-agent prompt         | `docs/AI_IMPLEMENTATION_PROMPT.md` |
+| Task type                                 | Read next                                                             |
+| ----------------------------------------- | --------------------------------------------------------------------- |
+| Product scope, MVP, non-goals             | `docs/REQUIREMENTS.md`                                                |
+| App/process boundaries                    | `docs/ARCHITECTURE.md`                                                |
+| Dependencies, package layout, commands    | `docs/TECH_STACK.md`                                                  |
+| Native tracking values                    | `docs/TRACKING_SPEC.md`                                               |
+| MotionFrame schema/compatibility          | `docs/MOTION_PROTOCOL.md`                                             |
+| Renderer mapping from MotionFrame         | `docs/MOTION_MAPPING.md`                                              |
+| Planning the next implementation unit     | `docs/ROADMAP.md`                                                     |
+| Git, checks, PR, reporting                | `docs/DEVELOPMENT_POLICY.md`                                          |
+| Local/manual validation claim rules       | `docs/DEVELOPMENT_POLICY.md`, `docs/LOCAL_RUNTIME_CHECKLIST.md`       |
+| OBS Browser Source validation             | `docs/OBS_BROWSER_SOURCE_GUIDE.md`, `docs/LOCAL_RUNTIME_CHECKLIST.md` |
+| OpenCV/local camera validation            | `docs/LOCAL_RUNTIME_CHECKLIST.md`                                     |
+| Diagnostics evidence / backend evaluation | `docs/TRACKING_BACKEND_EVALUATION.md`                                 |
+| Web Preview native status fixes           | `docs/LOCAL_RUNTIME_CHECKLIST.md`, then current Web Preview source    |
+| Copy-ready coding-agent prompt            | `docs/AI_IMPLEMENTATION_PROMPT.md`                                    |
 
 If documents conflict, prefer this order:
 
@@ -58,6 +63,7 @@ If documents conflict, prefer this order:
 - If an implementation conflicts with documentation, inspect the current code first, then propose the smallest documentation or code adjustment needed.
 - Do not treat documentation as more authoritative than working source code when the two differ.
 - Do not claim that checks passed unless they were actually run.
+- Do not claim OBS, webcam/OpenCV, Electron GUI, OS camera permission, or native hardware validation from Codex Cloud, headless CI, or any machine where that local/manual check was not actually performed.
 - If changes are made, create a PR.
 
 ---
@@ -76,14 +82,14 @@ If documents conflict, prefer this order:
 These are fixed unless the project owner explicitly changes them:
 
 - Keep LVK local-first.
-- Camera frames must stay local and must not be sent to external servers in v0.1.
+- Camera frames must stay local and must not be sent to external servers during early local-first releases.
 - Do not add telemetry, analytics, cloud upload, or new network behavior unless explicitly requested.
 - C++ Native Core is the tracking/performance layer.
 - Electron is the desktop shell, settings, calibration, and native process manager.
 - React / Three.js / React Three Fiber are the Web Preview and avatar renderer layer.
 - `MotionFrame` is the contract between Native Core and Renderer.
-- v0.1 uses plain handwritten R3F.
-- The user's separate R3F flow library must not be a required v0.1 dependency.
+- Plain handwritten R3F remains the stable Web Preview baseline.
+- The user's separate R3F flow library must not be a required core dependency.
 - `packages/motion-protocol` must stay framework-independent.
 
 ---
