@@ -34,6 +34,7 @@ Core rules:
 - Keep PRs small and reviewable.
 - Do not change unrelated files or add dependencies unless the task requires them.
 - Do not claim checks passed unless they were actually run.
+- Do not claim OBS, webcam/OpenCV, Electron GUI, OS camera permission, or native hardware validation unless it was actually performed on a suitable local machine.
 - If requirements, repository state, or tool behavior is unclear, stop and report it.
 
 Codex Cloud git policy:
@@ -43,16 +44,22 @@ Codex Cloud git policy:
 
 LVK constraints:
 - Keep LVK local-first.
-- Keep camera frames local in v0.1.
+- Keep camera frames local during early local-first releases.
 - Do not add telemetry, analytics, cloud upload, or new network behavior unless explicitly requested.
 - Keep packages/motion-protocol framework-independent.
-- Do not make the user's separate R3F flow library a required v0.1 dependency.
+- Do not make the user's separate R3F flow library a required core dependency.
 - MotionFrame is the contract between Native Core and Renderer.
 
 MotionFrame implementation:
 - Before MotionFrame-related edits, inspect current protocol docs and source.
 - Do not invent stale fields unless the protocol is intentionally changed in the same PR.
 - Keep renderer mapping typed, readable, and source-grounded.
+
+Focused v0.2.0 entry points:
+- OBS Browser Source validation: `docs/OBS_BROWSER_SOURCE_GUIDE.md` and `docs/LOCAL_RUNTIME_CHECKLIST.md`.
+- OpenCV/local camera validation: `docs/LOCAL_RUNTIME_CHECKLIST.md`.
+- Local diagnostics evidence and tracking backend evaluation: `docs/TRACKING_BACKEND_EVALUATION.md`.
+- Web Preview native status fixes: `docs/LOCAL_RUNTIME_CHECKLIST.md` and current Web Preview source.
 
 PR and final report:
 - Include the PR URL, summary of changes, changed files, checks run, and known limitations or follow-up items.

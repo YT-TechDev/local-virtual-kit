@@ -4,6 +4,8 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
+v0.1.0 has been released. For v0.2.0-era work, prefer small PRs that validate local camera / OBS workflows, improve Web Preview native-source status behavior, and collect evidence for the first real local tracking backend direction without changing the `MotionFrame` schema unless explicitly planned.
+
 ---
 
 ## Phase 0 - Documentation and Foundation
@@ -107,7 +109,7 @@ Goal:
 
 ---
 
-## Phase 6.5 - Tracking Backend Evaluation
+## Phase 6.5 - Tracking Backend Evaluation / v0.2.0 Direction
 
 Goal:
 
@@ -162,6 +164,19 @@ Goal:
 - add optional `examples/flow-avatar`
 - keep it separate from the core renderer
 - keep the plain R3F preview as the stable baseline
+
+---
+
+## v0.2.0 Entry Points
+
+Use these focused documents instead of expanding `docs/AGENTS.md` with issue details:
+
+- OBS Browser Source validation: `docs/OBS_BROWSER_SOURCE_GUIDE.md` and `docs/LOCAL_RUNTIME_CHECKLIST.md`.
+- OpenCV/local camera validation: `docs/LOCAL_RUNTIME_CHECKLIST.md`.
+- Local diagnostics evidence and tracking backend evaluation: `docs/TRACKING_BACKEND_EVALUATION.md`.
+- Web Preview native status fixes: `docs/LOCAL_RUNTIME_CHECKLIST.md`, then current Web Preview source.
+
+OBS, webcam/OpenCV, Electron GUI, OS camera permission, and native hardware validation are local/manual checks. Do not claim them from Codex Cloud or headless CI alone.
 
 ---
 
