@@ -287,7 +287,7 @@ Copy this Markdown block into a future backend evaluation PR only after real loc
   - `trackingDurationMs` avg 34.72ms dominates the pipeline cost. This is the Haar cascade classification time per frame. Compare to noop baseline avg 0.0026ms (Pass 2) — Haar adds ~34ms of detection overhead per frame at 640×480.
   - `captureDurationMs` avg 2.08ms is much lower than the noop run (38.9ms). In `--realtime` mode with a slow detector (Haar ~35ms/frame), the camera buffers frames between detections, reducing the apparent per-frame capture wait.
   - `effectiveFps≈22.9` at 640×480 with Haar enabled. The nominal 30fps is not achievable with Haar at this resolution on this host.
-  - The stdout MotionFrame `tracking.status` was `"lost"` throughout (consistent with `hasFaceCount=0`); all other MotionFrame fields were zero-valued during lost state.
+  - The stdout MotionFrame `tracking.status` was `"lost"` throughout (consistent with `hasFaceCount=0`). Lost-state frames preserved the camera timestamp and emitted neutral tracking values; eye openness remained at the current neutral default (`leftOpen=1.0`, `rightOpen=1.0`).
   - Haar detection quality at this resolution and under real lighting conditions is not evaluated here. Rectangle-only face detection is not suitable as a product-quality VTuber tracking backend.
   - Electron GUI, OBS Browser Source, and OS camera permission checks not performed; out of scope for this evidence PR.
 - Raw frame handling confirmation:
