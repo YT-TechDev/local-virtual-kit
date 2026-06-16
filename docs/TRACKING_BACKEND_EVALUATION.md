@@ -66,6 +66,55 @@ Use this checklist when a future PR evaluates a candidate on local hardware. Mar
 - Do not commit model files or cascade files.
 - Mark untested hardware/backend assumptions clearly.
 
+## Next Candidate Evaluation Plan
+
+Use this plan for the next local validation PR so LVK can compare candidate backends without selecting or adding one prematurely. Keep the PR source-grounded: record what was actually measured, and mark unavailable hardware, model, license, or runtime information as not yet reviewed.
+
+### Candidate order
+
+1. OpenCV Haar smoke may be used only as an optional baseline when a trusted local cascade XML path is available on the validation machine. Do not commit the cascade XML and do not treat Haar rectangle detection as product-quality tracking.
+2. MediaPipe Face Landmarker is the first product-quality candidate to research and evaluate for local landmark, pose, blink, mouth, and expression coverage.
+3. ONNX Runtime with a local model is the second candidate, only after a specific model, license, redistribution path, and runtime setup are identified.
+
+### Evaluation gates before implementation
+
+Before adding a backend dependency, model file, cascade XML, or runtime behavior, a candidate PR must review and document:
+
+- Local-only operation is confirmed, with no raw frame persistence, upload, external frame processing, telemetry, or analytics.
+- Required runtime packages, native dependencies, build flags, and platform setup are identified.
+- Required model, task, cascade, or data files are identified without committing them.
+- License, notice, and redistribution risk are reviewed for every runtime and model/data artifact.
+- Native Core boundary fit is confirmed; backend code stays behind camera, preprocessing, detector/tracker, and MotionFrame writer seams.
+- MotionFrame schema impact is assessed, with no schema expansion unless a separate schema PR is explicitly planned.
+- Packaging/runtime setup risk is assessed for local development and future distribution.
+- Diagnostics fields needed for measurement are listed before implementation.
+- Fallback and lost-face behavior expectations are defined.
+
+### Required local measurements
+
+Collect these values from local diagnostics whenever a candidate is actually run:
+
+- effective FPS
+- `captureDurationMs`
+- `detectionDurationMs`
+- `totalFrameDurationMs`
+- `hasFace` / `lostOrNoFace` rate
+- startup and shutdown behavior
+- detector/backend name reported in diagnostics
+- stability notes, including jitter, intermittent frame read failures, and any camera permission or runtime setup issues
+
+### Non-goals for the next candidate PR
+
+- Do not select the final tracking backend.
+- Do not add cloud inference or remote frame processing.
+- Do not commit model files, task files, cascade XML, raw frames, logs, screenshots, binaries, or build artifacts.
+- Do not add UI dependencies on backend runtime packages.
+- Do not expand the MotionFrame schema unless that change is intentionally planned in a separate schema PR.
+
+### Recommended next local-validation PR
+
+Run the next candidate validation on the Windows DevPC with Claude Code or another local agent that has direct camera access. Choose either an OpenCV Haar smoke using a trusted local cascade path, or a MediaPipe/ONNX feasibility spike that stops at documented dependency, model, license, runtime, and diagnostics requirements. Record evidence with the diagnostics summarizer, keep raw frames local and uncommitted, and state clearly that no backend has been selected.
+
 ## Diagnostics Evidence Workflow
 
 Use this workflow in a future backend evaluation PR after collecting real local measurements. The template below is evidence scaffolding only; leaving it blank or filling it with assumptions is not a validation result by itself.
