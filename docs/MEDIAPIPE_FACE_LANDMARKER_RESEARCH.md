@@ -148,3 +148,44 @@ This memo records the documentation-only feasibility research. The next local ta
 - What runtime route is smallest and safest for LVK?
 - Can we inspect output fields without committing model files or raw frames?
 - Can the output be mapped to current MotionFrame fields without schema changes?
+
+## Local Feasibility Spike Results (2026-06-16)
+
+The narrowly scoped feasibility spike was completed on the Windows DevPC (PR chore/mediapipe-face-landmarker-local-feasibility). Findings below; full evidence in `docs/TRACKING_BACKEND_EVALUATION.md` Pass 4.
+
+### Route confirmed
+
+Python Tasks (`mediapipe==0.10.35` pip package) works on Windows 11 / Python 3.11. This is a reference/feasibility route only, not a Native Core production path.
+
+**No official C++ Tasks route exists** for Face Landmarker. C++ integration requires MediaPipe Framework + Bazel, which is unvalidated on Windows and carries high build risk.
+
+### Output fields confirmed on a live webcam frame
+
+- 478 3D face landmarks per face (`NormalizedLandmark.x/y/z`; `.visibility`/`.presence` are `None` for this task)
+- 52 blendshape scores per face (`Category.category_name` / `.score`)
+- 4×4 float32 facial transformation matrix per face
+
+### MotionFrame mapping feasibility
+
+A basic MotionFrame mapping is feasible without schema changes using blendshapes and the transformation matrix. Key mappings:
+
+- `tracking.status` ← face detected boolean
+- `face.rotation` ← transformation matrix Euler decomposition
+- `eyes.leftOpen/rightOpen` ← `1.0 - eyeBlinkLeft/Right`
+- `mouth.open` ← `jawOpen`
+- `mouth.smile` ← `mouthSmileLeft/Right` average
+
+Gaze (`eyes.gaze.x/y`) requires landmark geometry derivation (not a direct blendshape).
+
+### Unresolved risks before production integration
+
+- C++ / Native Core integration route not validated (Bazel + Windows unknown)
+- Model license and redistribution terms require full review
+- Tracking quality, jitter, and lost-face rate not evaluated
+- GPU path not evaluated
+- Production packaging size not measured (pip wheel ~10–18MB; full venv ~200MB+)
+- A separate helper process boundary may be needed if C++ route remains infeasible
+
+### Next step
+
+Decide on integration route: C++ MediaPipe Framework (Bazel, higher risk) vs. separate local helper process (IPC complexity) vs. deferred pending ONNX Runtime evaluation. Full license and redistribution review required before any production dependency is added.

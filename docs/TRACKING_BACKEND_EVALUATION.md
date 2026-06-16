@@ -299,6 +299,96 @@ Copy this Markdown block into a future backend evaluation PR only after real loc
   - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata: yes — confirmed 120 stdout lines (all valid MotionFrame JSON, `schemaVersion=1`, `source=native`); stderr contained only `[camera]`, `[pipeline]`, and `[face]` startup/periodic/shutdown lines.
 - Decision impact: OpenCV Haar detector pipeline confirmed wiring end-to-end on Windows 11 with MSMF backend. Haar detection cost ~34ms/frame at 640×480 limits effective FPS to ~23fps on this host. No face was detected in this smoke run; detection quality was not evaluated. **OpenCV Haar remains a smoke/baseline path only and is not selected as the tracking backend.** Next evaluation step: MediaPipe Face Landmarker candidate research and local setup evaluation.
 
+### Pass 4 — MediaPipe Face Landmarker Local Feasibility Spike (2026-06-16)
+
+- Date: 2026-06-16
+- Machine / OS: Windows 11 Pro 10.0.26200, x86-64 (DevPC with USB webcam)
+- Candidate: MediaPipe Face Landmarker (Python Tasks route — reference/feasibility only)
+- Route evaluated: Python Tasks (`mediapipe` pip package) — **not** C++ MediaPipe Framework
+- Official sources used:
+  - Google AI Edge / MediaPipe Face Landmarker platform overview
+  - Google AI Edge / MediaPipe Face Landmarker Python guide
+  - PyPI: `mediapipe` package page
+- Approval: project owner approved venv creation, pip install, and model download before execution
+- Scratch directory: `C:\Users\Dev\Developments\lvk-mediapipe-face-landmarker-spike\` (outside repository)
+
+#### Setup
+
+- Python venv created outside repository
+- Package installed: `mediapipe==0.10.35` (Apache 2.0; Windows x86-64 wheel; Python 3.11 compatible)
+- Model downloaded to scratch directory only (not committed):
+  - Source: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task`
+  - Size: 3.58 MB
+  - Components: FaceDetector (192×192) + FaceMesh-V2 (256×256) + Blendshape (1×146×2), all float16
+  - License: model card not separately reviewed in this spike; full license/redistribution review required before any production use
+- Runtime backend: TFLite XNNPACK CPU delegate (auto-selected by MediaPipe on Windows)
+
+#### Output fields confirmed
+
+- `FaceLandmarkerResult.face_landmarks`: list of `NormalizedLandmark` per face
+  - Fields: `.x`, `.y`, `.z` (normalized image coords); `.visibility` and `.presence` are `None` for Face Landmarker (not populated by this task)
+  - **478 landmarks per face confirmed** on a live webcam frame
+- `FaceLandmarkerResult.face_blendshapes`: list of `Category` per face
+  - Fields: `.category_name`, `.score`, `.index`, `.display_name`
+  - **52 blendshapes per face confirmed**
+  - LVK-relevant blendshape scores observed (single live frame, not a tracking quality evaluation):
+    - `eyeBlinkLeft`: 0.2646
+    - `eyeBlinkRight`: 0.1521
+    - `jawOpen`: 0.0004
+    - `mouthSmileLeft`: 0.0052 / `mouthSmileRight`: 0.0032
+    - `browDownLeft`: 0.2991 / `browDownRight`: 0.1420
+- `FaceLandmarkerResult.facial_transformation_matrixes`: list of 4×4 float32 matrices
+  - **4×4 float32 affine matrix per face confirmed**
+
+#### Timing (CPU, Windows 11, no GPU)
+
+- Model init: ~72–243ms (two runs; JIT warmup likely)
+- `detect()` blank frame (no face): ~3–5ms avg
+- `detect()` with face detection running: ~5–67ms per frame (variable; no-face frames ~5–15ms, face-found frame ~34–67ms)
+
+#### MotionFrame mapping notes
+
+| MotionFrame field              | MediaPipe source                                         | Notes                                 |
+| ------------------------------ | -------------------------------------------------------- | ------------------------------------- |
+| `tracking.status`              | `len(face_landmarks) > 0`                                | Direct boolean mapping feasible       |
+| `tracking.confidence`          | face detection score (if exposed) or blendshape presence | Requires API investigation            |
+| `face.position`                | landmark centroid or transform matrix translation        | Needs normalization                   |
+| `face.rotation.pitch/yaw/roll` | 4×4 transformation matrix decomposition                  | Feasible; needs Euler extraction      |
+| `eyes.leftOpen/rightOpen`      | `1.0 - eyeBlinkLeft/Right` blendshape score              | Direct mapping candidate              |
+| `eyes.gaze.x/y`                | Not in Face Landmarker blendshapes                       | Requires landmark geometry derivation |
+| `mouth.open`                   | `jawOpen` blendshape score                               | Direct mapping candidate              |
+| `mouth.smile`                  | `mouthSmileLeft`/`Right` avg                             | Direct mapping candidate              |
+
+No MotionFrame schema changes are needed for a basic mapping. Richer output (all 52 blendshapes, full landmark array) would require a schema extension decision.
+
+#### Platform and integration notes
+
+- **No official C++ Tasks route exists** for Face Landmarker. C++ means MediaPipe Framework + Bazel — high build risk on Windows, not evaluated.
+- **Python Tasks route** confirmed working on Windows 11 / Python 3.11. Suitable for reference/feasibility only; not a Native Core production path.
+- A **separate local helper process** (Python or Node.js calling mediapipe) is a possible intermediate integration route that avoids Bazel but adds IPC complexity.
+- Native Core integration would require either: (a) MediaPipe Framework C++ + Bazel (unvalidated on Windows), or (b) a separate process boundary.
+
+#### What was not confirmed
+
+- C++ MediaPipe Framework build feasibility on Windows (not attempted; Bazel required)
+- Tracking quality, jitter, or lost-face rate under real conditions
+- Inference FPS stability over sustained periods
+- Model/task file license and redistribution terms (full review required before production use)
+- GPU acceleration path (not evaluated; CPU-only spike)
+- Binary/dependency size for production packaging (pip wheel ~10–18MB; total venv ~200MB+ estimated)
+
+#### Privacy and local-first confirmation
+
+- Raw camera frames stayed in process memory only; no frames were persisted, uploaded, or committed.
+- No uploads, telemetry, analytics, or external frame processing occurred.
+- No raw frames, screenshots, model files, task files, generated logs, venv folders, or build artifacts were committed to the repository.
+- All downloaded files stayed in the scratch directory outside the repository.
+- Camera was used for a brief multi-frame spike only (no long-running capture).
+
+#### Decision impact
+
+MediaPipe Face Landmarker output fields (478 landmarks, 52 blendshapes, 4×4 transformation matrix) are confirmed available via the Python Tasks route on Windows 11. A basic MotionFrame mapping is feasible without schema changes. **MediaPipe Face Landmarker remains a candidate only. No tracking backend is selected by this pass. No production dependency is added. No model/task file is committed. No MotionFrame schema change is made. Any production integration requires a separate architecture and implementation PR.**
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
