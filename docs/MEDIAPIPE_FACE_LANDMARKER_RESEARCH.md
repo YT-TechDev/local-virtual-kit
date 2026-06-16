@@ -12,6 +12,7 @@ This memo is research-only. It does not approve adding MediaPipe dependencies, m
 - Google AI Edge / MediaPipe Face Landmarker platform guides
 - Google AI Edge / MediaPipe Framework in C++ documentation
 - google-ai-edge/mediapipe repository license
+- Source review date: 2026-06-16
 
 ## Product fit
 
@@ -141,9 +142,7 @@ This memo does not:
 
 MediaPipe Face Landmarker should remain the first product-quality candidate to investigate after OpenCV Haar baseline evidence.
 
-The next PR should be documentation-only and should record this feasibility memo in the repository.
-
-After that, the next local task should be a narrowly scoped feasibility spike that answers:
+This memo records the documentation-only feasibility research. The next local task should be a narrowly scoped feasibility spike that answers:
 
 - Can we build or run an official local Face Landmarker path on Windows DevPC?
 - What runtime route is smallest and safest for LVK?

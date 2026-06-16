@@ -113,6 +113,8 @@ Collect these values from local diagnostics whenever a candidate is actually run
 
 ### Recommended next local-validation PR
 
+See `docs/MEDIAPIPE_FACE_LANDMARKER_RESEARCH.md` for the source-reviewed MediaPipe Face Landmarker feasibility memo before starting a local setup spike.
+
 Run the next candidate validation on the Windows DevPC with Claude Code or another local agent that has direct camera access. Choose either an OpenCV Haar smoke using a trusted local cascade path, or a MediaPipe/ONNX feasibility spike that stops at documented dependency, model, license, runtime, and diagnostics requirements. Record evidence with the diagnostics summarizer, keep raw frames local and uncommitted, and state clearly that no backend has been selected.
 
 ## Diagnostics Evidence Workflow
