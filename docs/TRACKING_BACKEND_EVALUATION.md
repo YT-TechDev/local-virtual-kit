@@ -121,6 +121,10 @@ Run the next candidate validation on the Windows DevPC with Claude Code or anoth
 
 A source-grounded MediaPipe Face Landmarker model/license redistribution review is recorded in `docs/MEDIAPIPE_FACE_LANDMARKER_RESEARCH.md#model-license-and-redistribution-review-2026-06-16`. MediaPipe Face Landmarker remains a candidate only. No tracking backend is selected. No production dependency is added. No model/task file is committed, and no model/task file is approved for bundling by this PR. Any production use requires a separate architecture/dependency/model packaging PR before LVK adds a dependency, commits or bundles a `.task` artifact, or changes runtime/MotionFrame behavior.
 
+### Integration route decision prep (2026-06-16)
+
+The follow-up route comparison is recorded in `docs/MEDIAPIPE_FACE_LANDMARKER_RESEARCH.md#integration-route-decision-prep-2026-06-16`. The recommended next evaluation route is a narrow C++ Tasks / MediaPipe Framework reconnaissance PR that answers whether the official Face Landmarker C++ route can fit LVK's Windows DevPC and Native Core boundaries. This is not a final backend selection: MediaPipe remains a candidate only, Python Tasks remains reference/feasibility only, ONNX Runtime remains a later candidate unless the project pivots, and no dependency, model/task file, runtime behavior, or MotionFrame schema change is approved here.
+
 ## Diagnostics Evidence Workflow
 
 Use this workflow in a future backend evaluation PR after collecting real local measurements. The template below is evidence scaffolding only; leaving it blank or filling it with assumptions is not a validation result by itself.

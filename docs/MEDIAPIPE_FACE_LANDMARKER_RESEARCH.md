@@ -258,3 +258,58 @@ Gaze (`eyes.gaze.x/y`) requires landmark geometry derivation (not a direct blend
 ### Next step
 
 Decide on integration route: C++ MediaPipe Framework (Bazel, higher risk) vs. separate local helper process (IPC complexity) vs. deferred pending ONNX Runtime evaluation. Full license and redistribution review required before any production dependency is added.
+
+## Integration Route Decision Prep (2026-06-16)
+
+This decision-prep memo chooses the safest next evaluation route, not the final tracking backend. It is documentation-only and does not implement MediaPipe, ONNX Runtime, helper processes, IPC, Native Core changes, MotionFrame schema changes, or model packaging.
+
+### Current evidence summary
+
+- PR #114 recorded OpenCV Haar smoke/baseline evidence. Haar remains useful for detector wiring and diagnostics smoke coverage, but it is not product-quality VTuber tracking.
+- PR #115 recorded official MediaPipe Face Landmarker research notes. Face Landmarker appears relevant because it can expose face landmarks, blendshape scores, and facial transformation matrices.
+- PR #116 recorded local Python Tasks feasibility findings on the Windows DevPC. Python Tasks confirmed useful reference outputs, but that route is feasibility/reference only and is not an approved production runtime boundary.
+- PR #117 recorded MediaPipe model/license redistribution review. The component model cards and MediaPipe packages are promising from a licensing standpoint, but the combined `.task` artifact still has unresolved production packaging and notice decisions.
+- MediaPipe Face Landmarker remains a candidate only. No tracking backend is selected. No model/task file is committed or approved for bundling.
+
+### Candidate route comparison
+
+| Criterion                        | Native C++ MediaPipe Tasks / MediaPipe Framework + Bazel                                                                                                                                     | Separate local helper process using Python Tasks                                                                                                         | Defer MediaPipe and evaluate ONNX Runtime + local model first                                                                                              |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native Core boundary fit         | Best conceptual fit if FaceLandmarker can be built or consumed behind the Native Core tracker seam; C++/Bazel compatibility with the current CMake-oriented Native Core remains unvalidated. | Weaker fit because tracking would cross a process boundary; requires an explicit helper-process architecture and IPC contract before production use.     | Potentially good if ONNX Runtime and a selected local model can live behind Native Core abstractions; depends on the model and provider path chosen later. |
+| Local-first/privacy fit          | Strong if all inference remains in Native Core memory and only MotionFrame JSON leaves the tracker process.                                                                                  | Can remain local-only, but IPC must be designed so raw frames are not persisted, uploaded, logged, or exposed beyond the local helper boundary.          | Strong if a local model is selected and no remote provider or external frame processing is introduced.                                                     |
+| Windows DevPC feasibility        | Unknown; the official C++/Bazel route is still unvalidated against LVK's Windows DevPC, CMake workflow, and packaging expectations.                                                          | Already feasible as a reference route through Python Tasks, but productionizing Python runtime ownership and packaging is a separate risk.               | Unknown until a specific model, provider, and Windows packaging path are reviewed.                                                                         |
+| Build/package complexity         | Likely highest short-term risk because it may introduce Bazel, native build graph complexity, binary size, and toolchain integration questions.                                              | Medium-to-high risk because packaging Python, wheels, virtual environments, helper lifecycle, and crash handling can expand Electron/runtime complexity. | Medium risk; ONNX Runtime packaging may be simpler than MediaPipe/Bazel but model selection, providers, and binary distribution still need review.         |
+| Model/task artifact handling     | Requires a later decision on the exact Face Landmarker `.task` artifact, notices, placement, and bundling policy.                                                                            | Same `.task` artifact questions remain, plus Python package/runtime packaging questions.                                                                 | Requires a different model/license/weights review before any local model is committed or bundled.                                                          |
+| Runtime dependency risk          | High until official C++ Tasks or Framework consumption on Windows is proven.                                                                                                                 | High if Python becomes part of production distribution without an approved helper-process architecture.                                                  | Medium-to-high until a concrete model and ONNX Runtime provider set are chosen.                                                                            |
+| MotionFrame schema impact        | No schema change is required for a narrow reconnaissance PR; richer landmarks/blendshapes must stay out of MotionFrame unless a separate schema PR is approved.                              | Same: helper output should map to current MotionFrame fields unless a separate schema PR is approved.                                                    | Same: model outputs should map to current MotionFrame fields unless a separate schema PR is approved.                                                      |
+| Short-term validation value      | Highest, because it answers the main unresolved production-route question left by the Python feasibility spike: whether an official C++ route can fit LVK.                                   | Useful fallback evaluation if the C++ route is blocked or too costly after reconnaissance.                                                               | Useful pivot option, but it does not directly retire the MediaPipe C++ route uncertainty created by the recent feasibility work.                           |
+| Long-term maintainability        | Potentially strongest if it keeps tracking in Native Core with minimal runtime boundaries, but only if build and packaging risk are manageable.                                              | Potentially maintainable with a well-designed helper boundary, but it adds lifecycle, IPC, and runtime support burden.                                   | Potentially maintainable if a stable model/runtime is selected, but model quality and license review are still unproven.                                   |
+| Reviewability / smallest next PR | Best as a reconnaissance-only PR that documents whether the C++ route can build or be consumed; it must not add production dependencies or artifacts.                                        | Requires a broader architecture discussion before it is reviewable as more than reference work.                                                          | Requires model discovery and license review before evaluation can be source-grounded.                                                                      |
+
+### Recommended next route to evaluate
+
+The next step should be a narrow C++ Tasks / MediaPipe Framework route reconnaissance PR, not production integration. It should answer whether the official C++ Tasks FaceLandmarker API or MediaPipe Framework route can be built or consumed on Windows in a way compatible with LVK's Native Core boundaries.
+
+The reconnaissance PR should stay documentation/architecture focused unless the project owner explicitly approves a small build spike. If the route appears too risky after reconnaissance, then the local helper process route can be considered separately with an explicit helper-process architecture PR. ONNX Runtime remains a later candidate unless the project chooses to pivot away from MediaPipe after the C++ route is assessed.
+
+### Why this is not a final backend selection
+
+- MediaPipe Face Landmarker remains a candidate only.
+- No tracking backend is selected.
+- Python Tasks remains reference/feasibility only unless a separate architecture PR approves a helper-process boundary.
+- The C++/Bazel route remains unvalidated.
+- ONNX Runtime remains a later candidate unless the project chooses to pivot.
+- No model/task file is committed or approved for bundling.
+- Any production use requires a separate implementation and packaging PR.
+
+### Must remain blocked until a later PR
+
+- Adding MediaPipe, ONNX Runtime, Python runtime, or helper-process production dependencies.
+- Committing or bundling `face_landmarker.task`, ONNX weights, cascade XML files, raw frames, screenshots, binaries, generated model artifacts, or build artifacts.
+- Changing Native Core runtime behavior, Electron process management, Web Preview behavior, MotionFrame schema, or package/lock/build files.
+- Adding IPC, telemetry, analytics, cloud upload, external frame processing, or new network behavior.
+- Claiming webcam/camera validation unless it is run on an appropriate local machine and recorded as evidence.
+
+### Next PR recommendation
+
+Open a small reconnaissance PR for the C++ Tasks / MediaPipe Framework route. It should identify the official C++ APIs or Framework examples available for Face Landmarker, document Windows DevPC build/toolchain requirements, assess whether Bazel can coexist with LVK's Native Core boundaries, list dependency and model artifact implications, and stop before production integration, dependency addition, model bundling, or MotionFrame schema changes.
