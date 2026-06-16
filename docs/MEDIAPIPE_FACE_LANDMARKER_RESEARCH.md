@@ -157,7 +157,7 @@ The narrowly scoped feasibility spike was completed on the Windows DevPC (PR cho
 
 Python Tasks (`mediapipe==0.10.35` pip package) works on Windows 11 / Python 3.11. This is a reference/feasibility route only, not a Native Core production path.
 
-**No official C++ Tasks route exists** for Face Landmarker. C++ integration requires MediaPipe Framework + Bazel, which is unvalidated on Windows and carries high build risk.
+**No official Face Landmarker C++ Tasks guide was identified in the reviewed official sources.** The official C++ path found during this spike is MediaPipe Framework + Bazel example-app documentation, which remains unvalidated for LVK's Windows/CMake Native Core and carries high build risk.
 
 ### Output fields confirmed on a live webcam frame
 

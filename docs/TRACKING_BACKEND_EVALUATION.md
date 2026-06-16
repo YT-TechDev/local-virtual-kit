@@ -308,6 +308,7 @@ Copy this Markdown block into a future backend evaluation PR only after real loc
 - Official sources used:
   - Google AI Edge / MediaPipe Face Landmarker platform overview
   - Google AI Edge / MediaPipe Face Landmarker Python guide
+  - Google AI Edge / MediaPipe Framework in C++ documentation
   - PyPI: `mediapipe` package page
 - Approval: project owner approved venv creation, pip install, and model download before execution
 - Scratch directory: `C:\Users\Dev\Developments\lvk-mediapipe-face-landmarker-spike\` (outside repository)
@@ -363,7 +364,7 @@ No MotionFrame schema changes are needed for a basic mapping. Richer output (all
 
 #### Platform and integration notes
 
-- **No official C++ Tasks route exists** for Face Landmarker. C++ means MediaPipe Framework + Bazel — high build risk on Windows, not evaluated.
+- **No official Face Landmarker C++ Tasks guide was identified in the reviewed official sources.** The official C++ path found during this spike is MediaPipe Framework + Bazel example-app documentation, which remains unvalidated for LVK's Windows/CMake Native Core.
 - **Python Tasks route** confirmed working on Windows 11 / Python 3.11. Suitable for reference/feasibility only; not a Native Core production path.
 - A **separate local helper process** (Python or Node.js calling mediapipe) is a possible intermediate integration route that avoids Bazel but adds IPC complexity.
 - Native Core integration would require either: (a) MediaPipe Framework C++ + Bazel (unvalidated on Windows), or (b) a separate process boundary.
