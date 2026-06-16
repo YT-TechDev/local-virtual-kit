@@ -117,6 +117,10 @@ See `docs/MEDIAPIPE_FACE_LANDMARKER_RESEARCH.md` for the source-reviewed MediaPi
 
 Run the next candidate validation on the Windows DevPC with Claude Code or another local agent that has direct camera access. Choose either an OpenCV Haar smoke using a trusted local cascade path, or a MediaPipe/ONNX feasibility spike that stops at documented dependency, model, license, runtime, and diagnostics requirements. Record evidence with the diagnostics summarizer, keep raw frames local and uncommitted, and state clearly that no backend has been selected.
 
+### Pass 4 follow-up — Model license and redistribution review (2026-06-16)
+
+A source-grounded MediaPipe Face Landmarker model/license redistribution review is recorded in `docs/MEDIAPIPE_FACE_LANDMARKER_RESEARCH.md#model-license-and-redistribution-review-2026-06-16`. MediaPipe Face Landmarker remains a candidate only. No tracking backend is selected. No production dependency is added. No model/task file is committed, and no model/task file is approved for bundling by this PR. Any production use requires a separate architecture/dependency/model packaging PR before LVK adds a dependency, commits or bundles a `.task` artifact, or changes runtime/MotionFrame behavior.
+
 ## Diagnostics Evidence Workflow
 
 Use this workflow in a future backend evaluation PR after collecting real local measurements. The template below is evidence scaffolding only; leaving it blank or filling it with assumptions is not a validation result by itself.
