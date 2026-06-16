@@ -252,6 +252,51 @@ Copy this Markdown block into a future backend evaluation PR only after real loc
   - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata: yes — confirmed by inspecting 30 stdout lines (initial smoke) and 120 stdout lines (noop pass), all valid MotionFrame JSON (`schemaVersion=1`, `source=native`); stderr contained only `[camera]`, `[pipeline]`, and `[face]` startup/periodic/shutdown lines.
 - Decision impact: OpenCV camera source confirmed working on Windows 11 with MSMF backend at 640×480, effectiveFps≈27. Pipeline captures real webcam frames and emits valid MotionFrame JSON. Per-stage overhead (preprocess, tracking, write) remains sub-millisecond in noop mode; camera frame read cost dominates at ≈39ms/frame. No backend selected. Next evaluation step is a MediaPipe Face Landmarker or ONNX Runtime candidate evaluation, or an OpenCV Haar smoke when a trusted cascade XML path is available.
 
+### Pass 3 — OpenCV Haar Smoke Baseline (2026-06-16)
+
+- Date: 2026-06-16
+- Machine / OS: Windows 11 Pro 10.0.26200, x86-64 (DevPC with USB webcam)
+- Candidate: OpenCV Haar smoke baseline
+- Camera source: `opencv` (backend: MSMF, index 0, 640×480, nominalFps=30, effectiveFps≈22.9)
+- Detector / backend: `opencv` Haar — `haarcascade_frontalface_default.xml`
+- Cascade XML source: official OpenCV 4.12.0 source tree installed locally via vcpkg (`buildtrees/opencv4/src/4.12.0-.../data/haarcascades/`); Apache 2.0 licensed; not committed to the repository
+- Frame count: 120
+- Command used:
+  ```powershell
+  .\native\tracker-core\build-opencv\Release\lvk-tracker-core.exe `
+    --camera-source opencv `
+    --face-detector opencv `
+    --face-cascade "<vcpkg-opencv4-src>/data/haarcascades/haarcascade_frontalface_default.xml" `
+    --frames 120 `
+    --realtime `
+    --log-camera-status `
+    --camera-status-interval 10 `
+    --log-pipeline-status `
+    --pipeline-status-interval 10 `
+    --log-face-status `
+    --face-status-interval 10 `
+    > $env:TEMP\lvk-opencv-haar-motionframe.jsonl `
+    2> $env:TEMP\lvk-opencv-haar-diagnostics.log
+  ```
+- Summarizer command: `node tools/summarize-native-diagnostics.mjs $env:TEMP\lvk-opencv-haar-diagnostics.log`
+- Summarizer output (Windows UTF-16 LE log parsed correctly after PR #112 fix):
+  - pipeline: 12 periodic reports · `captureDurationMs` avg 2.08ms · `preprocessDurationMs` avg 0.000225ms · `trackingDurationMs` avg 34.72ms · `writeDurationMs` avg 0.058ms · `totalFrameDurationMs` avg 36.86ms
+  - face: 12 periodic reports · `detectionDurationMs` avg 34.72ms · `hasFaceCount` 0 · `lostOrNoFaceCount` 12 · `hasFaceRate` 0 · `lostOrNoFaceRate` 1 · detectors: `opencv` ×12
+- Notes / assumptions:
+  - `hasFaceCount=0` / `lostOrNoFaceRate=1`: no face was detected during this 120-frame run. This is a smoke/baseline pass to confirm the Haar detector pipeline wires up and runs end-to-end; face detection quality and real-world detection rate are not evaluated here.
+  - `trackingDurationMs` avg 34.72ms dominates the pipeline cost. This is the Haar cascade classification time per frame. Compare to noop baseline avg 0.0026ms (Pass 2) — Haar adds ~34ms of detection overhead per frame at 640×480.
+  - `captureDurationMs` avg 2.08ms is much lower than the noop run (38.9ms). In `--realtime` mode with a slow detector (Haar ~35ms/frame), the camera buffers frames between detections, reducing the apparent per-frame capture wait.
+  - `effectiveFps≈22.9` at 640×480 with Haar enabled. The nominal 30fps is not achievable with Haar at this resolution on this host.
+  - The stdout MotionFrame `tracking.status` was `"lost"` throughout (consistent with `hasFaceCount=0`). Lost-state frames preserved the camera timestamp and emitted neutral tracking values; eye openness remained at the current neutral default (`leftOpen=1.0`, `rightOpen=1.0`).
+  - Haar detection quality at this resolution and under real lighting conditions is not evaluated here. Rectangle-only face detection is not suitable as a product-quality VTuber tracking backend.
+  - Electron GUI, OBS Browser Source, and OS camera permission checks not performed; out of scope for this evidence PR.
+- Raw frame handling confirmation:
+  - Raw camera frames stayed local to Native Core memory: yes.
+  - No uploads, telemetry, analytics, or external frame processing occurred: yes.
+  - No raw frames, screenshots, model files, cascade XML files, generated binaries, or build artifacts were committed: yes. Cascade XML path is local to the vcpkg buildtrees directory and was not committed.
+  - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata: yes — confirmed 120 stdout lines (all valid MotionFrame JSON, `schemaVersion=1`, `source=native`); stderr contained only `[camera]`, `[pipeline]`, and `[face]` startup/periodic/shutdown lines.
+- Decision impact: OpenCV Haar detector pipeline confirmed wiring end-to-end on Windows 11 with MSMF backend. Haar detection cost ~34ms/frame at 640×480 limits effective FPS to ~23fps on this host. No face was detected in this smoke run; detection quality was not evaluated. **OpenCV Haar remains a smoke/baseline path only and is not selected as the tracking backend.** Next evaluation step: MediaPipe Face Landmarker candidate research and local setup evaluation.
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
