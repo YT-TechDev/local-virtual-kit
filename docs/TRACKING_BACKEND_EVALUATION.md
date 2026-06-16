@@ -101,6 +101,47 @@ Copy this Markdown block into a future backend evaluation PR only after real loc
 - Decision impact:
 ```
 
+## Diagnostics Evidence
+
+### Pass 1 — Dummy/Noop Baseline (2026-06-16)
+
+- Date: 2026-06-16
+- Machine / OS: WSL2 — Linux 6.6.87.2-microsoft-standard-WSL2, x86_64
+- Candidate: dummy/noop baseline
+- Camera source: `dummy`
+- Detector / backend: `noop`
+- Frame count: 120
+- Command used:
+  ```bash
+  ./native/tracker-core/build/lvk-tracker-core \
+    --camera-source dummy \
+    --face-detector noop \
+    --frames 120 \
+    --realtime \
+    --log-pipeline-status \
+    --pipeline-status-interval 10 \
+    --log-face-status \
+    --face-status-interval 10 \
+    > /tmp/lvk-native-motionframe.jsonl \
+    2> /tmp/lvk-native-diagnostics.log
+  ```
+- Summarizer command: `node tools/summarize-native-diagnostics.mjs /tmp/lvk-native-diagnostics.log`
+- Summarizer output:
+  - pipeline: 12 periodic reports · `captureDurationMs` avg 0.002495ms · `preprocessDurationMs` avg 0.000506ms · `trackingDurationMs` avg 0.006476ms · `writeDurationMs` avg 0.070878ms · `totalFrameDurationMs` avg 0.080512ms
+  - face: 12 periodic reports · `detectionDurationMs` avg 0.000382ms · `hasFaceCount` 0 · `lostOrNoFaceCount` 12 · `hasFaceRate` 0 · `lostOrNoFaceRate` 1 · detectors: `noop` ×12
+- Notes / assumptions:
+  - `noop` detector always returns `hasFace=false`; `lostOrNoFaceRate=1` is the expected baseline result, not a failure.
+  - `writeDurationMs` dominates per-frame cost in `--realtime` mode (stdout flush before pacing); this is expected per README.
+  - `totalFrameDurationMs` avg ~0.08ms confirms the pipeline stages are sub-millisecond in dummy/noop mode.
+  - OpenCV camera smoke attempted on the same machine (`--camera-source opencv --frames 3 --log-camera-status`). Camera failed to open with `Failed to start local camera source: opencv.` This is the expected result for WSL2 without camera forwarding to `/dev/video0`. CMake confirmed OpenCV was available (core + videoio + imgproc + objdetect); the camera path requires a machine with direct webcam access.
+  - Webcam/OpenCV camera, Electron GUI, and OBS Browser Source checks were not performed. This machine is WSL2 without a forwarded webcam device.
+- Raw frame handling confirmation:
+  - Raw camera frames stayed local to Native Core memory: yes — dummy source produces no real frames.
+  - No uploads, telemetry, or external frame processing occurred: yes.
+  - No raw frames, screenshots, model files, cascade XML files, generated binaries, or build artifacts were committed: yes.
+  - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata: yes — confirmed by inspecting 120 stdout lines (all valid MotionFrame JSON, `schemaVersion=1`, `source=native`) and 25 stderr lines (all `[pipeline] periodic:` and `[face] periodic:` lines only).
+- Decision impact: Dummy/noop baseline confirmed working. Pipeline compiles and runs cleanly on WSL2. Per-stage timing baseline established — all stages sub-millisecond in dummy/noop mode. No backend selected. Next evaluation step is an OpenCV Haar smoke on a machine with direct webcam access, or a first MediaPipe/ONNX candidate evaluation.
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
