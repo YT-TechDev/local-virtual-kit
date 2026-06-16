@@ -121,6 +121,56 @@ try {
     "empty.face.lostOrNoFaceRate",
   );
 
+  // Windows PowerShell 5.1 regression: stderr 2> redirection writes UTF-16 LE (BOM FF FE)
+  // and Out-File word-wraps long lines at the console width without a continuation marker.
+  // The first native stderr line also receives a NativeCommandError prefix.
+  // Subsequent tagged lines are plain text but may be split mid-word across two file lines.
+  const windowsLines = [
+    // First stderr line: NativeCommandError prefix + header block
+    ".\\lvk-tracker-core.exe : [camera] startup: sourceName=opencv-camera-source, isRunning=true",
+    "At line:1 char:49",
+    "    + CategoryInfo          : NotSpecified: (...) [], RemoteException",
+    "    + FullyQualifiedErrorId : NativeCommandError",
+    "",
+    // Plain [pipeline] periodic — fits on one line (no wrap needed here)
+    "[pipeline] periodic: emittedFrameCount=10, captureDurationMs=31.5, preprocessDurationMs=0.0002, trackingDurationMs=0.0016, writeDurationMs=0.1095, totalFrameDurationMs=31.611",
+    // [face] periodic word-wrapped mid-field at ~97 chars
+    "[face] periodic: detectorName=noop, hasFace=false, confidence=0, bounds={x=0, y=0, width=0, height=",
+    "0}, detectionDurationMs=0.0005, usedFallbackTracking=true",
+    // Second [pipeline] periodic word-wrapped mid-word ("t\nrackingDurationMs")
+    "[pipeline] periodic: emittedFrameCount=20, captureDurationMs=28.5, preprocessDurationMs=0.0003, t",
+    "rackingDurationMs=0.0022, writeDurationMs=0.158, totalFrameDurationMs=28.69",
+    // Second [face] periodic — fits on one line
+    "[face] periodic: detectorName=noop, hasFace=false, confidence=0, detectionDurationMs=0.0004",
+    "[camera] shutdown: sourceName=opencv-camera-source, effectiveFps=27.0",
+    "",
+  ].join("\r\n");
+  const bom = Buffer.from([0xff, 0xfe]);
+  const utf16Buf = Buffer.from(windowsLines, "utf16le");
+  writeFileSync(tempLogPath, Buffer.concat([bom, utf16Buf]));
+
+  const windowsSummary = readSummary("Windows PowerShell UTF-16 LE fixture");
+  assertEqual(windowsSummary?.pipeline?.count, 2, "windows.pipeline.count");
+  assertEqual(windowsSummary?.face?.count, 2, "windows.face.count");
+  assertEqual(
+    windowsSummary?.face?.lostOrNoFaceCount,
+    2,
+    "windows.face.lostOrNoFaceCount",
+  );
+  assertEqual(
+    windowsSummary?.face?.hasFaceCount,
+    0,
+    "windows.face.hasFaceCount",
+  );
+  assertMetricSummary(
+    windowsSummary?.pipeline?.totalFrameDurationMs,
+    "windows.pipeline.totalFrameDurationMs",
+  );
+  assertMetricSummary(
+    windowsSummary?.face?.detectionDurationMs,
+    "windows.face.detectionDurationMs",
+  );
+
   console.log("native diagnostics summarizer smoke check passed");
 } catch (error) {
   console.error(
