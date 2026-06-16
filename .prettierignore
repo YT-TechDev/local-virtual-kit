@@ -3,4 +3,5 @@ dist
 out
 coverage
 native/tracker-core/build
+native/tracker-core/build-*
 pnpm-lock.yaml
