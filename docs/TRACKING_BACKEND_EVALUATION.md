@@ -142,6 +142,67 @@ Copy this Markdown block into a future backend evaluation PR only after real loc
   - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata: yes — confirmed by inspecting 120 stdout lines (all valid MotionFrame JSON, `schemaVersion=1`, `source=native`) and 25 stderr lines (all `[pipeline] periodic:` and `[face] periodic:` lines only).
 - Decision impact: Dummy/noop baseline confirmed working. Pipeline compiles and runs cleanly on WSL2. Per-stage timing baseline established — all stages sub-millisecond in dummy/noop mode. No backend selected. Next evaluation step is an OpenCV Haar smoke on a machine with direct webcam access, or a first MediaPipe/ONNX candidate evaluation.
 
+### Pass 2 — OpenCV Camera Smoke / Noop Diagnostics (2026-06-16)
+
+- Date: 2026-06-16
+- Machine / OS: Windows 11 Pro 10.0.26200, x86-64 (DevPC with USB webcam)
+- Candidate: OpenCV camera smoke
+- Camera source: `opencv` (backend: MSMF, index 0, 640×480, nominalFps=30, effectiveFps≈27.0)
+- Detector / backend: `noop`
+- Frame count: 120 (noop diagnostics pass); 30 (initial camera smoke)
+- CMake OpenCV feature summary:
+  - Built with: `cmake -S native/tracker-core -B native/tracker-core/build-opencv -DCMAKE_TOOLCHAIN_FILE=C:\Users\Dev\Developments\vcpkg\scripts\buildsystems\vcpkg.cmake`
+  - LVK OpenCV camera support: ON (components: core + videoio)
+  - LVK OpenCV face detector support: ON (components: core + imgproc + objdetect)
+  - vcpkg package: `opencv4[calib3d,core,directml,dnn,dshow,fs,gapi,highgui,intrinsics,jpeg,msmf,png,quirc,thread,tiff,webp,win32ui]:x64-windows@4.12.0#3`
+- Commands used:
+
+  ```powershell
+  # Initial 30-frame camera smoke
+  .\native\tracker-core\build-opencv\Release\lvk-tracker-core.exe `
+    --camera-source opencv `
+    --frames 30 `
+    --log-camera-status `
+    > $env:TEMP\lvk-opencv-camera-motionframe.jsonl `
+    2> $env:TEMP\lvk-opencv-camera-diagnostics.log
+
+  # 120-frame noop diagnostics pass
+  .\native\tracker-core\build-opencv\Release\lvk-tracker-core.exe `
+    --camera-source opencv `
+    --face-detector noop `
+    --frames 120 `
+    --realtime `
+    --log-camera-status `
+    --camera-status-interval 10 `
+    --log-pipeline-status `
+    --pipeline-status-interval 10 `
+    --log-face-status `
+    --face-status-interval 10 `
+    > $env:TEMP\lvk-opencv-noop-motionframe.jsonl `
+    2> $env:TEMP\lvk-opencv-noop-diagnostics.log
+  ```
+
+- Summarizer command: `node tools/summarize-native-diagnostics.mjs $env:TEMP\lvk-opencv-noop-diagnostics.log`
+- Summarizer output:
+  - Summarizer returned count=0 for all fields. Root cause: PowerShell's stderr redirection (`2>`) wraps the first native-exe stderr line in a NativeCommandError prefix, which corrupts the log file header and caused the summarizer parser to produce no matches. The raw log content was inspected directly and all 12 periodic reports were present and readable.
+  - Manually computed from raw stderr log (12 `[pipeline] periodic:` reports, 12 `[face] periodic:` reports):
+    - pipeline: 12 periodic reports · `captureDurationMs` avg ≈38.92ms · `preprocessDurationMs` avg ≈0.00044ms · `trackingDurationMs` avg ≈0.00258ms · `writeDurationMs` avg ≈0.238ms · `totalFrameDurationMs` avg ≈39.16ms
+    - face: 12 periodic reports · `detectionDurationMs` avg ≈0.000475ms · `hasFaceCount` 0 · `lostOrNoFaceCount` 12 · `hasFaceRate` 0 · `lostOrNoFaceRate` 1 · detectors: `noop` ×12
+    - camera: `failedReadCount` 0 throughout · `effectiveFps` 27.0007 at shutdown
+- Notes / assumptions:
+  - `noop` detector always returns `hasFace=false`; `lostOrNoFaceRate=1` is the expected baseline result.
+  - `captureDurationMs` avg ≈38.9ms reflects real camera frame read time at 30fps (≈33ms/frame nominal). Two periodic intervals showed elevated capture times (≈71ms and ≈67ms) consistent with occasional MSMF buffering; `failedReadCount` remained 0.
+  - `effectiveFps≈27.0` is below the nominal 30fps, consistent with MSMF initialization overhead and occasional frame-delivery jitter on this host.
+  - The summarizer NativeCommandError issue is a Windows/PowerShell stderr-redirection artifact. It does not affect the native binary's correctness; it affects only the log file parsability on Windows. The summarizer works correctly on Linux (Pass 1). A follow-up fix to the summarizer or the evidence workflow on Windows may be warranted.
+  - OpenCV Haar smoke not run: no trusted local cascade XML path was confirmed available. Haar remains a smoke/baseline path, not product-quality tracking.
+  - Electron GUI, OBS Browser Source, and OS camera permission checks were not performed in this pass (out of scope for this evidence PR).
+- Raw frame handling confirmation:
+  - Raw camera frames stayed local to Native Core memory: yes — opencv camera source reads frames into Native Core only; no raw pixel data is written to stdout/stderr or committed.
+  - No uploads, telemetry, analytics, or external frame processing occurred: yes.
+  - No raw frames, screenshots, model files, cascade XML files, generated binaries, or build artifacts were committed: yes.
+  - stdout remained MotionFrame JSON; diagnostics remained safe stderr metadata: yes — confirmed by inspecting 30 stdout lines (initial smoke) and 120 stdout lines (noop pass), all valid MotionFrame JSON (`schemaVersion=1`, `source=native`); stderr contained only `[camera]`, `[pipeline]`, and `[face]` startup/periodic/shutdown lines.
+- Decision impact: OpenCV camera source confirmed working on Windows 11 with MSMF backend at 640×480, effectiveFps≈27. Pipeline captures real webcam frames and emits valid MotionFrame JSON. Per-stage overhead (preprocess, tracking, write) remains sub-millisecond in noop mode; camera frame read cost dominates at ≈39ms/frame. No backend selected. Next evaluation step is a MediaPipe Face Landmarker or ONNX Runtime candidate evaluation, or an OpenCV Haar smoke when a trusted cascade XML path is available.
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
