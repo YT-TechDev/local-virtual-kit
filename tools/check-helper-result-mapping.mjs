@@ -94,8 +94,11 @@ const inUnitRange = (value) =>
   value >= 0 &&
   value <= 1;
 
-const isFiniteNumber = (value) =>
-  typeof value === "number" && Number.isFinite(value);
+const inRotationRange = (value) =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= -1 &&
+  value <= 1;
 
 lines.forEach((line, index) => {
   const lineNumber = index + 1;
@@ -147,8 +150,10 @@ lines.forEach((line, index) => {
     fail(`stdout line ${lineNumber} mouth values are not within [0,1]`);
   }
   for (const axis of ["pitch", "yaw", "roll"]) {
-    if (!isFiniteNumber(frame.face.rotation[axis])) {
-      fail(`stdout line ${lineNumber} face.rotation.${axis} is not finite`);
+    if (!inRotationRange(frame.face.rotation[axis])) {
+      fail(
+        `stdout line ${lineNumber} face.rotation.${axis} is not within [-1,1]`,
+      );
     }
   }
 });

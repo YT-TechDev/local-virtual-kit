@@ -41,6 +41,10 @@ bool inUnitRange(double value) {
   return std::isfinite(value) && value >= 0.0 && value <= 1.0;
 }
 
+bool inRotationRange(double value) {
+  return std::isfinite(value) && value >= -1.0 && value <= 1.0;
+}
+
 bool isNeutralZero(double value) { return std::isfinite(value) && value == 0.0; }
 
 // Validates that a mapped sample is safe regardless of the helper input.
@@ -74,10 +78,10 @@ bool validateMappedSample(
     return failCheck("mouth values not clamped to [0,1]");
   }
 
-  if (!std::isfinite(sample.faceRotation.pitch) ||
-      !std::isfinite(sample.faceRotation.yaw) ||
-      !std::isfinite(sample.faceRotation.roll)) {
-    return failCheck("face rotation not finite");
+  if (!inRotationRange(sample.faceRotation.pitch) ||
+      !inRotationRange(sample.faceRotation.yaw) ||
+      !inRotationRange(sample.faceRotation.roll)) {
+    return failCheck("face rotation not clamped to [-1,1]");
   }
 
   // Face position and gaze remain neutral for now.

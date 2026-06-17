@@ -24,8 +24,15 @@ double clampConfidence(double value) {
   return std::clamp(value, 0.0, 1.0);
 }
 
-double sanitizeFinite(double value) {
-  return std::isfinite(value) ? value : 0.0;
+// Clamp a face rotation axis to the normalized/stable small-angle range
+// [-1.0, 1.0]. Non-finite inputs (NaN/infinity) fall back to neutral 0.0 so
+// out-of-range or invalid rotations never leak into MotionFrame.
+double clampRotation(double value) {
+  if (!std::isfinite(value)) {
+    return 0.0;
+  }
+
+  return std::clamp(value, -1.0, 1.0);
 }
 
 // Safe, neutral non-tracking output shape, consistent with
@@ -61,9 +68,9 @@ TrackingSample createTrackingSampleFromHelperResult(
         clampConfidence(result.confidence),
         Vector3{0.0, 0.0, 0.0},
         EulerRotation{
-            sanitizeFinite(result.faceRotation.pitch),
-            sanitizeFinite(result.faceRotation.yaw),
-            sanitizeFinite(result.faceRotation.roll),
+            clampRotation(result.faceRotation.pitch),
+            clampRotation(result.faceRotation.yaw),
+            clampRotation(result.faceRotation.roll),
         },
         clampNormalized(result.eyes.leftOpen, 1.0),
         clampNormalized(result.eyes.rightOpen, 1.0),
