@@ -75,3 +75,19 @@ if(MSVC)
 else()
   target_compile_options(lvk-tracker-core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Synthetic helper contract smoke (H1a). Standalone, synthetic-only executable
+# used to exercise the internal Native Core <-> helper JSON contract. It has no
+# OpenCV dependency, does not access a camera, and is not wired into Native Core
+# process supervision. See docs/TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md.
+add_executable(lvk-synthetic-helper
+  src/synthetic_helper_main.cpp
+)
+
+target_compile_features(lvk-synthetic-helper PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-synthetic-helper PRIVATE /W4)
+else()
+  target_compile_options(lvk-synthetic-helper PRIVATE -Wall -Wextra -Wpedantic)
+endif()
