@@ -242,6 +242,11 @@ A future helper-process design/implementation PR must address each of the follow
 3. **Do not implement helper IPC or add any dependency in this PR.** Either follow-up is a separate,
    explicitly approved PR.
 
+> Update (2026-06-17): after a second C++ / Bazel reprobe still failed before C++ compilation, the
+> helper-process prototype direction was designed in
+> [`docs/TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md`](TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md)
+> (design-only; no selection, dependency, IPC, raw frame IPC, or schema change).
+
 ## Non-Selection Statement
 
 - The helper process is **not** selected; it is one architecture candidate under review.
