@@ -109,3 +109,22 @@ if(MSVC)
 else()
   target_compile_options(lvk-helper-result-mapping-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Helper process supervision smoke (H1c). Standalone executable that launches
+# lvk-synthetic-helper as a child process, captures its private stdout/stderr
+# pipes, and validates normal/failure/timeout lifecycle handling. The supervisor
+# is linked only into this smoke target and is NOT wired into the
+# lvk-tracker-core runtime. No OpenCV, no camera, no temporary files. See
+# docs/TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md.
+add_executable(lvk-helper-process-supervision-smoke
+  src/helper_process_supervision_smoke.cpp
+  src/helper_process_supervisor.cpp
+)
+
+target_compile_features(lvk-helper-process-supervision-smoke PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-helper-process-supervision-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-helper-process-supervision-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()

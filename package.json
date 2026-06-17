@@ -20,7 +20,8 @@
     "test:motion-ws-bridge": "node tools/check-motion-ws-bridge.mjs",
     "test:native-tracker-options": "node tools/check-native-tracker-options.mjs",
     "test:synthetic-helper": "node tools/check-synthetic-helper-output.mjs",
-    "test:helper-result-mapping": "node tools/check-helper-result-mapping.mjs"
+    "test:helper-result-mapping": "node tools/check-helper-result-mapping.mjs",
+    "test:helper-process-supervision": "node tools/check-helper-process-supervision.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"
