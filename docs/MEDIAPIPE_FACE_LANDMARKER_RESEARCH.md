@@ -678,3 +678,118 @@ Neither option should be pursued in this PR.
 - No camera/webcam validation was performed.
 - Python Tasks remains reference/feasibility only.
 - Any production integration requires a separate implementation/dependency/model packaging PR.
+
+## Python / Bazel Reprobe (2026-06-17)
+
+### Scope
+
+This section records the approval-gated, owner-run follow-up to the [C++ / Bazel Local Build Spike (2026-06-17)](#c--bazel-local-build-spike-2026-06-17). It applied one focused local environment fix for the previous TensorFlow `python_version_repo` blocker and re-ran the same minimal Bazel target once. All Bazel work stayed in the scratch directory and Bazel's own cache, both outside the LVK repository. No MediaPipe source was patched. No model/task files were downloaded. No camera validation was performed. No LVK source, CMake, package, Electron, Web Preview, or MotionFrame files were changed.
+
+### Root cause of the previous blocker (source-grounded)
+
+The Pass 6 failure (`Cannot match hermetic Python version to system Python version. System Python was not found.`) originates in TensorFlow's `third_party/py/python_repo.bzl`, function `_get_python_version`:
+
+1. It first reads the `HERMETIC_PYTHON_VERSION` environment variable, then `TF_PYTHON_VERSION`.
+2. Only if both are empty **and** `default_python_version == "system"` does it execute `python3 --version`.
+3. On Windows there is no `python3` on PATH (only `python.exe` / the `py` launcher), so that call fails and the rule aborts.
+
+The previous probe set `PYTHON_BIN_PATH`, which this repository rule does not consult (it is not in the rule's `environ` list). MediaPipe's `WORKSPACE` calls `python_init_repositories(default_python_version = "system", ...)` and maps `"3.11" → //:requirements_lock_3_11.txt`, so selecting 3.11 explicitly is supported.
+
+### Environment
+
+| Item            | Value                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| OS              | Windows 11 Pro 10.0.26200                                                                   |
+| Python          | 3.11.4 at `C:\Python311\python.exe` (the `py` launcher reports `-V:3.11 *`)                 |
+| Bazelisk        | 1.29.0 at the winget Packages path (invoked by full path; bare `bazelisk` not on PATH)      |
+| Bazel           | 7.4.1 (resolved by Bazelisk from `.bazelversion`)                                           |
+| MediaPipe clone | `C:\Users\Dev\Developments\lvk-mediapipe-cpp-build-spike\mediapipe` (ref `d8f747c`, reused) |
+| Scratch log     | `…\lvk-mediapipe-cpp-build-spike\reprobe-hermetic-3_11.log` (outside repo; not committed)   |
+
+### Environment fix applied
+
+A single minimal fix versus the failed Pass 6 command: add the repository-rule env var
+`--repo_env=HERMETIC_PYTHON_VERSION=3.11`. This short-circuits the rule before the failing
+`python3 --version` system-detection branch. No other fix was attempted.
+
+### Command attempted
+
+```
+& <bazelisk.exe> build `
+    --define MEDIAPIPE_DISABLE_GPU=1 `
+    --repo_env=HERMETIC_PYTHON_VERSION=3.11 `
+    --action_env=PYTHON_BIN_PATH=C://Python311//python.exe `
+    //mediapipe/tasks/cc/vision/face_landmarker:face_landmarker_result
+```
+
+Run once. No retry. (`BAZEL_VS` / `BAZEL_VC` / `BAZEL_VC_FULL_VERSION` / `BAZEL_WINSDK_FULL_VERSION` were set as in Pass 6.)
+
+### Result
+
+**FAILED** (exit code 1) — build aborted during analysis, still before C++ compilation.
+
+**Progress beyond the previous blocker: yes.** Bazel printed the hermetic Python configuration and proceeded much further than Pass 6:
+
+```
+Hermetic Python configuration:
+Version: "3.11"
+Kind: ""
+Interpreter: "default" (provided by rules_python)
+Requirements_lock label: "@python_version_repo//:requirements_lock_3_11.txt"
+```
+
+The probe then completed main repo mapping, loaded the `mediapipe/tasks/cc/vision/face_landmarker` package, and reached target analysis (96 packages loaded, 11 targets configured) for `//mediapipe/tasks/cc/vision/face_landmarker:face_landmarker_result`.
+
+**First actionable new blocker:** the Swift rules' Windows toolchain autoconfiguration, during the fetch of repository `rules_swift~~non_module_deps~build_bazel_rules_swift_local_config`:
+
+```
+ERROR: …/external/rules_swift~/swift/internal/swift_autoconfiguration.bzl:355:13:
+  An error occurred during the fetch of repository
+  'rules_swift~~non_module_deps~build_bazel_rules_swift_local_config':
+    …
+    File "…/swift_autoconfiguration.bzl", line 355, column 13, in _create_windows_toolchain
+      fail("No 'swiftc.exe' executable found in Path")
+Error in fail: No 'swiftc.exe' executable found in Path
+ERROR: Analysis of target '//mediapipe/tasks/cc/vision/face_landmarker:face_landmarker_result'
+  failed; build aborted: No 'swiftc.exe' executable found in Path
+```
+
+**Error category:** transitive Bazel toolchain autoconfiguration (`rules_swift`) requires a Swift compiler on Windows even though this C++ target does not use Swift. This is a workspace-wide repository-rule requirement evaluated before the C++ toolchain and before any compilation action.
+
+### Failure/success summary
+
+| Question                                                     | Answer                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Did `HERMETIC_PYTHON_VERSION=3.11` clear the Python blocker? | **Yes** — hermetic Python 3.11 configured                           |
+| Did repo mapping / package loading / analysis proceed?       | **Yes** — reached target analysis (96 packages, 11 targets)         |
+| Did the build reach C++ compilation?                         | **No**                                                              |
+| New first blocker                                            | `rules_swift` Windows toolchain: `No 'swiftc.exe' executable found` |
+| Was any retry or second fix attempted?                       | **No**                                                              |
+
+### What was not attempted
+
+- Installing Swift / adding `swiftc.exe` to PATH.
+- Patching `rules_swift`, the MediaPipe `WORKSPACE`, or any Bazel file to disable Swift autoconfiguration.
+- Running a broader or different Bazel target.
+- Any further reprobe after the first blocker.
+- Downloading model/task files; camera/webcam validation; any LVK file change.
+
+### Decision impact
+
+The focused Python/Bazel environment fix worked: the probe passed the previous TensorFlow hermetic Python detection blocker and advanced into analysis. However, the C++/Bazel route exposed yet another Windows toolchain dependency (`rules_swift` requiring `swiftc.exe`) **before** reaching C++ compilation. This reinforces that the full MediaPipe Bazel workspace pulls broad, platform-spanning toolchain requirements that are costly to satisfy on a Windows DevPC for a single small C++ target.
+
+Per the prior plan, because the route still fails before C++ compilation, the recommended next step is to **pivot to a helper-process prototype design PR** (a separate local process boundary, e.g. the validated Python Tasks route behind the Native Core tracker seam, per `docs/TRACKING_HELPER_PROCESS_ARCHITECTURE.md`), rather than continue chasing Windows Bazel toolchain dependencies. Swift was not installed and no further dependency chasing was performed.
+
+### Non-selection statement
+
+- MediaPipe Face Landmarker remains a candidate only.
+- No tracking backend is selected.
+- The C++/Bazel route remains unvalidated (no C++ compilation reached).
+- No LVK source, runtime, build, or package files are changed.
+- No dependency is added to LVK. No Bazel files, Python runtime, or model assets are added to LVK.
+- No model/task file is downloaded, committed, or approved for bundling.
+- No MotionFrame schema change is made.
+- No camera/webcam validation was performed.
+- No helper-process IPC is implemented by this PR.
+- Python Tasks remains reference/feasibility only.
+- Any production integration requires a separate implementation/dependency/model packaging PR.

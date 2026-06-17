@@ -137,6 +137,10 @@ The approval-gated local build spike evidence is recorded in `docs/MEDIAPIPE_FAC
 
 A design-only helper-process architecture decision memo is recorded in `docs/TRACKING_HELPER_PROCESS_ARCHITECTURE.md`. It compares continuing the C++ / Bazel route against a Native Core-owned local helper process (recommended candidate boundary), and is architecture/design only: no tracking backend is selected, no dependency/runtime/IPC is added, no model/task bundling is approved, raw frame IPC is not approved, and no MotionFrame schema change is made.
 
+### Pass 7 follow-up — Python/Bazel reprobe (2026-06-17)
+
+The owner-run, approval-gated Python/Bazel environment fix-and-reprobe is recorded in `docs/MEDIAPIPE_FACE_LANDMARKER_RESEARCH.md#python--bazel-reprobe-2026-06-17`. Adding `--repo_env=HERMETIC_PYTHON_VERSION=3.11` cleared the previous TensorFlow `python_version_repo` "System Python not found" blocker: Bazel configured hermetic Python 3.11 and progressed through repo mapping, package loading, and target analysis for `//mediapipe/tasks/cc/vision/face_landmarker:face_landmarker_result`. The build still did **not** reach C++ compilation — it failed at a new Windows toolchain blocker, `rules_swift` autoconfiguration (`No 'swiftc.exe' executable found in Path`). Swift was not installed and no further dependency chasing or retry was performed. Because the route still fails before C++ compilation, the recommended next step is to pivot to a helper-process prototype design PR (see `docs/TRACKING_HELPER_PROCESS_ARCHITECTURE.md`). No tracking backend is selected. No dependency, Bazel file, Python runtime, or model/task asset is added to LVK. No model/task file is downloaded or committed. No MotionFrame schema change is made. No camera/webcam validation was performed.
+
 ## Diagnostics Evidence Workflow
 
 Use this workflow in a future backend evaluation PR after collecting real local measurements. The template below is evidence scaffolding only; leaving it blank or filling it with assumptions is not a validation result by itself.
