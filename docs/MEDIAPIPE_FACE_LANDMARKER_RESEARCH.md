@@ -658,13 +658,14 @@ The full MediaPipe WORKSPACE (even for a minimal C++ target) pulls in TensorFlow
 
 ### Recommendation
 
-The build spike confirms that the Bazel toolchain can start on this Windows DevPC (Bazelisk 1.29.0, Bazel 7.4.1, MSVC 14.44), but the first real blocker is TensorFlow's Python hermetic version detection in the WORKSPACE repository rule evaluation phase. This is a solvable configuration problem (correct Python PATH or env variable for TensorFlow's detection mechanism), not a fundamental Windows/MSVC incompatibility.
+The C++/Bazel route remains unvalidated. The first local build probe stopped at Python environment detection in the TensorFlow WORKSPACE repository rule, before reaching C++ compilation. No retry or fix was attempted in this PR.
 
-If the project owner approves a follow-up, the narrowest fix is to identify the exact Python PATH or environment variable that TensorFlow's `python_repo.bzl` expects and re-run the probe with that configuration. This does not require MSYS2 and does not require the full OpenCV 3.4.10 setup.
+A future PR may either:
 
-If the Python detection issue is resolved, the next failure point is likely the OpenCV version mismatch (WORKSPACE expects 3.4.10 at `C:\opencv\build`; LVK uses vcpkg 4.12.0 at a different path). That would require either a WORKSPACE edit or installing a second OpenCV 3.4.10 alongside vcpkg — a separate decision.
+1. Run a focused Python/Bazel environment fix-and-reprobe — identifying the exact Python environment configuration that TensorFlow's `python_repo.bzl` expects and re-running the minimal probe once with approval.
+2. Start a helper-process architecture decision PR — evaluating a separate local process boundary (Python Tasks + IPC) as a production-usable route without requiring the full Bazel/MSVC/OpenCV setup.
 
-**Fallback recommendation:** If the Bazel/Python/OpenCV configuration chain proves too costly to resolve, the separate local helper process route (Python Tasks + IPC) remains the next best option to evaluate, via an explicit helper-process architecture PR.
+Neither option should be pursued in this PR.
 
 ### Non-selection statement
 
