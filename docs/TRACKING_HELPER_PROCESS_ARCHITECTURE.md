@@ -146,9 +146,11 @@ helper process**:
 
 ## 5. Raw Frame IPC Stance
 
-- **Raw frame IPC is NOT approved by this memo.** The recommended boundary (§3–§4) keeps camera frames
-  inside Native Core and crosses the helper boundary only with compact tracking results or, if camera
-  ownership stays in Native Core, with frames the helper needs — and that case is explicitly deferred.
+- **Raw frame IPC is NOT approved by this memo.** Native Core camera ownership and helper access to
+  raw frames, pixels, or tensors are separate design questions. The recommended boundary (§3–§4)
+  keeps camera capture owned by Native Core and crosses the helper boundary only with compact
+  tracking results by default. Any helper access to raw frames, pixels, or tensors is not approved by
+  this memo and is explicitly deferred to a future design/implementation PR.
 - If raw frames ever cross a local process boundary in a future design, that future explicit
   design/implementation PR must prove all of the following before any code lands:
   - local-only operation (no network egress of frames)
@@ -187,8 +189,9 @@ A future helper-process design/implementation PR must address each of the follow
 
 - **Process ownership** — Native Core spawns, supervises, and shuts down the helper; Electron retains
   only the existing native-process start/stop lifecycle role.
-- **Frame ownership** — camera frames stay owned by Native Core in v0.1; the helper does not own the
-  camera (Option D is deferred).
+- **Frame ownership and access** — camera capture remains owned by Native Core in v0.1;
+  helper-owned camera capture is deferred. Any helper access to raw frames, pixels, or tensors is not
+  approved by this memo and requires a separate future design/implementation PR.
 - **Backpressure and dropped-frame behavior** — define what happens when the helper is slower than the
   capture rate (drop oldest, coalesce, or block within bounds) without unbounded buffering.
 - **Startup / shutdown protocol** — define handshake, readiness signaling, and clean teardown so a
@@ -216,7 +219,9 @@ A future helper-process design/implementation PR must address each of the follow
 
 1. Which tracking implementation would the helper wrap first (for example the validated Python Tasks
    route), and is that acceptable as a non-production prototype only?
-2. Does Native Core keep camera ownership (preferred), so the helper never touches raw frames?
+2. Does Native Core keep camera ownership (preferred), and if a helper requires frame or tensor
+   access, is that raw-frame boundary explicitly deferred to a future design/implementation PR with
+   local-only, no-persistence, backpressure, crash, diagnostics, and IPC-security proof?
 3. What exact internal result shape crosses the boundary, and how does Native Core map it to
    MotionFrame without any schema change?
 4. Which single IPC mechanism is chosen for a first prototype, and how is it secured locally?
