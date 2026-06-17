@@ -504,3 +504,176 @@ If the Bazel build is blocked by MSVC issues, the fallback is the **separate loc
 - C++ route remains unvalidated until a separate local build spike proves it on Windows DevPC.
 - Python Tasks remains reference/feasibility only.
 - Any production integration requires a separate implementation and packaging PR.
+
+## C++ / Bazel Local Build Spike (2026-06-17)
+
+### Scope
+
+This section records the approval-gated local build spike conducted outside the LVK repository. No MediaPipe dependency was added to LVK. No Bazel files were added to LVK. No LVK CMake, source, or package files were changed. No model/task files were downloaded or committed. No camera validation was performed. No MotionFrame schema changes were made.
+
+All Bazel-related work remained in the scratch directory and Bazel's own cache, both outside the LVK repository.
+
+### Environment
+
+| Item               | Value                                                  |
+| ------------------ | ------------------------------------------------------ |
+| OS                 | Windows 11 Pro 10.0.26200                              |
+| VS 2022 BuildTools | MSVC 14.44.35207                                       |
+| VS 2019 BuildTools | MSVC 14.29.30133                                       |
+| Windows SDK        | 10.0.26100.0                                           |
+| CMake              | 4.3.3 (LVK Native Core build, not used for this spike) |
+| Python             | 3.11.4 at `C:\Python311\python.exe`                    |
+| Git                | 2.54.0.windows.1                                       |
+| Bazelisk           | 1.29.0 (installed via `winget install Bazel.Bazelisk`) |
+| MSYS2              | Not installed                                          |
+| Java               | Not in PATH (Bazel found its own JVM at runtime)       |
+| C: free space      | 71.13 GB before clone                                  |
+
+### Scratch directory
+
+```
+C:\Users\Dev\Developments\lvk-mediapipe-cpp-build-spike\
+```
+
+This directory is outside the LVK repository. No files from this directory were committed to LVK.
+
+### Source checkout details
+
+- Repository: `https://github.com/google-ai-edge/mediapipe`
+- Method: `git clone --depth 1` (shallow clone, HEAD only)
+- Target path: `C:\Users\Dev\Developments\lvk-mediapipe-cpp-build-spike\mediapipe`
+- Clone size: **72 MB**, 5,397 files
+
+### Build tool availability
+
+- Bazelisk 1.29.0 installed via winget. Confirmed working.
+- Bazel 7.4.1 downloaded automatically by Bazelisk on first invocation (`.bazelversion` in MediaPipe workspace specifies `7.4.1`).
+- Note: the MediaPipe documentation references Bazel 6.5.0+, but the actual `.bazelversion` file in the cloned repository requires **7.4.1**. Bazelisk resolves this automatically.
+- MSYS2 was not installed. It was not the first failure point (see result below).
+
+### Target inspected
+
+The Face Landmarker BUILD file was read at:
+
+```
+mediapipe/tasks/cc/vision/face_landmarker/BUILD
+```
+
+Targets confirmed present:
+
+| Target                   | Dependencies                                                  |
+| ------------------------ | ------------------------------------------------------------- |
+| `face_landmarker_result` | protobuf formats, absl, containers — **no OpenCV**            |
+| `face_landmarker`        | full graph, CalculatorGraph, protobuf, absl — OpenCV indirect |
+| `face_landmarker_graph`  | CalculatorGraph, many calculators — OpenCV required           |
+
+Additional configuration findings:
+
+- `.bazelrc` sets `build:windows --cxxopt=/std:c++20` — MediaPipe requires **C++20** on Windows, not C++17.
+- `common --enable_bzlmod` — uses Bazel Module system (Bzlmod), modern dependency management.
+- `WORKSPACE` hardcodes OpenCV at `C:\opencv\build` expecting OpenCV 3.4.10 (`opencv_world3410.lib`). LVK uses vcpkg OpenCV 4.12.0 at a different path; these would need reconciliation for a full build.
+
+### Command attempted
+
+```
+Set-Location C:\Users\Dev\Developments\lvk-mediapipe-cpp-build-spike\mediapipe
+
+$env:BAZEL_VS               = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
+$env:BAZEL_VC               = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC"
+$env:BAZEL_VC_FULL_VERSION   = "14.44.35207"
+$env:BAZEL_WINSDK_FULL_VERSION = "10.0.26100.0"
+
+bazelisk build `
+    --define MEDIAPIPE_DISABLE_GPU=1 `
+    "--action_env=PYTHON_BIN_PATH=C://Python311//python.exe" `
+    //mediapipe/tasks/cc/vision/face_landmarker:face_landmarker_result
+```
+
+Run once. No retry.
+
+### Result
+
+**FAILED** — build did not complete.
+
+**What succeeded before failure:**
+
+- Bazel 7.4.1 downloaded and extracted by Bazelisk: ✅
+- Bazel server started: ✅
+- Bzlmod repository resolution started (absl-cpp, protobuf, bazel_skylib resolved): ✅
+- MSYS2 absence did not trigger a failure at this stage: ✅
+
+**First actionable error:**
+
+```
+ERROR: C:/users/dev/_bazel_dev/.../external/org_tensorflow/
+         third_party/py/python_repo.bzl:147:21:
+  An error occurred during the fetch of repository 'python_version_repo':
+    Cannot match hermetic Python version to system Python version.
+    System Python was not found.
+ERROR: Error computing the main repository mapping:
+  no such package '@@python_version_repo//'
+```
+
+**Error category:** TensorFlow Python hermetic version-matching failure during repository fetch phase.
+
+**Root cause:** The WORKSPACE references `org_tensorflow`, which runs a Python detection repository rule (`python_repo.bzl`) over all external repositories before any build target is evaluated. That rule's `_get_python_version` function could not locate system Python via its expected detection mechanism, even though Python 3.11.4 exists at `C:\Python311\python.exe`. This is a Bazel repository rule evaluation failure, not a C++ compiler or MSYS2 failure.
+
+**Bazel output base (outside LVK repo and scratch dir):**
+
+```
+C:\users\dev\_bazel_dev\5rq3hgqp\
+```
+
+All downloaded external repositories, Bazel 7.4.1, and partial build state are in this Bazel-managed cache directory. No generated files were written into the LVK repository or the scratch clone directory.
+
+### Failure/success summary
+
+| Question                                                  | Answer                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| Can Bazelisk start on this Windows DevPC?                 | **Yes**                                                      |
+| Does Bazel 7.4.1 download and run?                        | **Yes**                                                      |
+| Does Bzlmod resolve basic deps (absl, protobuf)?          | **Yes (partial)**                                            |
+| Is MSYS2 required at this stage?                          | **Not confirmed** — not the first failure point              |
+| Does the C++ toolchain (MSVC 14.44) cause an early error? | **No** — not reached                                         |
+| Does the build succeed?                                   | **No** — Python detection in TensorFlow WORKSPACE rule fails |
+| First blocker                                             | TensorFlow `python_version_repo` cannot detect system Python |
+
+### Native Core implication
+
+The build failure was in the repository resolution phase, not in C++ compilation. However, it confirms that the full MediaPipe workspace carries a TensorFlow dependency chain that requires precise Python environment configuration even for a small C++ library target. This is because Bazel evaluates all WORKSPACE external repository rules globally, regardless of the specific target being built. Isolating `face_landmarker_result` from this workspace-wide dependency evaluation would require either patching the WORKSPACE (not attempted) or finding an official minimal MediaPipe Tasks build path that does not pull in `org_tensorflow`.
+
+### Packaging/dependency implication
+
+The full MediaPipe WORKSPACE (even for a minimal C++ target) pulls in TensorFlow, Python rules, JavaScript rules, Kotlin rules, Apple platform rules, and Rust rules. This confirms that the C++ Tasks API cannot be consumed as a small drop-in library without the full Bazel workspace context. There is no officially supported path to extract just the `face_landmarker` C++ library for use in a CMake project.
+
+### What was not attempted
+
+- Patching the WORKSPACE or `python_repo.bzl` to fix Python detection
+- Installing MSYS2 or adding it to PATH
+- Fixing the Python PATH environment so TensorFlow's detection succeeds
+- Running a broader `face_landmarker` or `face_landmarker_graph` target
+- Downloading model/task files
+- Camera or webcam validation
+- Any LVK CMake, source, or package file changes
+
+### Recommendation
+
+The build spike confirms that the Bazel toolchain can start on this Windows DevPC (Bazelisk 1.29.0, Bazel 7.4.1, MSVC 14.44), but the first real blocker is TensorFlow's Python hermetic version detection in the WORKSPACE repository rule evaluation phase. This is a solvable configuration problem (correct Python PATH or env variable for TensorFlow's detection mechanism), not a fundamental Windows/MSVC incompatibility.
+
+If the project owner approves a follow-up, the narrowest fix is to identify the exact Python PATH or environment variable that TensorFlow's `python_repo.bzl` expects and re-run the probe with that configuration. This does not require MSYS2 and does not require the full OpenCV 3.4.10 setup.
+
+If the Python detection issue is resolved, the next failure point is likely the OpenCV version mismatch (WORKSPACE expects 3.4.10 at `C:\opencv\build`; LVK uses vcpkg 4.12.0 at a different path). That would require either a WORKSPACE edit or installing a second OpenCV 3.4.10 alongside vcpkg — a separate decision.
+
+**Fallback recommendation:** If the Bazel/Python/OpenCV configuration chain proves too costly to resolve, the separate local helper process route (Python Tasks + IPC) remains the next best option to evaluate, via an explicit helper-process architecture PR.
+
+### Non-selection statement
+
+- MediaPipe Face Landmarker remains a candidate only.
+- No tracking backend is selected.
+- No LVK source, runtime, build, or package files are changed.
+- No dependency is added to LVK.
+- No model/task file is committed or approved for bundling.
+- No MotionFrame schema change is made.
+- No camera/webcam validation was performed.
+- Python Tasks remains reference/feasibility only.
+- Any production integration requires a separate implementation/dependency/model packaging PR.
