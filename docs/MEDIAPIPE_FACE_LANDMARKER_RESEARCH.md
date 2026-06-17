@@ -313,3 +313,194 @@ The reconnaissance PR should stay documentation/architecture focused unless the 
 ### Next PR recommendation
 
 Open a small reconnaissance PR for the C++ Tasks / MediaPipe Framework route. It should identify the official C++ APIs or Framework examples available for Face Landmarker, document Windows DevPC build/toolchain requirements, assess whether Bazel can coexist with LVK's Native Core boundaries, list dependency and model artifact implications, and stop before production integration, dependency addition, model bundling, or MotionFrame schema changes.
+
+## C++ Route Reconnaissance (2026-06-17)
+
+### Scope
+
+This section is documentation-only. No MediaPipe dependency was added. No Bazel files were created. No CMake files were changed. No source code was changed. No model/task files were downloaded or committed. No MediaPipe repository was cloned. No builds were run. No camera validation was performed. No MotionFrame schema changes were made.
+
+Official sources inspected during this reconnaissance:
+
+- `mediapipe/tasks/cc/vision/face_landmarker/face_landmarker.h` (official MediaPipe repository, raw source via GitHub)
+- `mediapipe/tasks/cc/vision/face_landmarker/face_landmarker_result.h` (official MediaPipe repository, raw source via GitHub)
+- `mediapipe/tasks/cc/vision/face_landmarker/BUILD` (Bazel build file, official MediaPipe repository via GitHub)
+- `mediapipe/tasks/cc/vision/face_landmarker/face_landmarker_graph.cc` (official MediaPipe repository, dependency review via GitHub)
+- Google AI Edge / MediaPipe Framework installation guide (Bazel/Windows requirements)
+- MediaPipe C++ getting started guide (Bazel example-app pattern)
+- Official MediaPipe Face Landmarker documentation (platform guide listing)
+- GitHub issue tracker: Windows/MSVC build issues, CMake support status
+- Reconnaissance date: 2026-06-17
+
+### Official C++ API findings
+
+The official C++ Tasks FaceLandmarker API was confirmed in the MediaPipe source tree.
+
+**Header path (confirmed in official repository):**
+
+```
+mediapipe/tasks/cc/vision/face_landmarker/face_landmarker.h
+```
+
+**Namespace (confirmed):**
+
+```
+mediapipe::tasks::vision::face_landmarker
+```
+
+**`FaceLandmarkerOptions` struct (confirmed):**
+
+| Field                                   | Type          | Notes                                 |
+| --------------------------------------- | ------------- | ------------------------------------- |
+| `base_options`                          | `BaseOptions` | Model path and accelerator config     |
+| `running_mode`                          | `RunningMode` | `IMAGE`, `VIDEO`, or `LIVE_STREAM`    |
+| `num_faces`                             | `int`         | Default: 1                            |
+| `min_face_detection_confidence`         | `float`       | Default: 0.5                          |
+| `min_face_presence_confidence`          | `float`       | Default: 0.5                          |
+| `min_tracking_confidence`               | `float`       | Default: 0.5                          |
+| `output_face_blendshapes`               | `bool`        | Enables 52 blendshape scores per face |
+| `output_facial_transformation_matrixes` | `bool`        | Enables 4×4 facial transform output   |
+| `result_callback`                       | callback      | Required for `LIVE_STREAM` mode       |
+
+**`FaceLandmarker` class methods (confirmed):**
+
+| Method           | Signature shape                                                                        | Running mode  |
+| ---------------- | -------------------------------------------------------------------------------------- | ------------- |
+| `Create`         | `static absl::StatusOr<std::unique_ptr<FaceLandmarker>> Create(FaceLandmarkerOptions)` | Any           |
+| `Detect`         | Synchronous; takes `Image` + optional `ImageProcessingOptions`                         | `IMAGE`       |
+| `DetectForVideo` | Takes `Image` + `timestamp_ms` + optional options                                      | `VIDEO`       |
+| `DetectAsync`    | Takes `Image` + `timestamp_ms` + optional options; result via callback                 | `LIVE_STREAM` |
+| `Close`          | Resource cleanup                                                                       | Any           |
+
+**`FaceLandmarkerResult` struct (confirmed from `face_landmarker_result.h`):**
+
+| Field                            | Type                                          | Content                                                                             |
+| -------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `face_landmarks`                 | `std::vector<NormalizedLandmarks>`            | 478 3D landmarks per face                                                           |
+| `face_blendshapes`               | `std::optional<std::vector<Classifications>>` | 52 blendshape scores per face (requires `output_face_blendshapes=true`)             |
+| `facial_transformation_matrixes` | `std::optional<std::vector<Matrix>>`          | 4×4 float32 matrix per face (requires `output_facial_transformation_matrixes=true`) |
+
+The output struct fields match what was confirmed experimentally via Python Tasks in Pass 4.
+
+**Include dependencies of `face_landmarker.h` (confirmed):**
+
+- `absl/status/statusor.h` — Abseil status/result type
+- `mediapipe/framework/formats/image.h` — MediaPipe image type
+- `mediapipe/tasks/cc/core/base_options.h` — model path and accelerator config
+- `mediapipe/tasks/cc/vision/core/base_vision_task_api.h` — vision task base class
+- `mediapipe/tasks/cc/vision/core/image_processing_options.h`
+- `mediapipe/tasks/cc/vision/core/running_mode.h`
+- `mediapipe/tasks/cc/vision/face_landmarker/face_landmarker_result.h`
+
+All includes pull in MediaPipe Framework, MediaPipe Tasks, and Abseil headers. No standalone CMake-consumable include path exists.
+
+**No official C++ Face Landmarker Tasks guide found.**
+
+The official platform guides for Face Landmarker list Android, Python, Web (JS), and iOS. The expected C++ guide URL returned 404. The C++ Tasks API is visible in the official source tree but is not published as a step-by-step public integration guide. Usage must be inferred from source headers and the Bazel BUILD file.
+
+### Build/toolchain findings
+
+**Official build system: Bazel/Bazelisk only.**
+
+No CMake path exists in official MediaPipe documentation or the source tree. The official installation guide requires Bazelisk. There is no `CMakeLists.txt`, `Find<Mediapipe>.cmake`, or officially supported CMake build path for the Tasks C++ API.
+
+**Windows status: experimental.**
+
+The official installation guide states that running MediaPipe on Windows is experimental. The Windows build path requires MSYS2, Visual C++ 2022 Build Tools, WinSDK, and Bazel 6.5.0 or higher. GPU support on Windows is not confirmed; the C++ getting started guide states GPU "currently works only on Linux."
+
+**Active Windows build issues confirmed from official GitHub issue tracker:**
+
+| Issue              | Description                                                                      |
+| ------------------ | -------------------------------------------------------------------------------- |
+| #5874 (March 2025) | Designated initializers (C++20 feature) fail to compile under MSVC in C++17 mode |
+| #5876 (March 2025) | `CAP_PROP_ORIENTATION_AUTO` constant differs between OpenCV 3.4.10 and 3.4.12    |
+| #5252              | Windows build fails with MSVC                                                    |
+| #975               | Latest upstream commit broke the MSVC build                                      |
+
+These issues are not all resolved and reflect ongoing Bazel/MSVC friction as of early 2025.
+
+**Dependency chain (confirmed from Bazel BUILD and graph source review):**
+
+The `face_landmarker` Bazel target depends on:
+
+- `:face_landmarker_graph` — the CalculatorGraph-based MediaPipe graph target
+- `mediapipe/framework/api2:builder` — MediaPipe graph construction layer
+- `mediapipe/framework/formats:*_cc_proto` — protobuf-generated format types
+- `mediapipe/tasks/cc/core:task_runner` — MediaPipe Tasks runner (wraps TFLite)
+- `mediapipe/tasks/cc/vision/core:vision_task_api_factory`
+- Multiple proto options targets (`face_landmarker_graph_options_cc_proto`, `face_detector_graph_options_cc_proto`, etc.)
+- `@com_google_absl//absl/status:statusor`
+
+The `face_landmarker_graph.cc` depends on:
+
+- Abseil (`absl/log`, `absl/strings`)
+- Protocol Buffers (multiple `.pb.h` format and options files)
+- MediaPipe Framework API (`mediapipe/framework/api2/builder.h`, `port.h`)
+- MediaPipe Framework formats (Image, Landmark, Detection, Classification, Rect, Tensor)
+- `mediapipe/tasks/cc/core/model_task_graph.h` — deep Tasks framework dependency
+- `mediapipe/tasks/cc/core/model_asset_bundle_resources.h`
+- `mediapipe/tasks/cc/core/model_resources_cache.h`
+- Multiple specialized MediaPipe calculators (face detection, landmark detection, geometry calculation, gating, association, vector manipulation)
+- Proto options: `FaceLandmarkerGraphOptions`, `FaceDetectorGraphOptions`, `FaceLandmarksDetectorGraphOptions`, `FaceGeometryGraphOptions`
+
+**The C++ Tasks FaceLandmarker API is not a small drop-in library.** It is tightly integrated with the MediaPipe Framework's CalculatorGraph infrastructure, protobuf, Abseil, TFLite (via Tasks runner), and a Bazel build graph. There is no official path to consume it from a CMake project without either: (a) building the full MediaPipe Framework with Bazel and manually exporting a static/shared library for CMake to consume, or (b) using an unofficial community wrapper.
+
+### Native Core fit
+
+Conceptually, the C++ Tasks FaceLandmarker API fits LVK's Native Core tracking abstraction:
+
+- Raw camera frames would stay in Native Core memory — the `Image` type accepted by `Detect`/`DetectForVideo`/`DetectAsync` can wrap an existing buffer.
+- `FaceLandmarkerResult` output maps to current MotionFrame fields without schema changes, as confirmed via Python Tasks in Pass 4.
+- The `LIVE_STREAM` running mode with an async callback matches LVK's real-time per-frame use case.
+- The API boundary is clean: Native Core calls `Create` once, feeds frames via `DetectAsync`, receives results in the callback, and writes MotionFrame output — all within the Native Core tracking seam.
+
+The **build route is the blocking risk**, not the API shape. The API itself would be architecturally correct for LVK's tracking abstraction if the build could be resolved.
+
+### Windows DevPC risks
+
+| Risk                                        | Severity | Notes                                                                                                          |
+| ------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| Bazel required; no official CMake path      | High     | Bazel is the only supported build system for MediaPipe                                                         |
+| Windows build officially experimental       | High     | Explicit warning in official docs                                                                              |
+| Active MSVC C++17/C++20 designator mismatch | High     | Issue #5874, March 2025 — not confirmed resolved                                                               |
+| OpenCV version mismatch                     | Medium   | LVK uses vcpkg OpenCV 4.12.0; MediaPipe Windows guide targets 3.4.10                                           |
+| CMake/Bazel coexistence                     | High     | No official mechanism; consuming a Bazel-built library from CMake requires manual export or unofficial wrapper |
+| Binary/build time                           | High     | Full MediaPipe Framework Bazel build is large and slow; no prebuilt Windows binary available                   |
+| GPU acceleration                            | Medium   | Not available on Windows; CPU-only path only                                                                   |
+| No official prebuilt package                | High     | No official prebuilt Windows binary or CMake package for the C++ Tasks API                                     |
+
+### What was not attempted
+
+- Cloning the MediaPipe repository
+- Installing Bazel or Bazelisk
+- Running any MediaPipe or Bazel build
+- Downloading model/task files
+- Camera or webcam validation
+- Visual Studio/MSVC compatibility testing
+- CMake/Bazel integration testing
+- Any source code, package.json, or CMakeLists.txt changes
+
+### Recommendation for the next build spike
+
+If the project owner approves a local build spike after reviewing these risks, it should:
+
+1. Run **outside the repository** in a scratch directory (e.g., `C:\Users\Dev\Developments\lvk-mediapipe-cpp-spike\`).
+2. Target the minimal question: _Can Bazel build the `mediapipe/tasks/cc/vision/face_landmarker:face_landmarker` target on Windows DevPC?_
+3. Not involve LVK's CMake Native Core or any repository files.
+4. Use the official MediaPipe Windows instructions: MSYS2, Visual C++ 2022 Build Tools, WinSDK, Bazel 6.5.0+.
+5. Record build success/failure, duration, and any MSVC/toolchain errors without committing build artifacts.
+6. If successful, document whether the resulting library and headers can be consumed from a CMake project without Bazel.
+7. Require explicit project owner approval before installing Bazel, cloning MediaPipe, or starting any build.
+
+If the Bazel build is blocked by MSVC issues, the fallback is the **separate local helper process** route (Python helper + IPC) evaluated via an explicit helper-process architecture PR.
+
+### Non-selection statement
+
+- MediaPipe Face Landmarker remains a candidate only.
+- No tracking backend is selected.
+- No dependency is added.
+- No model/task file is committed or approved for bundling.
+- No MotionFrame schema change is made.
+- C++ route remains unvalidated until a separate local build spike proves it on Windows DevPC.
+- Python Tasks remains reference/feasibility only.
+- Any production integration requires a separate implementation and packaging PR.
