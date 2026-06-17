@@ -91,3 +91,21 @@ if(MSVC)
 else()
   target_compile_options(lvk-synthetic-helper PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Helper result mapping smoke (H1b). Maps synthetic helper-style internal
+# results to the existing TrackingSample / MotionFrame shape. No OpenCV, no
+# camera, no process spawning, and no live helper stdout parsing. See
+# docs/TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md.
+add_executable(lvk-helper-result-mapping-smoke
+  src/helper_result_mapping_smoke.cpp
+  src/helper_tracking_result.cpp
+  src/motion_frame_writer.cpp
+)
+
+target_compile_features(lvk-helper-result-mapping-smoke PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-helper-result-mapping-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-helper-result-mapping-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
