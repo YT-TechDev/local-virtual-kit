@@ -145,7 +145,15 @@ Before any H2 implementation PR:
 - The first H2 IPC direction is now captured in
   [`docs/TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md`](TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md)
   (prefer a Native Core-owned private parent-child pipe).
-- A future **docs-only** PR may detail the pipe **message / framing contract**.
+- The pipe message / framing contract is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
+- The latest H2 docs navigation / status is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md),
+  and the H2 design readiness review in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
+- The next safe step is helper prototype cleanup / docs maintenance.
+- Implementation path: only under explicit project-owner approval, prepare a separate scoped
+  H2 prototype implementation-gate prompt.
 - Raw frame access and implementation remain **not approved**; no implementation until
   explicit owner approval is recorded.
 

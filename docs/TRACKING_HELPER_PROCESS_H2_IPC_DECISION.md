@@ -144,8 +144,15 @@ validation plan documented.
 - The project owner reviews this first H2 IPC direction.
 - The proposed pipe message / framing contract is captured in
   [`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
-- A future **docs-only** PR may add a **startup / shutdown handshake and helper state-machine
-  memo** built on the framing contract.
+- The startup / shutdown handshake and helper state machine is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md`](TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md).
+- The latest H2 docs navigation / status is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md),
+  and the H2 design readiness review in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
+- The next safe step is helper prototype cleanup / docs maintenance.
+- Implementation path: only under explicit project-owner approval, prepare a separate scoped
+  H2 prototype implementation-gate prompt.
 - No implementation until explicit owner approval is recorded.
 
 ## Cross-References

@@ -220,9 +220,15 @@ Before any implementation of this state machine:
 - The project owner reviews this proposed handshake and state machine.
 - The automated-check plan and state-machine test vectors are captured in
   [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md).
-- A future **docs-only** PR may either add a **manual local validation checklist** for the
-  state machine, or be a **helper prototype cleanup / docs maintenance PR** (safe cleanup
-  only).
+- The manual local validation checklist is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md).
+- The latest H2 docs navigation / status is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md),
+  and the H2 design readiness review in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
+- The next safe step is helper prototype cleanup / docs maintenance.
+- Implementation path: only under explicit project-owner approval, prepare a separate scoped
+  H2 prototype implementation-gate prompt.
 - No implementation until explicit owner approval is recorded.
 
 ## Cross-References
