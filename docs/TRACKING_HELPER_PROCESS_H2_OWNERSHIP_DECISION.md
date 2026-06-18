@@ -149,6 +149,9 @@ Before any H2 implementation PR:
 
 Suggested next PR title: `docs: add helper H2 IPC decision`.
 
+For the first H2 IPC direction, see
+[`docs/TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md`](TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_PREPARATION.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_PREPARATION.md)

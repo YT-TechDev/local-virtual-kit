@@ -224,6 +224,10 @@ A future H2 implementation PR may proceed only when all of the following are tru
   - a **helper prototype cleanup / docs maintenance PR** (safe cleanup only).
 - No implementation until explicit owner approval is recorded.
 
+The first H2 IPC direction is now captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md`](TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md)
+(prefer a Native Core-owned private parent-child pipe).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H1_CLOSEOUT_REVIEW.md`](TRACKING_HELPER_PROCESS_H1_CLOSEOUT_REVIEW.md)
