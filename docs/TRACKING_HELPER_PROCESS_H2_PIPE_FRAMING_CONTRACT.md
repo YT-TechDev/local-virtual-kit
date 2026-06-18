@@ -206,12 +206,12 @@ Before any implementation of this contract:
 ## Next Recommended Step
 
 - The project owner reviews this proposed pipe framing contract.
-- A future **docs-only** PR may add a startup / shutdown handshake and helper state-machine
-  memo built on this contract.
+- The proposed startup / shutdown handshake and helper state machine is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md`](TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md).
+- A future **docs-only** PR may either add an **automated-check plan / test-vector memo** for
+  the state machine, or be a **helper prototype cleanup / docs maintenance PR** (safe cleanup
+  only).
 - No implementation until explicit owner approval is recorded.
-
-The proposed startup / shutdown handshake and helper state machine is captured in
-[`docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md`](TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md).
 
 ## Cross-References
 
