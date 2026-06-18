@@ -258,10 +258,15 @@ bool runFailureCase(const std::string& helperPath) {
   return true;
 }
 
-// Helper timeout / silence: not_started -> launching -> waiting_for_ready ->
-// timed_out -> fallback. Captured stdout before forced termination is not
-// deterministic, so this case asserts only launch + timeout evidence (matching
-// the existing supervision smoke), not intermediate stdout markers.
+// Helper timeout / silence after running: not_started -> launching ->
+// waiting_for_ready -> ready -> running -> timed_out -> fallback. With
+// --interval-ms 1000 the synthetic helper emits and flushes its ready line and
+// the first result before its first sleep (synthetic_helper_main.cpp:
+// writeReadyLine -> writeResultLine -> std::cout.flush() -> sleep), so those
+// markers are deterministically captured before the bounded timeout fires. This
+// case therefore models a liveness/silence timeout after the helper reached
+// running, not a pure startup timeout. ready/running are appended only when
+// their markers are present.
 bool runTimeoutCase(const std::string& helperPath) {
   const HelperProcessRunResult run = runHelperProcessForSmoke(
       helperPath, {"--frames", "5", "--interval-ms", "1000"}, kHangTimeoutMs);
@@ -274,6 +279,13 @@ bool runTimeoutCase(const std::string& helperPath) {
   }
   path.push_back(HelperState::launching);
   path.push_back(HelperState::waiting_for_ready);
+
+  if (contains(run.stdoutText, "\"type\":\"ready\"")) {
+    path.push_back(HelperState::ready);
+  }
+  if (contains(run.stdoutText, "\"type\":\"result\"")) {
+    path.push_back(HelperState::running);
+  }
 
   if (!run.timedOut) {
     reportFailure("timeout", "expected timeout to be detected");
@@ -289,7 +301,8 @@ bool runTimeoutCase(const std::string& helperPath) {
 
   const std::vector<HelperState> expected = {
       HelperState::not_started, HelperState::launching,
-      HelperState::waiting_for_ready, HelperState::timed_out,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::timed_out,
       HelperState::fallback};
   if (!checkPath("timeout", path, expected)) {
     return false;
