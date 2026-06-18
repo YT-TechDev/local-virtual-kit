@@ -184,8 +184,11 @@ Before implementing any of these checks or tests:
 ## Next Recommended Step
 
 - The project owner reviews this automated-check plan and the test vectors.
-- A future **docs-only** PR may add a **manual local validation checklist** for the state
-  machine, or a helper prototype cleanup / docs maintenance PR.
+- The manual local validation checklist is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md).
+- A future **docs-only** PR may add **helper prototype cleanup / docs maintenance**, or — only
+  under explicit owner approval — begin a **scoped H2 prototype design-to-implementation
+  gate**.
 - No implementation until explicit owner approval is recorded.
 
 ## Cross-References
