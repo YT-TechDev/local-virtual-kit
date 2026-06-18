@@ -142,12 +142,11 @@ validation plan documented.
 ## Next Recommended Step
 
 - The project owner reviews this first H2 IPC direction.
-- A future H2 design PR may detail the **pipe message / framing contract** (message types,
-  bounds, error handling), still **docs-only**.
+- The proposed pipe message / framing contract is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
+- A future **docs-only** PR may add a **startup / shutdown handshake and helper state-machine
+  memo** built on the framing contract.
 - No implementation until explicit owner approval is recorded.
-
-The proposed pipe message / framing contract is captured in
-[`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
 
 ## Cross-References
 

@@ -222,14 +222,13 @@ A future H2 implementation PR may proceed only when all of the following are tru
   [`docs/TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md`](TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md)
   (prefer a Native Core-owned private parent-child pipe), so it is no longer an open choice
   for the next PR.
+- The proposed pipe message / framing contract is now captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
 - The next possible **docs-only** PR may either:
-  - detail the Native Core-owned private parent-child pipe **message / framing contract**,
-    including message types, bounds, error handling, and fallback behavior, or
+  - add a **startup / shutdown handshake and helper state-machine memo** built on the framing
+    contract, or
   - be a **helper prototype cleanup / docs maintenance PR** (safe cleanup only).
 - No implementation until explicit owner approval is recorded.
-
-The proposed pipe message / framing contract is now captured in
-[`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
 
 ## Cross-References
 
