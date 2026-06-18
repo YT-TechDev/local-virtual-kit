@@ -151,6 +151,9 @@ Mirrors the manual local validation checklist (`docs/TRACKING_HELPER_PROCESS_H2_
   gates above.
 - **Do not implement H2 in this PR.**
 
+For an H2 docs navigation / status index, see
+[`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_PREPARATION.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_PREPARATION.md)
