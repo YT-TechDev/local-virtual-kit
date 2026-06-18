@@ -212,9 +212,12 @@ A future H2 implementation PR may proceed only when all of the following are tru
 ## 13. Next Recommended Step
 
 - The project owner reviews this H2 design preparation memo.
+- The frame ownership decision is now captured separately in
+  [`docs/TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md`](TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md)
+  (prefer Native Core camera ownership), so it is no longer an open choice for the next PR.
 - The next PR should be either:
-  - an **H2 design decision PR** that selects one candidate IPC / ownership approach, still
-    **docs-only**, or
+  - an **H2 IPC decision PR**, still **docs-only**, that evaluates bounded local IPC
+    candidates for a future Native Core → helper frame handoff, or
   - a **helper prototype cleanup / docs maintenance PR** (safe cleanup only).
 - No implementation until explicit owner approval is recorded.
 
