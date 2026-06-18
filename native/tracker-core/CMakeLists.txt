@@ -37,6 +37,9 @@ add_executable(lvk-tracker-core
   src/face_detector.cpp
   src/face_tracking_pipeline.cpp
   src/frame_preprocessor.cpp
+  src/helper_process_supervisor.cpp
+  src/helper_runtime_smoke.cpp
+  src/helper_tracking_result.cpp
   src/main.cpp
   src/motion_frame_writer.cpp
   src/tracker.cpp
