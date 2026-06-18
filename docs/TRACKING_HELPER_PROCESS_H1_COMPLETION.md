@@ -66,6 +66,9 @@ H1a-H1e are complete. Strict H1 closeout can now be reviewed by the project owne
 
 Recommended next step: project-owner H1 closeout review.
 
+For the closeout review memo, see
+[`docs/TRACKING_HELPER_PROCESS_H1_CLOSEOUT_REVIEW.md`](TRACKING_HELPER_PROCESS_H1_CLOSEOUT_REVIEW.md).
+
 H1e now provides the dedicated integrated smoke evidence for launch failure, helper non-zero exit,
 and helper timeout fallback behavior without changing the default runtime and without adding
 production restart/backoff.
