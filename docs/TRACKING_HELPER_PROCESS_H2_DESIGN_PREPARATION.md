@@ -168,7 +168,10 @@ Required stance:
 
 Open questions to resolve in a future H2 design decision:
 
-1. Which component owns camera capture?
+1. Given the recorded decision that Native Core owns camera capture (see
+   [`docs/TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md`](TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md)),
+   how does that ownership model constrain the future IPC design for the Native Core →
+   helper frame handoff?
 2. Which IPC method best satisfies local-only and platform-security requirements?
 3. What is the maximum frame size and rate that H2 must handle?
 4. What backpressure policy is acceptable?
