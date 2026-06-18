@@ -28,15 +28,15 @@ terms, H1 means:
 
 ## H1 Slice Status
 
-| Slice | PR   | Status   | What it proved                                                                                                                                                                                                             | Not proved                                                                   |
-| ----- | ---- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| H1a   | #125 | Complete | Standalone `lvk-synthetic-helper` emits a synthetic internal stdout contract with safe stderr diagnostics and no MotionFrame output.                                                                                       | Native Core runtime use, process supervision, or fallback behavior.          |
-| H1b   | #126 | Complete | Native Core-internal helper result values map into the existing `TrackingSample` / MotionFrame shape with clamping and helper-only fields dropped.                                                                         | Process supervision, live helper stdout parsing, or runtime wiring.          |
-| H1c   | #127 | Complete | Standalone child-process supervision smoke covers normal completion, helper non-zero failure, and timeout/termination while keeping child output private.                                                                  | Real tracker runtime wiring or integrated runtime fallback policy.           |
-| H1d   | #128 | Complete | Explicit opt-in `lvk-tracker-core --helper-runtime-smoke <helper-path>` launches the synthetic helper, keeps helper stdout/stderr private, and emits only existing MotionFrame JSON on tracker stdout for the normal path. | Runtime failure/timeout fallback behavior through the integrated smoke path. |
+| Slice | PR   | Status   | What it proved                                                                                                                                                                                                                     | Not proved                                                                                             |
+| ----- | ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| H1a   | #125 | Complete | Standalone `lvk-synthetic-helper` emits a synthetic internal stdout contract with safe stderr diagnostics and no MotionFrame output.                                                                                               | Native Core runtime use, process supervision, or fallback behavior.                                    |
+| H1b   | #126 | Complete | Native Core-internal helper result values map into the existing `TrackingSample` / MotionFrame shape with clamping and helper-only fields dropped.                                                                                 | Process supervision, live helper stdout parsing, or runtime wiring.                                    |
+| H1c   | #127 | Complete | Standalone child-process supervision smoke covers normal completion, helper non-zero failure, and timeout/termination while keeping child output private.                                                                          | Real tracker runtime wiring or integrated runtime fallback policy.                                     |
+| H1d   | #128 | Complete | Explicit opt-in `lvk-tracker-core --helper-runtime-smoke <helper-path>` launches the synthetic helper, keeps helper stdout/stderr private, and emits only existing MotionFrame JSON on tracker stdout for the normal path.         | Runtime failure/timeout fallback behavior through the integrated smoke path.                           |
+| H1e   | #130 | Complete | Explicit opt-in `--helper-runtime-smoke-case launch-failure\|nonzero-exit\|timeout` validates safe fallback MotionFrame output for expected helper launch failure, non-zero exit, and timeout while keeping helper output private. | Production restart/backoff, graceful stop control, real frame access, or production backend selection. |
 
-H1a-H1d are complete. Strict H1 closeout should remain open until the project owner decides whether
-runtime failure/timeout fallback must be proven before H1 is closed.
+H1a-H1e are complete. Strict H1 closeout can now be reviewed by the project owner; restart/backoff, graceful stop control, H2 real-frame access, and production backend selection remain out of scope.
 
 ## H1 Completion Checklist
 
@@ -55,25 +55,23 @@ runtime failure/timeout fallback must be proven before H1 is closed.
 
 ### Not yet complete / requires decision
 
-- [ ] Runtime failure path from `--helper-runtime-smoke` is not yet validated through a dedicated
-      checker.
-- [ ] Runtime timeout path from `--helper-runtime-smoke` is not yet validated through a dedicated
-      checker.
-- [ ] Runtime fallback MotionFrame policy is not yet proven in the integrated runtime smoke.
+- [x] Runtime failure path from `--helper-runtime-smoke` is validated through a dedicated checker.
+- [x] Runtime timeout path from `--helper-runtime-smoke` is validated through a dedicated checker.
+- [x] Runtime fallback MotionFrame policy is proven in the integrated runtime smoke.
 - [ ] Restart/backoff remains out of scope and should not be added unless explicitly approved.
 - [ ] Graceful stop control over stdin is not implemented; current H1 uses bounded helper runs and
       termination smoke only.
 
-## Recommended Next Implementation
+## Recommended Next Step
 
-Recommended next implementation: **H1e — helper runtime failure/timeout fallback smoke**.
+Recommended next step: project-owner H1 closeout review.
 
-Goal: extend only the explicit smoke path so a checker can validate launch failure, helper non-zero
-exit, and helper timeout behavior without changing the default runtime and without adding production
-restart/backoff.
+H1e now provides the dedicated integrated smoke evidence for launch failure, helper non-zero exit,
+and helper timeout fallback behavior without changing the default runtime and without adding
+production restart/backoff.
 
-This recommendation is limited to H1 closeout evidence. It is not an H2 implementation plan and does
-not approve real frame access.
+This closeout review is limited to H1 evidence. It is not an H2 implementation plan and does not
+approve real frame access.
 
 ## H2 Entry Gates
 

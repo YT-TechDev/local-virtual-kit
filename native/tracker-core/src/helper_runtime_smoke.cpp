@@ -13,6 +13,7 @@ namespace lvk::tracker {
 namespace {
 
 constexpr int kHelperRuntimeSmokeTimeoutMs = 5000;
+constexpr int kHelperRuntimeSmokeHangTimeoutMs = 200;
 
 bool containsToken(const std::string& line, const std::string& token) {
   return line.find(token) != std::string::npos;
@@ -115,17 +116,85 @@ void writeDiagnostic(std::ostream& output, const std::string& message) {
   output << "[helper-runtime-smoke] " << message << "\n";
 }
 
+void writeFallbackMotionFrame(std::ostream& output) {
+  writeMotionFrameJson(
+      output,
+      TrackingSample{
+          0,
+          TrackingStatus::Lost,
+          0.0,
+          Vector3{0.0, 0.0, 0.0},
+          EulerRotation{0.0, 0.0, 0.0},
+          1.0,
+          1.0,
+          Vector2{0.0, 0.0},
+          0.0,
+          0.0,
+      });
+}
+
+bool handleExpectedFailure(
+    const HelperProcessRunResult& helperRun,
+    HelperRuntimeSmokeCase smokeCase,
+    std::ostream& motionFrameOutput,
+    std::ostream& diagnosticsOutput) {
+  if (smokeCase == HelperRuntimeSmokeCase::LaunchFailure &&
+      (!helperRun.launched ||
+       (helperRun.launched && !helperRun.timedOut &&
+        helperRun.exitCode == 127))) {
+    writeFallbackMotionFrame(motionFrameOutput);
+    writeDiagnostic(
+        diagnosticsOutput, "helper launch failed; emitted fallback frame");
+    return true;
+  }
+  if (smokeCase == HelperRuntimeSmokeCase::NonzeroExit &&
+      helperRun.launched && !helperRun.timedOut && helperRun.exitCode != 0) {
+    writeFallbackMotionFrame(motionFrameOutput);
+    writeDiagnostic(
+        diagnosticsOutput, "helper exited non-zero; emitted fallback frame");
+    return true;
+  }
+  if (smokeCase == HelperRuntimeSmokeCase::Timeout &&
+      helperRun.launched && helperRun.timedOut) {
+    writeFallbackMotionFrame(motionFrameOutput);
+    writeDiagnostic(diagnosticsOutput, "helper timed out; emitted fallback frame");
+    return true;
+  }
+  return false;
+}
+
+std::vector<std::string> buildHelperArguments(
+    const HelperRuntimeSmokeOptions& options) {
+  if (options.smokeCase == HelperRuntimeSmokeCase::NonzeroExit) {
+    return {"--frames", std::to_string(options.frameCount), "--fail-after", "1"};
+  }
+  if (options.smokeCase == HelperRuntimeSmokeCase::Timeout) {
+    return {"--frames", "5", "--interval-ms", "1000"};
+  }
+  return {"--frames", std::to_string(options.frameCount)};
+}
+
+int smokeTimeoutMs(HelperRuntimeSmokeCase smokeCase) {
+  return smokeCase == HelperRuntimeSmokeCase::Timeout
+             ? kHelperRuntimeSmokeHangTimeoutMs
+             : kHelperRuntimeSmokeTimeoutMs;
+}
+
 }  // namespace
 
 int runHelperRuntimeSmoke(
-    const std::string& helperPath,
-    int frameCount,
+    const HelperRuntimeSmokeOptions& options,
     std::ostream& motionFrameOutput,
     std::ostream& diagnosticsOutput) {
   const HelperProcessRunResult helperRun = runHelperProcessForSmoke(
-      helperPath,
-      {"--frames", std::to_string(frameCount)},
-      kHelperRuntimeSmokeTimeoutMs);
+      options.helperPath,
+      buildHelperArguments(options),
+      smokeTimeoutMs(options.smokeCase));
+
+  if (handleExpectedFailure(
+          helperRun, options.smokeCase, motionFrameOutput, diagnosticsOutput)) {
+    return 0;
+  }
 
   if (!helperRun.launched) {
     writeDiagnostic(diagnosticsOutput, "helper launch failed");
@@ -211,7 +280,7 @@ int runHelperRuntimeSmoke(
     writeDiagnostic(diagnosticsOutput, "helper stopped line missing");
     return 1;
   }
-  if (resultCount != frameCount) {
+  if (resultCount != options.frameCount) {
     writeDiagnostic(diagnosticsOutput, "helper result count mismatch");
     return 1;
   }
