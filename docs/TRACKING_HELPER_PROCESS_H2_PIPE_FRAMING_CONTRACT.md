@@ -210,6 +210,9 @@ Before any implementation of this contract:
   memo built on this contract.
 - No implementation until explicit owner approval is recorded.
 
+The proposed startup / shutdown handshake and helper state machine is captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md`](TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md`](TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md)
