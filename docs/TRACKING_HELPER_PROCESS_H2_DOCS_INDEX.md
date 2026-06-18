@@ -15,9 +15,11 @@ order, the current design state, and the one authoritative next step.
 The H2 design **readiness review** is the authoritative latest phase status:
 [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
 The earlier H2 point-in-time next-step notes have been reconciled. For current phase status,
-use this index and the H2 design readiness review. The next phase may prepare a scoped H2
-prototype implementation-gate prompt only under explicit project-owner approval. No H2
-implementation is approved by this document.
+use this index and the H2 design readiness review. The scoped H2 prototype
+implementation-gate is now documented in
+[`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md);
+any future scoped prototype implementation still requires explicit project-owner approval. No
+H2 implementation is approved by this document.
 
 ## H2 Docs Reading Order
 
