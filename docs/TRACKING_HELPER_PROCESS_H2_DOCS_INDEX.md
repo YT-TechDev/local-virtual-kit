@@ -45,6 +45,9 @@ H2 implementation is approved by this document.
 10. [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)
     — owner decision approving a future synthetic-only scoped prototype PR, bounded by the gate
     (records approval only; implements nothing).
+11. [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md)
+    — closeout for the first implemented synthetic-only H2 slice (PR #147,
+    `lvk-helper-h2-state-machine-smoke`); records implementation state, not production integration.
 
 Background:
 
@@ -58,10 +61,18 @@ Background:
 ## Current H2 Design State
 
 - The H2 design-doc phase is complete.
-- No H2 prototype is implemented.
+- The first synthetic-only H2 state-machine smoke is implemented (PR #147):
+  `lvk-helper-h2-state-machine-smoke`, a standalone Native Core executable that validates the
+  normal / failure / timeout-silence lifecycle state paths using the existing synthetic helper
+  and supervisor. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md).
+- No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
+  (the helper is not wired into it).
+- No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
+  change exists.
 - Camera ownership, the first IPC direction, the framing contract, the state machine, the
-  automated-check goals / test vectors, and the manual-validation claim rules are all defined
-  in **documentation only**.
+  automated-check goals / test vectors, and the manual-validation claim rules remain **design
+  documents**.
 
 ## Safety Boundaries
 
@@ -101,17 +112,17 @@ These boundaries are preserved across all H2 docs:
 
 ## Next Recommended Step
 
-- **Prepared gate:** the scoped H2 prototype implementation-gate is documented in
-  [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
-  (intended scope, anticipated changed files, and the gates a future implementation PR must
-  satisfy). It grants no approval.
-- **Owner decision recorded:** the project owner has approved _starting_ a future scoped H2
-  prototype implementation PR (synthetic-only, bounded by the gate) in
-  [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md).
-- **Next possible step:** a future scoped H2 prototype implementation PR. **No implementation
-  exists yet.**
-- That future PR must satisfy **both** the implementation gate and the owner decision, and must
-  remain synthetic-only with all safety boundaries preserved.
+- **First slice merged:** the first synthetic-only H2 state-machine smoke is implemented and
+  merged (PR #147), recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md).
+  It satisfied the implementation gate
+  ([`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md))
+  and the owner decision
+  ([`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)).
+- **Next safe step:** either another small synthetic-only H2 implementation slice, or a docs
+  decision / gate for the next H2 slice before any broader integration.
+- No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
+  access until separately scoped and approved. All safety boundaries remain preserved.
 
 ## Cross-References
 
@@ -121,6 +132,8 @@ These boundaries are preserved across all H2 docs:
   — scoped prototype implementation-gate (intended scope, anticipated changed files, gates).
 - [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)
   — owner decision approving a future synthetic-only scoped prototype PR (bounded by the gate).
+- [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md)
+  — closeout for the first implemented synthetic-only H2 slice (PR #147).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
