@@ -57,6 +57,8 @@ struct TrackerOptions {
   lvk::tracker::CameraSourceOptions camera;
   std::string faceDetectorName = "noop";
   std::string helperRuntimeSmokePath;
+  lvk::tracker::HelperRuntimeSmokeCase helperRuntimeSmokeCase =
+      lvk::tracker::HelperRuntimeSmokeCase::Normal;
   std::string faceCascadePath;
 };
 
@@ -142,7 +144,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
-            "[--helper-runtime-smoke PATH]\n";
+            "[--helper-runtime-smoke PATH] [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -171,6 +173,7 @@ void printUsage(std::ostream &output) {
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
+  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case; supported values are normal, launch-failure, nonzero-exit, and timeout. Defaults to normal.\n";
 }
 
 void handleStopSignal(int) {
@@ -474,6 +477,38 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       continue;
     }
 
+    if (argument == "--helper-runtime-smoke-case") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --helper-runtime-smoke-case.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      const std::string smokeCase = argv[argIndex + 1];
+      if (smokeCase == "normal") {
+        options.helperRuntimeSmokeCase =
+            lvk::tracker::HelperRuntimeSmokeCase::Normal;
+      } else if (smokeCase == "launch-failure") {
+        options.helperRuntimeSmokeCase =
+            lvk::tracker::HelperRuntimeSmokeCase::LaunchFailure;
+      } else if (smokeCase == "nonzero-exit") {
+        options.helperRuntimeSmokeCase =
+            lvk::tracker::HelperRuntimeSmokeCase::NonzeroExit;
+      } else if (smokeCase == "timeout") {
+        options.helperRuntimeSmokeCase =
+            lvk::tracker::HelperRuntimeSmokeCase::Timeout;
+      } else {
+        std::cerr << "Unsupported --helper-runtime-smoke-case: " << smokeCase
+                  << ". Supported values are normal, launch-failure, "
+                  << "nonzero-exit, and timeout.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      ++argIndex;
+      continue;
+    }
+
     if (argument == "--face-detector") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --face-detector.\n";
@@ -545,8 +580,11 @@ int main(int argc, char *argv[]) {
 
   if (!options.helperRuntimeSmokePath.empty()) {
     return lvk::tracker::runHelperRuntimeSmoke(
-        options.helperRuntimeSmokePath,
-        options.frameCount,
+        lvk::tracker::HelperRuntimeSmokeOptions{
+            options.helperRuntimeSmokePath,
+            options.frameCount,
+            options.helperRuntimeSmokeCase,
+        },
         std::cout,
         std::cerr);
   }
