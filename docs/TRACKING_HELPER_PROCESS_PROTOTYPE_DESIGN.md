@@ -77,6 +77,8 @@ A staged plan, each phase gated by explicit review before the next:
   emits compact **synthetic** internal results (no camera, no model, no raw frames). Proves process
   lifecycle, supervision, the internal result shape, mapping to MotionFrame, fallback, and
   diagnostics. This is the first implementation spike, and only if separately approved.
+  For the current implementation status and H1 closeout checklist, see
+  [`docs/TRACKING_HELPER_PROCESS_H1_COMPLETION.md`](TRACKING_HELPER_PROCESS_H1_COMPLETION.md).
 - **H2 — Local-frame-access design PR (future, explicit).** Only if real helper inference needs raw
   frames, pixels, or tensors. Requires the full local-only / no-persistence / backpressure / crash /
   diagnostics / IPC-security proof (see §13). Not approved here.
