@@ -193,6 +193,9 @@ Before any manual validation run:
   under explicit owner approval — begin a scoped H2 prototype design-to-implementation gate.
 - No implementation until explicit owner approval is recorded.
 
+The H2 design-doc phase readiness review is captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md)
