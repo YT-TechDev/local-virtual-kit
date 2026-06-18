@@ -42,6 +42,9 @@ H2 implementation is approved by this document.
 9. [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
    — scoped prototype implementation-gate: intended scope, anticipated changed files, and the
    gates a future implementation PR must satisfy (grants no approval).
+10. [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)
+    — owner decision approving a future synthetic-only scoped prototype PR, bounded by the gate
+    (records approval only; implements nothing).
 
 Background:
 
@@ -102,10 +105,13 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
   (intended scope, anticipated changed files, and the gates a future implementation PR must
   satisfy). It grants no approval.
-- **Next safe step:** helper prototype cleanup / docs maintenance.
-- **Implementation path:** only under explicit project-owner approval, a future PR may begin
-  the scoped prototype after satisfying the gate above.
-- No implementation until explicit owner approval is recorded.
+- **Owner decision recorded:** the project owner has approved _starting_ a future scoped H2
+  prototype implementation PR (synthetic-only, bounded by the gate) in
+  [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md).
+- **Next possible step:** a future scoped H2 prototype implementation PR. **No implementation
+  exists yet.**
+- That future PR must satisfy **both** the implementation gate and the owner decision, and must
+  remain synthetic-only with all safety boundaries preserved.
 
 ## Cross-References
 
@@ -113,6 +119,8 @@ These boundaries are preserved across all H2 docs:
   — authoritative latest H2 phase status.
 - [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
   — scoped prototype implementation-gate (intended scope, anticipated changed files, gates).
+- [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)
+  — owner decision approving a future synthetic-only scoped prototype PR (bounded by the gate).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
