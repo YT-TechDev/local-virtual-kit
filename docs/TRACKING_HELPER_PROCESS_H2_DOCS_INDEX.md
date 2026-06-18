@@ -37,6 +37,9 @@ implementation is approved by this document.
    — manual local validation checklist and safe-evidence / claim rules.
 8. [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
    — H2 design-doc phase closeout / readiness review (authoritative latest status).
+9. [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
+   — scoped prototype implementation-gate: intended scope, anticipated changed files, and the
+   gates a future implementation PR must satisfy (grants no approval).
 
 Background:
 
@@ -93,15 +96,21 @@ These boundaries are preserved across all H2 docs:
 
 ## Next Recommended Step
 
+- **Prepared gate:** the scoped H2 prototype implementation-gate is documented in
+  [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
+  (intended scope, anticipated changed files, and the gates a future implementation PR must
+  satisfy). It grants no approval.
 - **Next safe step:** helper prototype cleanup / docs maintenance.
-- **Implementation path:** only under explicit project-owner approval, prepare a separate
-  scoped H2 prototype implementation-gate prompt.
+- **Implementation path:** only under explicit project-owner approval, a future PR may begin
+  the scoped prototype after satisfying the gate above.
 - No implementation until explicit owner approval is recorded.
 
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
   — authoritative latest H2 phase status.
+- [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
+  — scoped prototype implementation-gate (intended scope, anticipated changed files, gates).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
