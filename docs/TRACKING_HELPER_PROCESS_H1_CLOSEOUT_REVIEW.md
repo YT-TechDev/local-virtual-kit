@@ -101,6 +101,9 @@ Two safe next options, neither of which adds raw frame access or production back
 Both options stay within H1 boundaries. Neither approves H2, H3, a production backend, or
 raw frame / pixel / tensor access.
 
+For H2 design gates and open questions, see
+[`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_PREPARATION.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_PREPARATION.md).
+
 ## 7. Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H1_COMPLETION.md`](TRACKING_HELPER_PROCESS_H1_COMPLETION.md)
