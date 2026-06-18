@@ -2,6 +2,7 @@
 #include "face_detector.h"
 #include "face_tracking_pipeline.h"
 #include "frame_preprocessor.h"
+#include "helper_runtime_smoke.h"
 #include "motion_frame_writer.h"
 #include "tracker.h"
 
@@ -55,6 +56,7 @@ struct TrackerOptions {
   int pipelineStatusInterval = kDefaultPipelineStatusInterval;
   lvk::tracker::CameraSourceOptions camera;
   std::string faceDetectorName = "noop";
+  std::string helperRuntimeSmokePath;
   std::string faceCascadePath;
 };
 
@@ -139,7 +141,8 @@ void printUsage(std::ostream &output) {
             "[--log-pipeline-status] [--pipeline-status-interval N] "
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
-            "[--face-detector noop|opencv] [--face-cascade PATH]\n";
+            "[--face-detector noop|opencv] [--face-cascade PATH] "
+            "[--helper-runtime-smoke PATH]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -167,6 +170,7 @@ void printUsage(std::ostream &output) {
          << kMaxCameraFps << ".\n";
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
+  output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
 }
 
 void handleStopSignal(int) {
@@ -458,6 +462,17 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       continue;
     }
 
+    if (argument == "--helper-runtime-smoke") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --helper-runtime-smoke.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.helperRuntimeSmokePath = argv[argIndex + 1];
+      ++argIndex;
+      continue;
+    }
 
     if (argument == "--face-detector") {
       if (argIndex + 1 >= argc) {
@@ -526,6 +541,14 @@ int main(int argc, char *argv[]) {
   TrackerOptions options;
   if (!parseTrackerOptions(argc, argv, options)) {
     return 1;
+  }
+
+  if (!options.helperRuntimeSmokePath.empty()) {
+    return lvk::tracker::runHelperRuntimeSmoke(
+        options.helperRuntimeSmokePath,
+        options.frameCount,
+        std::cout,
+        std::cerr);
   }
 
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);
