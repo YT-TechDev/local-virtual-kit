@@ -131,3 +131,27 @@ if(MSVC)
 else()
   target_compile_options(lvk-helper-process-supervision-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# H2 synthetic state-machine smoke (first scoped H2 prototype slice). Standalone
+# executable that launches lvk-synthetic-helper under the existing bounded helper
+# process supervisor and reconstructs the designed H2 helper lifecycle state path
+# (not_started -> launching -> waiting_for_ready -> ready -> running -> exited,
+# plus failure/timeout fallback paths) from the supervised run result. Captured
+# helper stdout/stderr stay private and are never forwarded to public stdout;
+# only safe [h2-state-machine-smoke] diagnostics go to stderr. Synthetic only:
+# no OpenCV, no camera, no temporary files, no new dependency, and it is NOT
+# wired into the lvk-tracker-core runtime. See
+# docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md and
+# docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md.
+add_executable(lvk-helper-h2-state-machine-smoke
+  src/helper_h2_state_machine_smoke.cpp
+  src/helper_process_supervisor.cpp
+)
+
+target_compile_features(lvk-helper-h2-state-machine-smoke PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-helper-h2-state-machine-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-helper-h2-state-machine-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
