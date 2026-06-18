@@ -228,6 +228,9 @@ A future H2 implementation PR may proceed only when all of the following are tru
   - be a **helper prototype cleanup / docs maintenance PR** (safe cleanup only).
 - No implementation until explicit owner approval is recorded.
 
+The proposed pipe message / framing contract is now captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H1_CLOSEOUT_REVIEW.md`](TRACKING_HELPER_PROCESS_H1_CLOSEOUT_REVIEW.md)

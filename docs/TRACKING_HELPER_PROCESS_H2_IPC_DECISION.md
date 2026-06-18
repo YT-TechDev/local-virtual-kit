@@ -146,6 +146,9 @@ validation plan documented.
   bounds, error handling), still **docs-only**.
 - No implementation until explicit owner approval is recorded.
 
+The proposed pipe message / framing contract is captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md`](TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md)
