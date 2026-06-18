@@ -146,18 +146,22 @@ Mirrors the manual local validation checklist (`docs/TRACKING_HELPER_PROCESS_H2_
 ## Recommended Next Step
 
 - **Option A:** a helper prototype cleanup / docs maintenance PR (safe cleanup only).
-- **Option B:** only if the project owner explicitly approves, prepare a separate **scoped H2
-  prototype implementation-gate prompt** that documents exact scope, changed files, and the
-  gates above.
+- **Option B:** the scoped H2 prototype implementation-gate is now documented in
+  [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
+  (exact scope, anticipated changed files, and the gates above); a future scoped H2 prototype
+  implementation may proceed only under explicit project-owner approval after satisfying that
+  gate.
 - **Do not implement H2 in this PR.**
 
 For an H2 docs navigation / status index, see
 [`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md).
 
 The earlier H2 point-in-time next-step notes have been reconciled. For current phase status,
-use this readiness review and the H2 docs index. The next phase may prepare a scoped H2
-prototype implementation-gate prompt only under explicit project-owner approval. No H2
-implementation is approved by this document.
+use this readiness review and the H2 docs index. The scoped H2 prototype
+implementation-gate is now documented in
+[`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md);
+any future scoped prototype implementation still requires explicit project-owner approval. No
+H2 implementation is approved by this document.
 
 ## Cross-References
 
