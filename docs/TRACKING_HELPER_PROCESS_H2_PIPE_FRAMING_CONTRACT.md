@@ -208,9 +208,15 @@ Before any implementation of this contract:
 - The project owner reviews this proposed pipe framing contract.
 - The proposed startup / shutdown handshake and helper state machine is captured in
   [`docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md`](TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md).
-- A future **docs-only** PR may either add an **automated-check plan / test-vector memo** for
-  the state machine, or be a **helper prototype cleanup / docs maintenance PR** (safe cleanup
-  only).
+- The automated-check plan and state-machine test vectors are captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md).
+- The latest H2 docs navigation / status is captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md),
+  and the H2 design readiness review in
+  [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
+- The next safe step is helper prototype cleanup / docs maintenance.
+- Implementation path: only under explicit project-owner approval, prepare a separate scoped
+  H2 prototype implementation-gate prompt.
 - No implementation until explicit owner approval is recorded.
 
 ## Cross-References
