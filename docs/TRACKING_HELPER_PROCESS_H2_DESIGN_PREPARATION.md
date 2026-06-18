@@ -82,6 +82,9 @@ Recommended stance:
   proves it is both safer and simpler than Native Core ownership.
 - No option is approved for implementation in this PR.
 
+For the ownership decision, see
+[`docs/TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md`](TRACKING_HELPER_PROCESS_H2_OWNERSHIP_DECISION.md).
+
 ## 5. IPC Options to Evaluate
 
 High-level evaluation only; **no IPC option is approved by this PR**.
