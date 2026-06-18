@@ -218,8 +218,11 @@ Before any implementation of this state machine:
 ## Next Recommended Step
 
 - The project owner reviews this proposed handshake and state machine.
-- A future **docs-only** PR may add an automated-check plan / test-vector memo for the state
-  machine, or a helper prototype cleanup / docs maintenance PR.
+- The automated-check plan and state-machine test vectors are captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md).
+- A future **docs-only** PR may either add a **manual local validation checklist** for the
+  state machine, or be a **helper prototype cleanup / docs maintenance PR** (safe cleanup
+  only).
 - No implementation until explicit owner approval is recorded.
 
 ## Cross-References
