@@ -188,6 +188,9 @@ Before implementing any of these checks or tests:
   machine, or a helper prototype cleanup / docs maintenance PR.
 - No implementation until explicit owner approval is recorded.
 
+The manual local validation checklist is captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md`](TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md)
