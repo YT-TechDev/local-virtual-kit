@@ -222,6 +222,9 @@ Before any implementation of this state machine:
   machine, or a helper prototype cleanup / docs maintenance PR.
 - No implementation until explicit owner approval is recorded.
 
+The automated-check plan and state-machine test vectors are captured in
+[`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md).
+
 ## Cross-References
 
 - [`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md)
