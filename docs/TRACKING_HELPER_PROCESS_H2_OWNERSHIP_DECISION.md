@@ -142,12 +142,12 @@ Before any H2 implementation PR:
 
 ## 10. Next Recommended Step
 
-- The next PR should be an **H2 IPC decision PR, still docs-only**.
-- It should evaluate a short list of local IPC candidates for a bounded Native Core →
-  helper frame handoff.
-- It must still **not** implement raw frame access.
-
-Suggested next PR title: `docs: add helper H2 IPC decision`.
+- The first H2 IPC direction is now captured in
+  [`docs/TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md`](TRACKING_HELPER_PROCESS_H2_IPC_DECISION.md)
+  (prefer a Native Core-owned private parent-child pipe).
+- A future **docs-only** PR may detail the pipe **message / framing contract**.
+- Raw frame access and implementation remain **not approved**; no implementation until
+  explicit owner approval is recorded.
 
 ## Cross-References
 
