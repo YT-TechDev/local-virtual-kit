@@ -77,6 +77,9 @@ H2 implementation is approved by this document.
     `stop` handshake is designed-only (not implemented), lists the decisions that must be settled
     before implementation, and keeps shutdown / control gated before production wiring; implements
     nothing.
+19. [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md)
+    — docs-only plan for the smallest future synthetic shutdown smoke slice; records candidate
+    vectors and invariants while leaving shutdown / control implementation unapproved.
 
 Background:
 
@@ -125,6 +128,9 @@ Background:
   remains designed-only (not implemented), and shutdown / control stays gated before production
   wiring. See
   [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md).
+- The synthetic shutdown smoke plan is docs-only; it records candidate future vectors and invariants,
+  but shutdown / control implementation remains unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -198,6 +204,9 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md).
   It implements nothing; the `stop` handshake remains designed-only, and shutdown / control stays
   gated before production wiring.
+- **Synthetic shutdown smoke plan added:** the next step is read-only review of
+  [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md)
+  before any shutdown / control implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -226,6 +235,8 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md)
   — scope / gate for a future helper shutdown / stop / control-channel slice (designed-only `stop`
   handshake; decisions required before implementation).
+- [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md)
+  — docs-only plan for a future synthetic shutdown smoke slice; implementation remains unapproved.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
