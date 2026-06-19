@@ -173,5 +173,3 @@ The following remain **not implemented / not approved**:
   — closeout for the final helper-output error vector in the completed synthetic smoke group.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback behavior.
 - [`docs/MOTION_PROTOCOL.md`](MOTION_PROTOCOL.md) — MotionFrame schema (`schemaVersion: 1`).
-  </content>
-  </invoke>
