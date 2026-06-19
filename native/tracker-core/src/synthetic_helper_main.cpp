@@ -44,6 +44,7 @@ struct HelperOptions {
   bool emitUnknownType = false;
   bool emitMalformedLine = false;
   bool emitOversizedLine = false;
+  bool emitGracefulShutdown = false;
 };
 
 bool parseIntInRange(
@@ -69,7 +70,8 @@ bool parseIntInRange(
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
             "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
-            "[--emit-oversized-line] [--fail-after N]\n";
+            "[--emit-oversized-line] [--emit-graceful-shutdown] "
+            "[--fail-after N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -91,6 +93,13 @@ void printUsage(std::ostream &output) {
             "oversized helper-output line (a marker plus safe filler, a few KB) "
             "after the ready line; the helper otherwise completes normally. It "
             "stays synthetic only and is not a MotionFrame.\n";
+  output << "--emit-graceful-shutdown is a test-only mode that, on the clean "
+            "completion path, emits one private synthetic \"stopping\" lifecycle "
+            "marker line just before the \"stopped\" line, then exits 0; it "
+            "models the helper-side of a graceful shutdown. It is smoke-local / "
+            "test-only, is helper-driven (NOT a response to a real parent stop "
+            "message; no parent-to-child control channel exists), stays synthetic "
+            "only, and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -175,6 +184,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--emit-oversized-line") {
       options.emitOversizedLine = true;
+      continue;
+    }
+
+    if (argument == "--emit-graceful-shutdown") {
+      options.emitGracefulShutdown = true;
       continue;
     }
 
@@ -277,6 +291,20 @@ void writeResultLine(std::ostream &output, long long timestampMs) {
          << "\"diag\":{\"inferenceMs\":" << 0.0 << "}}\n";
 }
 
+// Emits a single private synthetic "stopping" lifecycle marker line. It models
+// the helper-side of a graceful shutdown: the helper announces it is stopping
+// just before its clean "stopped" line. It is intentionally NOT a MotionFrame,
+// carries the distinct type "stopping", and contains no raw data, paths,
+// secrets, pixels, tensors, or model contents. It is smoke-local / test-only and
+// helper-driven: there is no parent-to-child control channel, so this is NOT a
+// response to a real parent "stop" message.
+void writeStoppingLine(std::ostream &output, const std::string &reason) {
+  output << "{"
+         << "\"type\":\"stopping\","
+         << "\"schemaVersion\":" << kHelperSchemaVersion << ","
+         << "\"reason\":\"" << reason << "\"}\n";
+}
+
 void writeStoppedLine(std::ostream &output, const std::string &reason) {
   output << "{"
          << "\"type\":\"stopped\","
@@ -369,6 +397,16 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] error: simulated failure after " << emittedResultCount
               << " result frames (reason=simulated-fail-after)\n";
     return 1;
+  }
+
+  // Test-only: on the clean completion path, emit one private synthetic
+  // "stopping" lifecycle marker just before the "stopped" line, modeling the
+  // helper-side of a graceful shutdown (stopping -> exited). This is helper-
+  // driven and smoke-local; no parent-to-child control channel exists.
+  if (options.emitGracefulShutdown) {
+    std::cerr << "[helper] stopping: reason=graceful-shutdown "
+                 "(reason=synthetic-graceful-shutdown)\n";
+    writeStoppingLine(std::cout, "graceful-shutdown");
   }
 
   writeStoppedLine(std::cout, "completed");

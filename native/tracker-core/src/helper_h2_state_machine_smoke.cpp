@@ -9,6 +9,12 @@
 // known stdout lifecycle markers and asserts it matches the documented vector
 // (docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md).
 //
+// The graceful-shutdown case (shutdown_graceful_exit) reconstructs a `stopping`
+// state from a private, test-only synthetic helper marker emitted just before
+// the clean stopped line. There is NO parent-to-child control channel in code:
+// `stopping` is a reconstructed lifecycle label (like failed/timed_out/fallback),
+// not a real parent stop exchange.
+//
 // Boundaries (synthetic-only; bounded by the H2 implementation gate and owner
 // decision):
 //   - no camera, no OpenCV, no real frames, no pixels, no tensors, no models
@@ -55,6 +61,7 @@ enum class HelperState {
   waiting_for_ready,
   ready,
   running,
+  stopping,
   exited,
   failed,
   timed_out,
@@ -73,6 +80,8 @@ const char* stateName(HelperState state) {
       return "ready";
     case HelperState::running:
       return "running";
+    case HelperState::stopping:
+      return "stopping";
     case HelperState::exited:
       return "exited";
     case HelperState::failed:
@@ -687,6 +696,86 @@ bool runOversizedLineCase(const std::string& helperPath) {
   return true;
 }
 
+// Graceful shutdown: not_started -> launching -> waiting_for_ready -> ready ->
+// running -> stopping -> exited. With --emit-graceful-shutdown the synthetic
+// helper, on its clean completion path, emits one private "stopping" lifecycle
+// marker line just before its "stopped" line, then exits 0. This smoke
+// reconstructs the `stopping` state from that private marker and `exited` from
+// the clean stopped marker plus exit code 0.
+//
+// Honest scope: there is NO parent-to-child control channel in code, and this
+// case does not add one. The `stopping` state is a RECONSTRUCTED lifecycle label
+// (like failed/timed_out/fallback in the other cases), derived from a private,
+// test-only synthetic helper marker; it is NOT a real parent stop exchange. The
+// marker is captured only in the helper's PRIVATE stdout (asserted present there)
+// and is never forwarded to this smoke's stdout, which stays empty.
+bool runShutdownGracefulExitCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", "3", "--emit-graceful-shutdown"},
+      kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("shutdown_graceful_exit", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("shutdown_graceful_exit", "unexpected timeout");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("shutdown_graceful_exit", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("shutdown_graceful_exit", "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  // The private "stopping" marker models the helper-side graceful stop. It must
+  // be present in the captured PRIVATE helper stdout before the clean exit. The
+  // distinct "stopping" type cannot be confused with the "stopped" marker.
+  if (!contains(run.stdoutText, "\"type\":\"stopping\"")) {
+    reportFailure("shutdown_graceful_exit",
+                  "missing stopping marker in private helper stdout");
+    return false;
+  }
+  path.push_back(HelperState::stopping);
+
+  if (run.exitCode != 0) {
+    reportFailure("shutdown_graceful_exit", "expected exit code 0");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+    reportFailure("shutdown_graceful_exit", "missing stopped marker");
+    return false;
+  }
+  path.push_back(HelperState::exited);
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("shutdown_graceful_exit", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::stopping, HelperState::exited};
+  if (!checkPath("shutdown_graceful_exit", path, expected)) {
+    return false;
+  }
+
+  reportPath("shutdown_graceful_exit", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -702,7 +791,8 @@ int main(int argc, char* argv[]) {
       !runTimeoutCase(helperPath) || !runStartupTimeoutCase(helperPath) ||
       !runUnknownMessageTypeCase(helperPath) ||
       !runMalformedLineCase(helperPath) ||
-      !runOversizedLineCase(helperPath)) {
+      !runOversizedLineCase(helperPath) ||
+      !runShutdownGracefulExitCase(helperPath)) {
     return 1;
   }
 
