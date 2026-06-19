@@ -27,6 +27,8 @@ constexpr int kDefaultFrameCount = 5;
 constexpr int kMaxFrameCount = 100000;
 constexpr int kDefaultIntervalMs = 0;
 constexpr int kMaxIntervalMs = 600000;
+constexpr int kDefaultDelayReadyMs = 0;
+constexpr int kMaxDelayReadyMs = 600000;
 constexpr int kFailAfterDisabled = -1;
 constexpr int kHelperSchemaVersion = 1;
 constexpr long long kSyntheticTimestampStepMs = 33; // ~30 synthetic fps
@@ -34,6 +36,7 @@ constexpr long long kSyntheticTimestampStepMs = 33; // ~30 synthetic fps
 struct HelperOptions {
   int frameCount = kDefaultFrameCount;
   int intervalMs = kDefaultIntervalMs;
+  int delayReadyMs = kDefaultDelayReadyMs;
   int failAfter = kFailAfterDisabled;
 };
 
@@ -59,12 +62,16 @@ bool parseIntInRange(
 
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
-            "[--fail-after N]\n";
+            "[--delay-ready-ms N] [--fail-after N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
          << " (default " << kDefaultIntervalMs
          << "); it paces synthetic result frames for manual smoke.\n";
+  output << "--delay-ready-ms N must be an integer between 0 and "
+         << kMaxDelayReadyMs << " (default " << kDefaultDelayReadyMs
+         << "); it is a test-only mode that sleeps before emitting the ready "
+            "line so a bounded startup timeout can be exercised.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -112,6 +119,27 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       }
 
       options.intervalMs = intervalMs;
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--delay-ready-ms") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --delay-ready-ms.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      int delayReadyMs = 0;
+      if (!parseIntInRange(
+              argv[argIndex + 1], 0, kMaxDelayReadyMs, delayReadyMs)) {
+        std::cerr << "Invalid value for --delay-ready-ms: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.delayReadyMs = delayReadyMs;
       ++argIndex;
       continue;
     }
@@ -198,6 +226,18 @@ int main(int argc, char *argv[]) {
   }
 
   std::cerr << "[helper] startup: source=synthetic-helper\n";
+
+  // Test-only: delay the ready line so a bounded startup timeout can be
+  // exercised. With the default of 0 the helper announces readiness
+  // immediately, preserving existing behavior. The sleep is placed before the
+  // ready line so a supervisor that terminates the child during the delay
+  // observes no ready marker on the helper's stdout.
+  if (options.delayReadyMs > 0) {
+    std::cerr << "[helper] startup: delaying ready emission by "
+              << options.delayReadyMs << " ms (reason=synthetic-delay-ready)\n";
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(options.delayReadyMs));
+  }
 
   writeReadyLine(std::cout);
 
