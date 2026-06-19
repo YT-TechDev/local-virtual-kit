@@ -120,6 +120,10 @@ H2 implementation is approved by this document.
     completes the synthetic shutdown smoke group and keeps production forced termination, production
     shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, default
     runtime wiring, and production H2 integration unapproved.
+28. [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md)
+    — docs-only handoff recording that the H2 synthetic smoke phase is complete at the
+    synthetic-smoke level after the final readiness review; defines the next scope decision boundary
+    before any production H2 work.
 
 Background:
 
@@ -229,6 +233,9 @@ Background:
   forced termination, production shutdown timeout policy, restart / backoff, production supervisor
   shutdown semantics, default runtime wiring, and production H2 integration remain unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md).
+- The H2 synthetic smoke phase is complete at the synthetic-smoke level and recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md);
+  this does not claim production readiness.
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -322,10 +329,11 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **Next scope decision required:** do not proceed to production forced termination, production
-  shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, a real
-  parent-to-child control channel, default runtime wiring, or production H2 integration without a
-  separate docs-only scope gate and explicit approval.
+- **Next scope decision required:** first perform read-only review of the synthetic smoke phase handoff,
+  then create a separate docs-only post-synthetic next-scope gate before any production H2 work; do not
+  proceed to production forced termination, production shutdown timeout policy, restart / backoff,
+  production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
+  wiring, or production H2 integration without that separate gate and explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -378,6 +386,8 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md)
   — closeout for the `shutdown_timeout_forced_exit` synthetic vector (synthetic-smoke level only;
   terminal `exited`); completes the synthetic shutdown smoke group.
+- [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md)
+  — docs-only handoff for the completed H2 synthetic smoke phase and next scope decision boundary.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
