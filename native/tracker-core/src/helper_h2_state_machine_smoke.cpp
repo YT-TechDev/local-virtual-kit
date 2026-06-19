@@ -28,6 +28,14 @@
 // timeout, and fallback meaning. It too uses no real control channel, emits no
 // marker, and implies no restart/backoff.
 //
+// The forced-exit case (shutdown_timeout_forced_exit) reconstructs
+// stopping -> timed_out -> exited from private synthetic "stopping" and
+// "shutdown-timeout" markers plus the helper's own clean exit. Here `timed_out`
+// is a reconstructed synthetic shutdown-timeout observation (NOT a real
+// supervisor timeout, which would yield fallback) and `exited` is the terminal
+// synthetic outcome -- there is no real forced kill, no supervisor change, and no
+// production shutdown-timeout policy.
+//
 // Boundaries (synthetic-only; bounded by the H2 implementation gate and owner
 // decision):
 //   - no camera, no OpenCV, no real frames, no pixels, no tensors, no models
@@ -120,6 +128,26 @@ std::string pathToString(const std::vector<HelperState>& path) {
 
 bool contains(const std::string& haystack, const std::string& needle) {
   return haystack.find(needle) != std::string::npos;
+}
+
+// Smoke-local / test-only ordering check: returns true only if every needle in
+// `orderedNeedles` is present in `haystack` AND appears strictly after the
+// previous needle (each searched from just past the prior match). This is a
+// simple substring-offset check over captured PRIVATE helper stdout; it is NOT a
+// JSON parser and adds no dependency. It is used to assert that private helper
+// lifecycle markers were emitted in the expected order, so a case cannot falsely
+// pass on out-of-order markers.
+bool markersAppearInOrder(const std::string& haystack,
+                          const std::vector<std::string>& orderedNeedles) {
+  size_t searchFrom = 0;
+  for (const std::string& needle : orderedNeedles) {
+    const size_t found = haystack.find(needle, searchFrom);
+    if (found == std::string::npos) {
+      return false;
+    }
+    searchFrom = found + needle.size();
+  }
+  return true;
 }
 
 // Every non-empty stderr line emitted by the helper must use the safe
@@ -1086,6 +1114,120 @@ bool runShutdownAfterFailureOrTimeoutCase(const std::string& helperPath) {
   return true;
 }
 
+// Shutdown timeout forced exit: not_started -> launching -> waiting_for_ready ->
+// ready -> running -> stopping -> timed_out -> exited. With
+// --emit-timeout-forced-shutdown the synthetic helper, on its clean completion
+// path, emits a private "stopping" marker followed by a private "shutdown-timeout"
+// marker just before its "stopped" line, then exits 0. This smoke reconstructs
+// `stopping` from the stopping marker, `timed_out` from the shutdown-timeout
+// marker, and `exited` from the clean stopped marker plus exit code 0.
+//
+// Honest scope: `timed_out` here is a RECONSTRUCTED synthetic shutdown-timeout
+// observation from a private helper marker (modeling a graceful stop that did not
+// complete within a bounded smoke window); it is NOT a real supervisor timeout
+// (which would yield `fallback` and a killed child). `exited` is the terminal
+// synthetic outcome reconstructed from the helper's own clean exit -- there is NO
+// real forced termination, NO cross-platform forced kill, NO production shutdown
+// timeout policy, and NO supervisor change. There is NO parent-to-child control
+// channel; the markers are captured only in the helper's PRIVATE stdout and are
+// never forwarded to this smoke's stdout, which stays empty. The terminal state is
+// `exited`, not `fallback`.
+bool runShutdownTimeoutForcedExitCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", "3", "--emit-timeout-forced-shutdown"},
+      kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("shutdown_timeout_forced_exit", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("shutdown_timeout_forced_exit",
+                  "unexpected real supervisor timeout (terminal must be exited, "
+                  "not fallback)");
+    return false;
+  }
+
+  // Smoke-local ordering assertion: the private helper stdout markers must appear
+  // in the exact lifecycle order before we reconstruct the path. This prevents a
+  // false pass if the helper emitted "shutdown-timeout" before "stopping" or after
+  // "stopped". Uses substring offsets only (no JSON parser).
+  if (!markersAppearInOrder(run.stdoutText,
+                            {"\"type\":\"ready\"", "\"type\":\"result\"",
+                             "\"type\":\"stopping\"",
+                             "\"type\":\"shutdown-timeout\"",
+                             "\"type\":\"stopped\""})) {
+    reportFailure("shutdown_timeout_forced_exit",
+                  "private helper stdout markers missing or out of order "
+                  "(expected ready -> result -> stopping -> shutdown-timeout -> "
+                  "stopped)");
+    return false;
+  }
+
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("shutdown_timeout_forced_exit", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("shutdown_timeout_forced_exit", "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  // The private "stopping" marker models the helper-side start of shutdown.
+  if (!contains(run.stdoutText, "\"type\":\"stopping\"")) {
+    reportFailure("shutdown_timeout_forced_exit",
+                  "missing stopping marker in private helper stdout");
+    return false;
+  }
+  path.push_back(HelperState::stopping);
+
+  // The private "shutdown-timeout" marker models a synthetic shutdown-timeout
+  // observation (NOT a real supervisor timeout). It is distinct from the
+  // "stopped" marker and from a real run timeout.
+  if (!contains(run.stdoutText, "\"type\":\"shutdown-timeout\"")) {
+    reportFailure("shutdown_timeout_forced_exit",
+                  "missing shutdown-timeout marker in private helper stdout");
+    return false;
+  }
+  path.push_back(HelperState::timed_out);
+
+  if (run.exitCode != 0) {
+    reportFailure("shutdown_timeout_forced_exit", "expected exit code 0");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+    reportFailure("shutdown_timeout_forced_exit", "missing stopped marker");
+    return false;
+  }
+  path.push_back(HelperState::exited);
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("shutdown_timeout_forced_exit",
+                  "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::stopping, HelperState::timed_out,
+      HelperState::exited};
+  if (!checkPath("shutdown_timeout_forced_exit", path, expected)) {
+    return false;
+  }
+
+  reportPath("shutdown_timeout_forced_exit", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -1104,7 +1246,8 @@ int main(int argc, char* argv[]) {
       !runOversizedLineCase(helperPath) ||
       !runShutdownGracefulExitCase(helperPath) ||
       !runShutdownAfterHelperAlreadyExitedCase(helperPath) ||
-      !runShutdownAfterFailureOrTimeoutCase(helperPath)) {
+      !runShutdownAfterFailureOrTimeoutCase(helperPath) ||
+      !runShutdownTimeoutForcedExitCase(helperPath)) {
     return 1;
   }
 

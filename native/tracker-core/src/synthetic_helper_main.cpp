@@ -45,6 +45,7 @@ struct HelperOptions {
   bool emitMalformedLine = false;
   bool emitOversizedLine = false;
   bool emitGracefulShutdown = false;
+  bool emitTimeoutForcedShutdown = false;
 };
 
 bool parseIntInRange(
@@ -71,7 +72,7 @@ void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
             "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
             "[--emit-oversized-line] [--emit-graceful-shutdown] "
-            "[--fail-after N]\n";
+            "[--emit-timeout-forced-shutdown] [--fail-after N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -100,6 +101,15 @@ void printUsage(std::ostream &output) {
             "test-only, is helper-driven (NOT a response to a real parent stop "
             "message; no parent-to-child control channel exists), stays synthetic "
             "only, and is not a MotionFrame.\n";
+  output << "--emit-timeout-forced-shutdown is a test-only mode that, on the "
+            "clean completion path, emits one private synthetic \"stopping\" "
+            "lifecycle marker followed by one private synthetic "
+            "\"shutdown-timeout\" marker just before the \"stopped\" line, then "
+            "exits 0; it models a stopping -> synthetic shutdown-timeout -> clean "
+            "terminal exit sequence. It is smoke-local / test-only and "
+            "helper-driven: there is NO real parent stop message, NO real forced "
+            "kill, and NO production shutdown-timeout policy; the helper simply "
+            "exits cleanly. It stays synthetic only and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -184,6 +194,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--emit-oversized-line") {
       options.emitOversizedLine = true;
+      continue;
+    }
+
+    if (argument == "--emit-timeout-forced-shutdown") {
+      options.emitTimeoutForcedShutdown = true;
       continue;
     }
 
@@ -305,6 +320,20 @@ void writeStoppingLine(std::ostream &output, const std::string &reason) {
          << "\"reason\":\"" << reason << "\"}\n";
 }
 
+// Emits a single private synthetic "shutdown-timeout" lifecycle marker line. It
+// models a graceful stop that did not complete within a bounded smoke window, so
+// a shutdown-timeout / forced-exit-style terminal outcome is observed. It is
+// intentionally NOT a MotionFrame, carries the distinct type "shutdown-timeout",
+// and contains no raw data, paths, secrets, pixels, tensors, or model contents.
+// It is smoke-local / test-only and helper-driven: there is no parent-to-child
+// control channel and no real forced termination; the helper still exits cleanly.
+void writeShutdownTimeoutLine(std::ostream &output, const std::string &reason) {
+  output << "{"
+         << "\"type\":\"shutdown-timeout\","
+         << "\"schemaVersion\":" << kHelperSchemaVersion << ","
+         << "\"reason\":\"" << reason << "\"}\n";
+}
+
 void writeStoppedLine(std::ostream &output, const std::string &reason) {
   output << "{"
          << "\"type\":\"stopped\","
@@ -407,6 +436,21 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] stopping: reason=graceful-shutdown "
                  "(reason=synthetic-graceful-shutdown)\n";
     writeStoppingLine(std::cout, "graceful-shutdown");
+  }
+
+  // Test-only: on the clean completion path, model a stopping -> synthetic
+  // shutdown-timeout -> clean terminal exit sequence by emitting a private
+  // "stopping" marker followed by a private "shutdown-timeout" marker just before
+  // the "stopped" line. This is helper-driven and smoke-local; there is no
+  // parent-to-child control channel, no real forced kill, and no production
+  // shutdown-timeout policy -- the helper still exits 0 cleanly.
+  if (options.emitTimeoutForcedShutdown) {
+    std::cerr << "[helper] stopping: reason=timeout-forced-shutdown "
+                 "(reason=synthetic-timeout-forced-shutdown)\n";
+    writeStoppingLine(std::cout, "timeout-forced-shutdown");
+    std::cerr << "[helper] shutdown-timeout: reason=synthetic-shutdown-timeout "
+                 "(reason=synthetic-timeout-forced-shutdown)\n";
+    writeShutdownTimeoutLine(std::cout, "synthetic-shutdown-timeout");
   }
 
   writeStoppedLine(std::cout, "completed");

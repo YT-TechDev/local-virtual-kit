@@ -112,6 +112,14 @@ H2 implementation is approved by this document.
     shutdown smoke candidate; keeps production forced termination, production shutdown timeout policy,
     restart / backoff, production supervisor shutdown semantics, default runtime wiring, and production
     H2 integration unapproved.
+27. [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md)
+    — closeout for the `shutdown_timeout_forced_exit` synthetic vector; records implementation at the
+    synthetic-smoke level only (terminal `exited`, not `fallback`; `stopping` and `timed_out`
+    reconstructed from private synthetic markers, `timed_out` being a synthetic shutdown-timeout
+    observation rather than a real supervisor timeout; no real forced kill, no supervisor change);
+    completes the synthetic shutdown smoke group and keeps production forced termination, production
+    shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, default
+    runtime wiring, and production H2 integration unapproved.
 
 Background:
 
@@ -210,6 +218,17 @@ Background:
   production forced termination, production shutdown timeout policy, restart / backoff, production
   supervisor shutdown semantics, default runtime wiring, and production H2 integration unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md).
+- `shutdown_timeout_forced_exit` is implemented at the synthetic-smoke level only, **completing the
+  synthetic shutdown smoke group**: the `shutdown_timeout_forced_exit` case added to the same smoke
+  reconstructs
+  `not_started -> launching -> waiting_for_ready -> ready -> running -> stopping -> timed_out -> exited`
+  from private synthetic `"stopping"` and `"shutdown-timeout"` markers plus the helper's own clean
+  exit. The terminal state is `exited`, not `fallback`; `timed_out` is a reconstructed synthetic
+  shutdown-timeout observation, not a real supervisor timeout, and there is no real forced kill, no new
+  lifecycle state, no real `stop` exchange, and no `helper_process_supervisor` change. Production
+  forced termination, production shutdown timeout policy, restart / backoff, production supervisor
+  shutdown semantics, default runtime wiring, and production H2 integration remain unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -296,9 +315,17 @@ These boundaries are preserved across all H2 docs:
   in
   [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md)
   at the synthetic-smoke level only, covering both the failure and timeout fallback paths.
-- **Forced-exit shutdown smoke gate added:** the next step is read-only review of
-  [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md)
-  before any implementation.
+- **Forced-exit shutdown smoke implemented:** `shutdown_timeout_forced_exit` is recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  at the synthetic-smoke level only (terminal `exited`, not `fallback`; `timed_out` reconstructed from
+  a private synthetic shutdown-timeout marker; no real forced kill or supervisor change). This
+  **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
+  `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
+  `shutdown_timeout_forced_exit`).
+- **Next scope decision required:** do not proceed to production forced termination, production
+  shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, a real
+  parent-to-child control channel, default runtime wiring, or production H2 integration without a
+  separate docs-only scope gate and explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -348,6 +375,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md)
   — docs-only gate selecting only `shutdown_timeout_forced_exit` as the remaining future shutdown
   smoke candidate.
+- [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  — closeout for the `shutdown_timeout_forced_exit` synthetic vector (synthetic-smoke level only;
+  terminal `exited`); completes the synthetic shutdown smoke group.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
