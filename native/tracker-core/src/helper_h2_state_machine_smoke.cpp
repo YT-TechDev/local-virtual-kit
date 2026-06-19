@@ -21,6 +21,13 @@
 // reconstructed path. It also relies on no real control channel and emits no
 // marker.
 //
+// The failure/timeout case (shutdown_after_failure_or_timeout) reconstructs the
+// failed -> fallback and timed_out -> fallback terminal paths exactly as the
+// existing failure/timeout cases do, then applies a smoke-local, idempotent
+// "after-fallback stop observation" -- a pure no-op that preserves failure,
+// timeout, and fallback meaning. It too uses no real control channel, emits no
+// marker, and implies no restart/backoff.
+//
 // Boundaries (synthetic-only; bounded by the H2 implementation gate and owner
 // decision):
 //   - no camera, no OpenCV, no real frames, no pixels, no tensors, no models
@@ -892,6 +899,193 @@ bool runShutdownAfterHelperAlreadyExitedCase(const std::string& helperPath) {
   return true;
 }
 
+// Smoke-local / test-only model of a stop / shutdown observation issued AFTER the
+// helper has already entered a terminal `fallback` state (reached via a failed or
+// timed-out synthetic path). There is NO real parent-to-child control channel in
+// code, and this does not add one: this is a pure, smoke-local observation over
+// the already-reconstructed lifecycle path, not a real parent stop exchange and
+// not production IPC. Because the helper is already in fallback, the observation
+// is a safe no-op: it appends no state, leaves the path unchanged, and is
+// idempotent under repeated application. It preserves the meaning of failure,
+// timeout, and fallback and introduces no restart/backoff, forced termination, or
+// shutdown timeout behavior.
+//
+// Returns false only if the precondition is violated (the path is not in the
+// terminal `fallback` state), which would mean the case was applied incorrectly.
+bool applyAfterFallbackStopObservation(std::vector<HelperState>& path) {
+  if (path.empty() || path.back() != HelperState::fallback) {
+    return false;
+  }
+  // No-op: a stop after a failure/timeout fallback changes nothing.
+  return true;
+}
+
+// Shutdown after the helper already failed or timed out. Covers both terminal
+// fallback paths:
+//   failure: not_started -> launching -> waiting_for_ready -> ready -> running ->
+//            failed -> fallback
+//   timeout: not_started -> launching -> waiting_for_ready -> ready -> running ->
+//            timed_out -> fallback
+// Each sub-scenario reconstructs the terminal fallback path exactly as the
+// existing failure / timeout cases do, then applies a smoke-local / test-only
+// "after-fallback stop observation" (see applyAfterFallbackStopObservation). The
+// observation is asserted to be safe and idempotent: applied repeatedly it must
+// leave the reconstructed path unchanged. This models that a stop / shutdown
+// request after a failure or timeout does not rewrite the failure / timeout
+// meaning and does not corrupt fallback reconstruction.
+//
+// Honest scope: there is NO real parent-to-child control channel; the observation
+// is a pure smoke-local no-op over the reconstructed path, not a real stop
+// exchange. No marker is emitted; helper stdout stays private and this smoke's
+// stdout stays empty. No restart/backoff is implied.
+bool runShutdownAfterFailureOrTimeoutCase(const std::string& helperPath) {
+  // Failure sub-scenario: the helper exits non-zero after producing some output,
+  // reconstructing running -> failed -> fallback.
+  {
+    const char* caseName = "shutdown_after_failure_or_timeout(failure)";
+    const HelperProcessRunResult run = runHelperProcessForSmoke(
+        helperPath, {"--frames", "3", "--fail-after", "1"}, kNormalTimeoutMs);
+
+    std::vector<HelperState> path = {HelperState::not_started};
+
+    if (!run.launched) {
+      reportFailure(caseName, "child failed to launch");
+      return false;
+    }
+    path.push_back(HelperState::launching);
+    path.push_back(HelperState::waiting_for_ready);
+
+    if (run.timedOut) {
+      reportFailure(caseName, "unexpected timeout");
+      return false;
+    }
+    if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+      reportFailure(caseName, "missing ready marker before failure");
+      return false;
+    }
+    path.push_back(HelperState::ready);
+
+    if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+      reportFailure(caseName, "missing result marker before failure");
+      return false;
+    }
+    path.push_back(HelperState::running);
+
+    if (run.exitCode == 0) {
+      reportFailure(caseName, "expected non-zero exit code");
+      return false;
+    }
+    if (!contains(run.stderrText, "[helper] error:")) {
+      reportFailure(caseName, "missing safe helper error diagnostic");
+      return false;
+    }
+    path.push_back(HelperState::failed);
+    path.push_back(HelperState::fallback);
+
+    if (!helperStderrIsSafe(run.stderrText)) {
+      reportFailure(caseName, "unexpected non-helper stderr line");
+      return false;
+    }
+
+    // The helper is now in a terminal `fallback` state. Apply the smoke-local
+    // after-fallback stop observation twice to demonstrate it is safe and
+    // idempotent and never rewrites failure meaning or corrupts fallback.
+    const std::vector<HelperState> pathBeforeObservation = path;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+      if (!applyAfterFallbackStopObservation(path)) {
+        reportFailure(caseName,
+                      "after-fallback stop observation precondition not met "
+                      "(path not in terminal fallback state)");
+        return false;
+      }
+      if (path != pathBeforeObservation) {
+        reportFailure(caseName,
+                      "after-fallback stop observation changed the lifecycle "
+                      "path");
+        return false;
+      }
+    }
+
+    const std::vector<HelperState> expected = {
+        HelperState::not_started, HelperState::launching,
+        HelperState::waiting_for_ready, HelperState::ready,
+        HelperState::running, HelperState::failed, HelperState::fallback};
+    if (!checkPath(caseName, path, expected)) {
+      return false;
+    }
+
+    reportPath(caseName, path);
+  }
+
+  // Timeout sub-scenario: the helper goes silent after its first flushed output,
+  // so the bounded supervisor times out, reconstructing running -> timed_out ->
+  // fallback.
+  {
+    const char* caseName = "shutdown_after_failure_or_timeout(timeout)";
+    const HelperProcessRunResult run = runHelperProcessForSmoke(
+        helperPath, {"--frames", "5", "--interval-ms", "1000"}, kHangTimeoutMs);
+
+    std::vector<HelperState> path = {HelperState::not_started};
+
+    if (!run.launched) {
+      reportFailure(caseName, "child failed to launch");
+      return false;
+    }
+    path.push_back(HelperState::launching);
+    path.push_back(HelperState::waiting_for_ready);
+
+    if (contains(run.stdoutText, "\"type\":\"ready\"")) {
+      path.push_back(HelperState::ready);
+    }
+    if (contains(run.stdoutText, "\"type\":\"result\"")) {
+      path.push_back(HelperState::running);
+    }
+
+    if (!run.timedOut) {
+      reportFailure(caseName, "expected timeout to be detected");
+      return false;
+    }
+    path.push_back(HelperState::timed_out);
+    path.push_back(HelperState::fallback);
+
+    if (!helperStderrIsSafe(run.stderrText)) {
+      reportFailure(caseName, "unexpected non-helper stderr line");
+      return false;
+    }
+
+    // The helper is now in a terminal `fallback` state. Apply the smoke-local
+    // after-fallback stop observation twice to demonstrate it is safe and
+    // idempotent and never rewrites timeout meaning or corrupts fallback.
+    const std::vector<HelperState> pathBeforeObservation = path;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+      if (!applyAfterFallbackStopObservation(path)) {
+        reportFailure(caseName,
+                      "after-fallback stop observation precondition not met "
+                      "(path not in terminal fallback state)");
+        return false;
+      }
+      if (path != pathBeforeObservation) {
+        reportFailure(caseName,
+                      "after-fallback stop observation changed the lifecycle "
+                      "path");
+        return false;
+      }
+    }
+
+    const std::vector<HelperState> expected = {
+        HelperState::not_started, HelperState::launching,
+        HelperState::waiting_for_ready, HelperState::ready,
+        HelperState::running, HelperState::timed_out, HelperState::fallback};
+    if (!checkPath(caseName, path, expected)) {
+      return false;
+    }
+
+    reportPath(caseName, path);
+  }
+
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -909,7 +1103,8 @@ int main(int argc, char* argv[]) {
       !runMalformedLineCase(helperPath) ||
       !runOversizedLineCase(helperPath) ||
       !runShutdownGracefulExitCase(helperPath) ||
-      !runShutdownAfterHelperAlreadyExitedCase(helperPath)) {
+      !runShutdownAfterHelperAlreadyExitedCase(helperPath) ||
+      !runShutdownAfterFailureOrTimeoutCase(helperPath)) {
     return 1;
   }
 
