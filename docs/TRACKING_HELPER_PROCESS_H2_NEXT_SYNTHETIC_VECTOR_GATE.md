@@ -16,6 +16,12 @@ This document records a decision about **what the next safe synthetic-only slice
 the gates a future implementation PR must satisfy. It implements nothing, approves no production
 integration, grants no real frame access, adds no dependency, and changes no MotionFrame schema.
 
+> Update: the first candidate vector, `unknown_message_type_safe_ignore`, was implemented in
+> PR #152 (see
+> [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)).
+> The malformed and oversized helper output vectors remain the follow-up candidates under this
+> gate.
+
 ## Current Implemented H2 Synthetic Smoke Coverage
 
 The implemented H2 work is the standalone, synthetic-only `lvk-helper-h2-state-machine-smoke`

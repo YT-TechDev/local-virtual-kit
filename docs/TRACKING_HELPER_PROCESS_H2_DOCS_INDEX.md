@@ -55,6 +55,10 @@ H2 implementation is approved by this document.
     — gate / decision for the next synthetic-only slice: a narrowly scoped helper-output error
     vector group (malformed / unknown / oversized); records the decision and future gates,
     implements nothing.
+14. [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)
+    — closeout for the unknown-message-type synthetic vector (PR #152,
+    `unknown_message_type_safe_ignore`); the first helper-output error vector under the gate,
+    records implementation state, not production integration.
 
 Background:
 
@@ -78,10 +82,15 @@ Background:
   same smoke, covering a pure startup timeout where `ready` is not emitted before the bounded
   startup timeout. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md).
-- The next gated candidate is a narrowly scoped synthetic-only helper-output error vector group
-  (malformed / unknown / oversized helper output), recorded in
-  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md);
-  it remains unimplemented and a future implementation PR must satisfy that gate before any code is
+- The first helper-output error vector under the gate is implemented (PR #152): the
+  `unknown_message_type_safe_ignore` case added to the same smoke, where an unknown-type helper
+  output line is captured only in private helper stdout and does not corrupt the reconstructed
+  lifecycle path (`not_started -> launching -> waiting_for_ready -> ready -> running -> exited`).
+  See
+  [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md).
+- The remaining gated candidates — malformed and oversized helper output, recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)
+  — remain unimplemented and a future implementation PR must satisfy that gate before any code is
   added. Shutdown / control-channel vectors require a separate scope decision.
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
@@ -139,10 +148,13 @@ These boundaries are preserved across all H2 docs:
 - **Startup-timeout vector merged:** the `startup_timeout_fallback` vector is implemented and
   merged (PR #149), recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md).
-- **Next safe step:** a future small synthetic-only helper-output error vector planning slice
-  (malformed / unknown / oversized helper output), gated by
-  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md),
-  or another docs decision / gate if the scope broadens, before any broader integration. Shutdown /
+- **Unknown-message vector merged:** the `unknown_message_type_safe_ignore` vector — the first
+  helper-output error vector under the gate — is implemented and merged (PR #152), recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md).
+- **Next safe step:** a future small synthetic-only **malformed** helper output vector planning
+  slice (`malformed_json_line_safe_drop`), gated by
+  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md);
+  the oversized vector should follow only after its size bounds / scope are kept narrow. Shutdown /
   control-channel vectors require a separate scope decision before implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
@@ -161,6 +173,8 @@ These boundaries are preserved across all H2 docs:
   — closeout for the startup-timeout synthetic vector (PR #149).
 - [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)
   — gate / decision for the next synthetic-only helper-output error vector slice.
+- [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)
+  — closeout for the unknown-message-type synthetic vector (PR #152).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
