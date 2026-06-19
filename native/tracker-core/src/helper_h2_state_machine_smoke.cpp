@@ -40,6 +40,11 @@ constexpr int kHangTimeoutMs = 200;
 // helper before it can emit its ready line. The child is killed at the timeout,
 // so the case's wall-clock cost stays near kHangTimeoutMs, not this value.
 constexpr int kStartupDelayMs = 5000;
+// Smoke-local, test-only maximum helper output line length. Every legitimate
+// synthetic helper line (ready/result/stopped/unknown/malformed) is far below
+// this, so it never false-positives on normal output. This is a smoke-local
+// size check ONLY; it is NOT a supervisor or production size/backpressure policy.
+constexpr size_t kMaxHelperLineBytesForSmoke = 1024;
 
 // Helper lifecycle states tracked by Native Core, per the H2 handshake / state
 // machine design. This is a local, smoke-internal modeling of those states; it
@@ -114,6 +119,27 @@ bool helperStderrIsSafe(const std::string& stderrText) {
     }
   }
   return true;
+}
+
+// Returns true if any line in `text` is longer than `maxLineBytes`. Only line
+// LENGTHS are measured; line content is never copied, stored, printed, or
+// forwarded. This is the smoke-local, test-only oversized-line size check; it is
+// NOT a supervisor or production size/backpressure policy.
+bool hasLineExceeding(const std::string& text, size_t maxLineBytes) {
+  size_t lineLength = 0;
+  for (size_t index = 0; index <= text.size(); ++index) {
+    const bool atEnd = index == text.size();
+    const char character = atEnd ? '\n' : text[index];
+    if (character == '\n' || character == '\r') {
+      if (lineLength > maxLineBytes) {
+        return true;
+      }
+      lineLength = 0;
+    } else {
+      ++lineLength;
+    }
+  }
+  return false;
 }
 
 void reportFailure(const std::string& caseName, const std::string& reason) {
@@ -520,6 +546,90 @@ bool runMalformedLineCase(const std::string& helperPath) {
   return true;
 }
 
+// Oversized helper output line is rejected by a smoke-local size check without
+// corrupting the reconstructed state path: not_started -> launching ->
+// waiting_for_ready -> ready -> running -> exited. With --emit-oversized-line the
+// synthetic helper emits one bounded (~2 KB) line after ready, then completes
+// normally. That line is captured only in the helper's PRIVATE stdout (its marker
+// is asserted present, by substring check) and is never forwarded to this smoke's
+// stdout, which stays empty. The case asserts the oversized line exceeds the
+// smoke-local test-only limit (kMaxHelperLineBytesForSmoke), i.e. it is rejected.
+//
+// Honest scope: the size limit and rejection are SMOKE-LOCAL / TEST-ONLY. They
+// are not a supervisor or production size / backpressure / reject policy; the
+// supervisor is unchanged. No fallback is triggered.
+bool runOversizedLineCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", "3", "--emit-oversized-line"}, kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("oversized_line_rejected", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("oversized_line_rejected", "unexpected timeout");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("oversized_line_rejected", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("oversized_line_rejected", "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  if (run.exitCode != 0) {
+    reportFailure("oversized_line_rejected", "expected exit code 0");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+    reportFailure("oversized_line_rejected", "missing stopped marker");
+    return false;
+  }
+  path.push_back(HelperState::exited);
+
+  // The oversized line's marker must be present in the captured PRIVATE helper
+  // stdout (substring check; the payload itself is never printed).
+  if (!contains(run.stdoutText, "oversized-synthetic")) {
+    reportFailure("oversized_line_rejected",
+                  "missing oversized marker in private helper stdout");
+    return false;
+  }
+
+  // Smoke-local, test-only rejection: a line exceeding kMaxHelperLineBytesForSmoke
+  // must be present (only line lengths are measured; no payload is printed).
+  if (!hasLineExceeding(run.stdoutText, kMaxHelperLineBytesForSmoke)) {
+    reportFailure("oversized_line_rejected",
+                  "no line exceeded the smoke-local size limit");
+    return false;
+  }
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("oversized_line_rejected", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::exited};
+  if (!checkPath("oversized_line_rejected", path, expected)) {
+    return false;
+  }
+
+  reportPath("oversized_line_rejected", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -534,7 +644,8 @@ int main(int argc, char* argv[]) {
   if (!runNormalCase(helperPath) || !runFailureCase(helperPath) ||
       !runTimeoutCase(helperPath) || !runStartupTimeoutCase(helperPath) ||
       !runUnknownMessageTypeCase(helperPath) ||
-      !runMalformedLineCase(helperPath)) {
+      !runMalformedLineCase(helperPath) ||
+      !runOversizedLineCase(helperPath)) {
     return 1;
   }
 
