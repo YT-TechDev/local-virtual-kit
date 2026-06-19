@@ -131,6 +131,10 @@ H2 implementation is approved by this document.
 30. [`docs/TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md)
     — docs-only frame / data-flow decision preserving Native Core camera ownership, MotionFrame-only
     public output, and the unapproved status of helper-owned capture and raw frame transport.
+31. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md`](TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md)
+    — docs-only helper backend / runtime decision preserving the unapproved status of backend,
+    runtime, model / task bundle, dependency, production integration, default runtime wiring, cloud
+    inference, and external frame processing choices.
 
 Background:
 
@@ -249,6 +253,10 @@ Background:
   raw frame IPC, tensor IPC, high-rate frame transport, MotionFrame changes, production H2
   integration, or default runtime wiring. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md).
+- The helper backend / runtime decision has been added and still approves no backend / runtime /
+  model / dependency selection, production H2 integration, default runtime wiring, cloud inference,
+  or external frame processing. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md`](TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -342,12 +350,13 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **Frame / data-flow decision review required:** next, perform a read-only review of the frame /
-  data-flow decision, then choose one narrow planning direction before any implementation. Do not
-  proceed to production forced termination, production shutdown timeout policy, restart / backoff,
-  production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
-  wiring, production H2 integration, helper-owned camera capture, or frame transport without separate
-  explicit approval.
+- **Helper backend / runtime decision review required:** next, perform a read-only review of the
+  helper backend / runtime decision, then choose one narrow next planning direction before any
+  implementation. Do not proceed to backend / runtime / model / dependency selection, production
+  forced termination, production shutdown timeout policy, restart / backoff, production supervisor
+  shutdown semantics, a real parent-to-child control channel, default runtime wiring, production H2
+  integration, helper-owned camera capture, cloud inference, external frame processing, or frame
+  transport without separate explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -407,6 +416,10 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md)
   — docs-only frame / data-flow decision; preserves Native Core camera ownership and rejects default
   frame transport.
+- [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md`](TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md)
+  — docs-only helper backend / runtime decision; keeps backend, runtime, model, dependency,
+  production integration, default runtime wiring, cloud inference, and external frame processing
+  unapproved.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
