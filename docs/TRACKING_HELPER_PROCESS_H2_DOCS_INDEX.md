@@ -100,6 +100,13 @@ H2 implementation is approved by this document.
     — docs-only gate selecting only `shutdown_after_failure_or_timeout` as the next future synthetic
     shutdown smoke candidate; keeps `shutdown_timeout_forced_exit`, forced termination, shutdown
     timeout, and restart / backoff unapproved.
+25. [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md)
+    — closeout for the `shutdown_after_failure_or_timeout` synthetic vector; records implementation at
+    the synthetic-smoke level only, covering both the failure and timeout fallback paths (a smoke-local
+    idempotent after-fallback stop observation that is a no-op over the already-terminal path; no new
+    lifecycle state, no marker, no real `stop` exchange; fallback meaning preserved); keeps
+    `shutdown_timeout_forced_exit`, forced termination, shutdown timeout, and restart / backoff
+    unapproved.
 
 Background:
 
@@ -181,6 +188,18 @@ Background:
   next future candidate and keeps `shutdown_timeout_forced_exit`, forced termination, shutdown
   timeout, and restart / backoff unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_GATE.md).
+- `shutdown_after_failure_or_timeout` is implemented at the synthetic-smoke level only, covering
+  **both** the failure and timeout fallback paths: the `shutdown_after_failure_or_timeout` case added
+  to the same smoke reconstructs
+  `not_started -> launching -> waiting_for_ready -> ready -> running -> failed -> fallback` and
+  `not_started -> launching -> waiting_for_ready -> ready -> running -> timed_out -> fallback`, and
+  then applies a smoke-local / test-only after-fallback stop observation that is a pure idempotent
+  no-op over the already-terminal path. There is no real parent-to-child control channel, no new
+  lifecycle state, and no marker; the observation is not a real `stop` exchange and the failure /
+  timeout / fallback meaning is preserved. `shutdown_timeout_forced_exit`, forced termination, shutdown
+  timeout behavior, restart / backoff, and production shutdown / control semantics remain unapproved.
+  See
+  [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -309,6 +328,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_GATE.md)
   — docs-only gate selecting only `shutdown_after_failure_or_timeout` as the next future shutdown
   smoke candidate.
+- [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  — closeout for the `shutdown_after_failure_or_timeout` synthetic vector (synthetic-smoke level only;
+  both failure and timeout paths).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
