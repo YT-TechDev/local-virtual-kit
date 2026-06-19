@@ -35,6 +35,11 @@ using lvk::tracker::runHelperProcessForSmoke;
 
 constexpr int kNormalTimeoutMs = 5000;
 constexpr int kHangTimeoutMs = 200;
+// Delay-before-ready used by the startup-timeout case. It is well above
+// kHangTimeoutMs so the bounded supervisor deterministically terminates the
+// helper before it can emit its ready line. The child is killed at the timeout,
+// so the case's wall-clock cost stays near kHangTimeoutMs, not this value.
+constexpr int kStartupDelayMs = 5000;
 
 // Helper lifecycle states tracked by Native Core, per the H2 handshake / state
 // machine design. This is a local, smoke-internal modeling of those states; it
@@ -312,6 +317,58 @@ bool runTimeoutCase(const std::string& helperPath) {
   return true;
 }
 
+// Pure startup timeout: not_started -> launching -> waiting_for_ready ->
+// timed_out -> fallback. With --delay-ready-ms kStartupDelayMs the synthetic
+// helper sleeps before emitting its ready line, so the bounded supervisor
+// terminates the child while still in waiting_for_ready (no ready, no result on
+// the helper's stdout). This models a startup timeout where ready never arrives,
+// distinct from the liveness/silence-after-running timeout case above. Unlike
+// that case, ready/running are never appended; their absence is asserted.
+bool runStartupTimeoutCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath,
+      {"--frames", "3", "--delay-ready-ms", std::to_string(kStartupDelayMs)},
+      kHangTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("startup_timeout", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("startup_timeout",
+                  "ready emitted before startup timeout (expected none)");
+    return false;
+  }
+
+  if (!run.timedOut) {
+    reportFailure("startup_timeout", "expected startup timeout to be detected");
+    return false;
+  }
+  path.push_back(HelperState::timed_out);
+  path.push_back(HelperState::fallback);
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("startup_timeout", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::timed_out,
+      HelperState::fallback};
+  if (!checkPath("startup_timeout", path, expected)) {
+    return false;
+  }
+
+  reportPath("startup_timeout", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -324,7 +381,7 @@ int main(int argc, char* argv[]) {
   const std::string helperPath = argv[1];
 
   if (!runNormalCase(helperPath) || !runFailureCase(helperPath) ||
-      !runTimeoutCase(helperPath)) {
+      !runTimeoutCase(helperPath) || !runStartupTimeoutCase(helperPath)) {
     return 1;
   }
 
