@@ -72,6 +72,11 @@ H2 implementation is approved by this document.
     `oversized_line_rejected`); the final helper-output error vector under the gate; records
     implementation state without claiming production supervisor size policy or general
     backpressure semantics.
+18. [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md)
+    — scope / gate for a future helper shutdown / stop / control-channel slice: records that the
+    `stop` handshake is designed-only (not implemented), lists the decisions that must be settled
+    before implementation, and keeps shutdown / control gated before production wiring; implements
+    nothing.
 
 Background:
 
@@ -114,6 +119,12 @@ Background:
   the synthetic-smoke level without defining production supervisor size policy or general
   backpressure semantics. See
   [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_LINE_SMOKE_CLOSEOUT.md).
+- The helper-output error vector group is now covered at the synthetic-smoke level (PR #152 /
+  #154 / #157). A docs-only shutdown / control-channel scope gate records the decisions that must
+  be settled before any helper stop / control-channel implementation begins; the `stop` handshake
+  remains designed-only (not implemented), and shutdown / control stays gated before production
+  wiring. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -182,6 +193,11 @@ These boundaries are preserved across all H2 docs:
 - **Helper-output error vector group covered:** unknown-message, malformed-line, and oversized-line
   coverage now exists at the synthetic-smoke level. Shutdown / control-channel vectors still require
   a separate scope decision before implementation.
+- **Shutdown / control-channel scope gate added:** the decisions that must be settled before any
+  helper shutdown / stop / control-channel implementation are recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md).
+  It implements nothing; the `stop` handshake remains designed-only, and shutdown / control stays
+  gated before production wiring.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -207,6 +223,9 @@ These boundaries are preserved across all H2 docs:
   — scope / gate for the oversized helper-output vector.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_LINE_SMOKE_CLOSEOUT.md)
   — closeout for the oversized-line synthetic vector (PR #157).
+- [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md)
+  — scope / gate for a future helper shutdown / stop / control-channel slice (designed-only `stop`
+  handshake; decisions required before implementation).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
