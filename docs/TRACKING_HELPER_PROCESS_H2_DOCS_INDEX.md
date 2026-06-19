@@ -206,9 +206,9 @@ Background:
   See
   [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md).
 - The forced-exit shutdown smoke gate selects only `shutdown_timeout_forced_exit` as the remaining
-  future candidate and keeps production forced termination, production shutdown timeout policy,
-  restart / backoff, production supervisor shutdown semantics, default runtime wiring, and production
-  H2 integration unapproved. See
+  future candidate, keeps the candidate terminal as `exited` rather than `fallback`, and keeps
+  production forced termination, production shutdown timeout policy, restart / backoff, production
+  supervisor shutdown semantics, default runtime wiring, and production H2 integration unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).

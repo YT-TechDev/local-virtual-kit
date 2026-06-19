@@ -67,8 +67,11 @@ Expected behavior idea:
 
 - A synthetic helper models a shutdown that does not complete gracefully within a bounded smoke-local
   timeout.
-- The smoke observes a forced-exit style terminal outcome at the synthetic-smoke level only.
+- The smoke observes a shutdown-timeout / forced-exit style terminal outcome at the
+  synthetic-smoke level only.
 - The reconstructed lifecycle must remain bounded and explicit.
+- `exited` is the expected terminal state for this candidate; `fallback` is not the expected
+  terminal state for this forced-exit shutdown candidate.
 - The case must not define production process termination policy.
 - The case must not define cross-platform forced termination semantics.
 - The case must not add restart / backoff.
@@ -76,7 +79,7 @@ Expected behavior idea:
 
 Suggested path idea, if the future implementation can model it without production semantics:
 
-`not_started -> launching -> waiting_for_ready -> ready -> running -> stopping -> timed_out -> fallback`
+`not_started -> launching -> waiting_for_ready -> ready -> running -> stopping -> timed_out -> exited`
 
 Caution: if source inspection later shows this path would require production supervisor changes, real
 process termination policy, cross-platform forced-kill behavior, or a real control channel,
