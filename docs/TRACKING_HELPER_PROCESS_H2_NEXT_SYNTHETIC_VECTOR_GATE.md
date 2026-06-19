@@ -18,9 +18,10 @@ integration, grants no real frame access, adds no dependency, and changes no Mot
 
 > Update: the first candidate vector, `unknown_message_type_safe_ignore`, was implemented in
 > PR #152 (see
-> [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)).
-> The malformed and oversized helper output vectors remain the follow-up candidates under this
-> gate.
+> [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)),
+> and the malformed-line vector (case key `malformed_line`) was implemented in PR #154 (see
+> [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)).
+> The oversized helper output vector remains the sole follow-up candidate under this gate.
 
 ## Current Implemented H2 Synthetic Smoke Coverage
 
