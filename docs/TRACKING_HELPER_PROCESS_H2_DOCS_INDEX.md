@@ -63,6 +63,10 @@ H2 implementation is approved by this document.
     — closeout for the malformed-line synthetic vector (PR #154, case key `malformed_line`); the
     second helper-output error vector under the gate; records implementation state without claiming
     parser-level safe-drop semantics.
+16. [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md)
+    — scope / gate for the remaining `oversized_message_reject` candidate: records source-grounded
+    size/capture findings and the smallest safe future implementation shape and honest naming;
+    implements nothing.
 
 Background:
 
@@ -98,10 +102,14 @@ Background:
   (`not_started -> launching -> waiting_for_ready -> ready -> running -> exited`). With the current
   parser-free smoke style it does not claim parser-level safe-drop semantics. See
   [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md).
-- The remaining gated candidate — oversized helper output, recorded in
-  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)
-  — remains unimplemented and a future implementation PR must satisfy that gate before any code is
-  added. Shutdown / control-channel vectors require a separate scope decision.
+- The remaining gated candidate — oversized helper output — remains unimplemented and now has a
+  dedicated scope/gate in
+  [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md),
+  which records source-grounded findings (no enforced output size bound exists today) and the
+  smallest safe future shape and honest naming. A future implementation PR must satisfy that
+  scope/gate (and the
+  [`next synthetic vector gate`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)) before
+  any code is added. Shutdown / control-channel vectors require a separate scope decision.
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -164,12 +172,14 @@ These boundaries are preserved across all H2 docs:
 - **Malformed-line vector merged:** the `malformed_line` vector — the second helper-output error
   vector under the gate — is implemented and merged (PR #154), recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md).
-- **Next safe step:** a docs-only scope note / gate for the remaining `oversized_message_reject`
-  candidate first, under
-  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md);
-  a very small oversized vector should follow only if its size bounds / scope are obvious from the
-  current supervisor / source. Shutdown / control-channel vectors require a separate scope decision
-  before implementation.
+- **Oversized scope/gate added:** the remaining `oversized_message_reject` candidate now has a
+  dedicated scope/gate,
+  [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md).
+- **Next safe step:** Plan Mode for the smallest source-grounded oversized slice, bounded by that
+  scope/gate. Because current source has no enforced output size bound, the slice must first define
+  a narrow test-only line-size boundary (and the synthetic rejection check that goes with it), or
+  adopt a narrower source-grounded case name. Shutdown / control-channel vectors require a separate
+  scope decision before implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -191,6 +201,8 @@ These boundaries are preserved across all H2 docs:
   — closeout for the unknown-message-type synthetic vector (PR #152).
 - [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)
   — closeout for the malformed-line synthetic vector (PR #154).
+- [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md)
+  — scope / gate for the remaining oversized helper-output vector.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback

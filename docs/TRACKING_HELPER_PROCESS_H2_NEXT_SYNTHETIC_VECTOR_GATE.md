@@ -21,7 +21,9 @@ integration, grants no real frame access, adds no dependency, and changes no Mot
 > [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)),
 > and the malformed-line vector (case key `malformed_line`) was implemented in PR #154 (see
 > [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)).
-> The oversized helper output vector remains the sole follow-up candidate under this gate.
+> The oversized helper output vector remains the sole follow-up candidate under this gate, and now
+> has a dedicated scope/gate in
+> [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md).
 
 ## Current Implemented H2 Synthetic Smoke Coverage
 
