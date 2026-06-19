@@ -202,8 +202,7 @@ Do not create those additional documents in this PR. Do not proceed directly to 
   — frame / data-flow decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SMOKE_PHASE_HANDOFF.md)
   — handoff for the completed H2 synthetic smoke phase.
-- [`docs/TRACKING_HELPER_PROCESS_H2_NATIVE_HELPER_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_NATIVE_HELPER_CONTRACT.md)
-  — native helper contract.
+- H2 native helper contract: no current document exists in `docs/` with this title.
 - [`docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md`](TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md)
   — design-only pipe framing contract.
 - [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
