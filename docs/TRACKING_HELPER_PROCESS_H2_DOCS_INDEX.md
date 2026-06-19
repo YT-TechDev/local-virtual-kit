@@ -282,9 +282,14 @@ These boundaries are preserved across all H2 docs:
   in
   [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md)
   at the synthetic-smoke level only.
-- **Failure / timeout shutdown smoke gate added:** the next step is read-only review of
-  [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_GATE.md)
-  before any implementation.
+- **Failure / timeout shutdown smoke implemented:** `shutdown_after_failure_or_timeout` is recorded
+  in
+  [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  at the synthetic-smoke level only, covering both the failure and timeout fallback paths.
+- **Next scope decision required:** do not proceed to `shutdown_timeout_forced_exit`, forced
+  termination, shutdown timeout behavior, restart / backoff, production shutdown / control semantics,
+  default runtime wiring, or production H2 integration without a separate docs-only scope gate and
+  explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
