@@ -19,11 +19,14 @@ integration, grants no real frame access, adds no dependency, and changes no Mot
 > Update: the first candidate vector, `unknown_message_type_safe_ignore`, was implemented in
 > PR #152 (see
 > [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)),
-> and the malformed-line vector (case key `malformed_line`) was implemented in PR #154 (see
-> [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)).
-> The oversized helper output vector remains the sole follow-up candidate under this gate, and now
-> has a dedicated scope/gate in
-> [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_OUTPUT_SCOPE_GATE.md).
+> the malformed-line vector (case key `malformed_line`) was implemented in PR #154 (see
+> [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)),
+> and the oversized-line vector (case key `oversized_line_rejected`) was implemented and closed out
+> by PR #157 (see
+> [`docs/TRACKING_HELPER_PROCESS_H2_OVERSIZED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_OVERSIZED_LINE_SMOKE_CLOSEOUT.md)).
+> The helper-output error vector group is now covered at the synthetic-smoke level; production
+> supervisor size policy, general backpressure, shutdown / control semantics, and production H2
+> integration remain separately unapproved.
 
 ## Current Implemented H2 Synthetic Smoke Coverage
 
