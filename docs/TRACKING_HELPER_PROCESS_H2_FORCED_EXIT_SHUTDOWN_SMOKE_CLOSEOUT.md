@@ -45,6 +45,10 @@ which narrowed the final synthetic shutdown slice to only `shutdown_timeout_forc
     `"shutdown-timeout"` marker, and `exited` from the clean `"stopped"` marker plus exit code 0;
   - asserts the supervisor did **not** time out (`run.timedOut == false`), so the terminal state
     is `exited`, not `fallback`;
+  - asserts the private helper stdout markers appear in the exact lifecycle order
+    (`ready` -> `result` -> `stopping` -> `shutdown-timeout` -> `stopped`) before reconstructing
+    the path, using a smoke-local substring-offset ordering check (no JSON parser), so the case
+    cannot falsely pass if `shutdown-timeout` were emitted before `stopping` or after `stopped`;
   - keeps the markers private to helper stdout and never forwards them to public stdout (the
     smoke's own stdout stays empty);
   - asserts the reconstructed path equals

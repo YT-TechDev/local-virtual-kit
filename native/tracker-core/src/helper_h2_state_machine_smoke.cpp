@@ -130,6 +130,26 @@ bool contains(const std::string& haystack, const std::string& needle) {
   return haystack.find(needle) != std::string::npos;
 }
 
+// Smoke-local / test-only ordering check: returns true only if every needle in
+// `orderedNeedles` is present in `haystack` AND appears strictly after the
+// previous needle (each searched from just past the prior match). This is a
+// simple substring-offset check over captured PRIVATE helper stdout; it is NOT a
+// JSON parser and adds no dependency. It is used to assert that private helper
+// lifecycle markers were emitted in the expected order, so a case cannot falsely
+// pass on out-of-order markers.
+bool markersAppearInOrder(const std::string& haystack,
+                          const std::vector<std::string>& orderedNeedles) {
+  size_t searchFrom = 0;
+  for (const std::string& needle : orderedNeedles) {
+    const size_t found = haystack.find(needle, searchFrom);
+    if (found == std::string::npos) {
+      return false;
+    }
+    searchFrom = found + needle.size();
+  }
+  return true;
+}
+
 // Every non-empty stderr line emitted by the helper must use the safe
 // "[helper] " diagnostic prefix (matches the synthetic helper contract).
 bool helperStderrIsSafe(const std::string& stderrText) {
@@ -1132,6 +1152,23 @@ bool runShutdownTimeoutForcedExitCase(const std::string& helperPath) {
                   "not fallback)");
     return false;
   }
+
+  // Smoke-local ordering assertion: the private helper stdout markers must appear
+  // in the exact lifecycle order before we reconstruct the path. This prevents a
+  // false pass if the helper emitted "shutdown-timeout" before "stopping" or after
+  // "stopped". Uses substring offsets only (no JSON parser).
+  if (!markersAppearInOrder(run.stdoutText,
+                            {"\"type\":\"ready\"", "\"type\":\"result\"",
+                             "\"type\":\"stopping\"",
+                             "\"type\":\"shutdown-timeout\"",
+                             "\"type\":\"stopped\""})) {
+    reportFailure("shutdown_timeout_forced_exit",
+                  "private helper stdout markers missing or out of order "
+                  "(expected ready -> result -> stopping -> shutdown-timeout -> "
+                  "stopped)");
+    return false;
+  }
+
   if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
     reportFailure("shutdown_timeout_forced_exit", "missing ready marker");
     return false;
