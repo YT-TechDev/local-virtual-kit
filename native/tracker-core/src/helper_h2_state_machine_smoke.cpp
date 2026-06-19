@@ -442,6 +442,84 @@ bool runUnknownMessageTypeCase(const std::string& helperPath) {
   return true;
 }
 
+// Malformed helper output line is ignored by lifecycle reconstruction without
+// corrupting the reconstructed state path: not_started -> launching ->
+// waiting_for_ready -> ready -> running -> exited. With --emit-malformed-line the
+// synthetic helper emits one short, intentionally invalid helper-output line
+// after ready, then completes normally. That line is captured only in the
+// helper's PRIVATE stdout (asserted present there) and is never forwarded to this
+// smoke's stdout, which stays empty. No fallback is triggered.
+//
+// Honest scope: this smoke uses bounded string checks, not a JSON parser. It
+// verifies the malformed line is IGNORED BY LIFECYCLE RECONSTRUCTION and stays
+// private; it does NOT demonstrate general parser "safe drop" semantics, which
+// remain future production work. This corresponds to the design vector
+// malformed_json_line_safe_drop but verifies only that narrower property.
+bool runMalformedLineCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", "3", "--emit-malformed-line"}, kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("malformed_line", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("malformed_line", "unexpected timeout");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("malformed_line", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("malformed_line", "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  if (run.exitCode != 0) {
+    reportFailure("malformed_line", "expected exit code 0");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+    reportFailure("malformed_line", "missing stopped marker");
+    return false;
+  }
+  path.push_back(HelperState::exited);
+
+  // The malformed line must be present in the captured PRIVATE helper stdout,
+  // proving it was emitted and captured privately. It is never printed to this
+  // smoke's stdout.
+  if (!contains(run.stdoutText, "malformed-synthetic")) {
+    reportFailure("malformed_line",
+                  "missing malformed marker in private helper stdout");
+    return false;
+  }
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("malformed_line", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::exited};
+  if (!checkPath("malformed_line", path, expected)) {
+    return false;
+  }
+
+  reportPath("malformed_line", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -455,7 +533,8 @@ int main(int argc, char* argv[]) {
 
   if (!runNormalCase(helperPath) || !runFailureCase(helperPath) ||
       !runTimeoutCase(helperPath) || !runStartupTimeoutCase(helperPath) ||
-      !runUnknownMessageTypeCase(helperPath)) {
+      !runUnknownMessageTypeCase(helperPath) ||
+      !runMalformedLineCase(helperPath)) {
     return 1;
   }
 

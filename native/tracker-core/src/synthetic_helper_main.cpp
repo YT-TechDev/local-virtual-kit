@@ -39,6 +39,7 @@ struct HelperOptions {
   int delayReadyMs = kDefaultDelayReadyMs;
   int failAfter = kFailAfterDisabled;
   bool emitUnknownType = false;
+  bool emitMalformedLine = false;
 };
 
 bool parseIntInRange(
@@ -63,7 +64,8 @@ bool parseIntInRange(
 
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
-            "[--delay-ready-ms N] [--emit-unknown-type] [--fail-after N]\n";
+            "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
+            "[--fail-after N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -77,6 +79,10 @@ void printUsage(std::ostream &output) {
             "synthetic helper-style line carrying an unknown type after the "
             "ready line; the helper otherwise completes normally. It stays "
             "synthetic only and is not a MotionFrame.\n";
+  output << "--emit-malformed-line is a test-only mode that emits one short, "
+            "intentionally invalid helper-output line after the ready line; the "
+            "helper otherwise completes normally. It stays synthetic only and is "
+            "not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -154,6 +160,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       continue;
     }
 
+    if (argument == "--emit-malformed-line") {
+      options.emitMalformedLine = true;
+      continue;
+    }
+
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --fail-after.\n";
@@ -199,6 +210,17 @@ void writeUnknownTypeLine(std::ostream &output) {
          << "\"type\":\"unknown-synthetic\","
          << "\"schemaVersion\":" << kHelperSchemaVersion << ","
          << "\"source\":\"synthetic-helper\"}\n";
+}
+
+// Emits a single short, intentionally invalid helper-output line. It opens like
+// a helper object but is not parseable helper JSON (missing delimiters and a
+// closing brace), modeling a malformed line that must not corrupt Native Core's
+// lifecycle handling. It is intentionally NOT a MotionFrame, carries the distinct
+// marker "malformed-synthetic", and contains no raw data, paths, secrets, pixels,
+// tensors, or model contents. It deliberately omits the ready/result/stopped
+// markers so it cannot perturb lifecycle reconstruction.
+void writeMalformedLine(std::ostream &output) {
+  output << "{\"type\":\"malformed-synthetic\" this-is-not-valid-helper-json\n";
 }
 
 // Emits a synthetic internal helper result line. This is intentionally NOT a
@@ -270,6 +292,15 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] emitting synthetic unknown-type line "
                  "(reason=synthetic-unknown-type)\n";
     writeUnknownTypeLine(std::cout);
+  }
+
+  // Test-only: emit one intentionally invalid helper-output line after ready.
+  // The helper otherwise continues normally, modeling a malformed line that
+  // Native Core would discard without corrupting the lifecycle.
+  if (options.emitMalformedLine) {
+    std::cerr << "[helper] emitting synthetic malformed line "
+                 "(reason=synthetic-malformed-line)\n";
+    writeMalformedLine(std::cout);
   }
 
   long long emittedResultCount = 0;
