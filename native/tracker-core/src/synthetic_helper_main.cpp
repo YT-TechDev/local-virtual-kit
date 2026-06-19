@@ -38,6 +38,7 @@ struct HelperOptions {
   int intervalMs = kDefaultIntervalMs;
   int delayReadyMs = kDefaultDelayReadyMs;
   int failAfter = kFailAfterDisabled;
+  bool emitUnknownType = false;
 };
 
 bool parseIntInRange(
@@ -62,7 +63,7 @@ bool parseIntInRange(
 
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
-            "[--delay-ready-ms N] [--fail-after N]\n";
+            "[--delay-ready-ms N] [--emit-unknown-type] [--fail-after N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -72,6 +73,10 @@ void printUsage(std::ostream &output) {
          << kMaxDelayReadyMs << " (default " << kDefaultDelayReadyMs
          << "); it is a test-only mode that sleeps before emitting the ready "
             "line so a bounded startup timeout can be exercised.\n";
+  output << "--emit-unknown-type is a test-only mode that emits one extra "
+            "synthetic helper-style line carrying an unknown type after the "
+            "ready line; the helper otherwise completes normally. It stays "
+            "synthetic only and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -144,6 +149,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       continue;
     }
 
+    if (argument == "--emit-unknown-type") {
+      options.emitUnknownType = true;
+      continue;
+    }
+
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --fail-after.\n";
@@ -175,6 +185,18 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 void writeReadyLine(std::ostream &output) {
   output << "{"
          << "\"type\":\"ready\","
+         << "\"schemaVersion\":" << kHelperSchemaVersion << ","
+         << "\"source\":\"synthetic-helper\"}\n";
+}
+
+// Emits a single safe, synthetic helper-style line carrying an unknown type.
+// Native Core would ignore such a line with a safe diagnostic (no state
+// corruption); this models the unknown_message_type_safe_ignore vector. It is
+// intentionally NOT a MotionFrame and contains no raw data, paths, secrets,
+// pixels, tensors, or model contents.
+void writeUnknownTypeLine(std::ostream &output) {
+  output << "{"
+         << "\"type\":\"unknown-synthetic\","
          << "\"schemaVersion\":" << kHelperSchemaVersion << ","
          << "\"source\":\"synthetic-helper\"}\n";
 }
@@ -240,6 +262,15 @@ int main(int argc, char *argv[]) {
   }
 
   writeReadyLine(std::cout);
+
+  // Test-only: emit one synthetic helper-style line with an unknown type after
+  // ready. The helper otherwise continues normally, modeling an unknown message
+  // that Native Core would ignore without corrupting the lifecycle.
+  if (options.emitUnknownType) {
+    std::cerr << "[helper] emitting synthetic unknown-type line "
+                 "(reason=synthetic-unknown-type)\n";
+    writeUnknownTypeLine(std::cout);
+  }
 
   long long emittedResultCount = 0;
   for (int frameIndex = 0; frameIndex < options.frameCount; ++frameIndex) {

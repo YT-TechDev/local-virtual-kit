@@ -369,6 +369,79 @@ bool runStartupTimeoutCase(const std::string& helperPath) {
   return true;
 }
 
+// Unknown helper message type is ignored without corrupting the reconstructed
+// state path: not_started -> launching -> waiting_for_ready -> ready -> running
+// -> exited. With --emit-unknown-type the synthetic helper emits one extra
+// helper-style line carrying an unknown "type" after ready, then completes
+// normally. That unknown line is captured only in the helper's PRIVATE stdout
+// (asserted present there) and is never forwarded to this smoke's stdout, which
+// stays empty. No fallback is triggered; the path is identical to the normal
+// case.
+bool runUnknownMessageTypeCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", "3", "--emit-unknown-type"}, kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("unknown_message_type", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("unknown_message_type", "unexpected timeout");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("unknown_message_type", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("unknown_message_type", "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  if (run.exitCode != 0) {
+    reportFailure("unknown_message_type", "expected exit code 0");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+    reportFailure("unknown_message_type", "missing stopped marker");
+    return false;
+  }
+  path.push_back(HelperState::exited);
+
+  // The unknown-type line must be present in the captured PRIVATE helper stdout,
+  // proving it was emitted and captured privately. It is never printed to this
+  // smoke's stdout.
+  if (!contains(run.stdoutText, "\"type\":\"unknown-synthetic\"")) {
+    reportFailure("unknown_message_type",
+                  "missing unknown-type marker in private helper stdout");
+    return false;
+  }
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("unknown_message_type", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::exited};
+  if (!checkPath("unknown_message_type", path, expected)) {
+    return false;
+  }
+
+  reportPath("unknown_message_type", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -381,7 +454,8 @@ int main(int argc, char* argv[]) {
   const std::string helperPath = argv[1];
 
   if (!runNormalCase(helperPath) || !runFailureCase(helperPath) ||
-      !runTimeoutCase(helperPath) || !runStartupTimeoutCase(helperPath)) {
+      !runTimeoutCase(helperPath) || !runStartupTimeoutCase(helperPath) ||
+      !runUnknownMessageTypeCase(helperPath)) {
     return 1;
   }
 
