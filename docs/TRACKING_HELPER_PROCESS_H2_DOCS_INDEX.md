@@ -147,6 +147,10 @@ H2 implementation is approved by this document.
     — docs-only validation scope gate defining CI-safe, local/manual, privacy, public stdout, helper
     privacy, and evidence-claim boundaries required before production H2 runtime work; implements
     nothing.
+35. [`docs/TRACKING_HELPER_PROCESS_H2_RUNTIME_INTEGRATION_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_RUNTIME_INTEGRATION_OWNER_DECISION.md)
+    — docs-only owner decision recording that H2 must not proceed directly to production runtime
+    implementation yet, and that default `lvk-tracker-core` helper runtime wiring remains
+    unapproved.
 
 Background:
 
@@ -283,6 +287,9 @@ Background:
   production readiness claim, real frame access, telemetry / network behavior, or cloud / external
   processing. See
   [`docs/TRACKING_HELPER_PROCESS_H2_VALIDATION_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_VALIDATION_SCOPE_GATE.md).
+- The runtime integration owner decision records that production H2 implementation and default
+  `lvk-tracker-core` helper runtime wiring are not approved yet. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_RUNTIME_INTEGRATION_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_RUNTIME_INTEGRATION_OWNER_DECISION.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -376,8 +383,9 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **Validation scope gate review required:** next, perform a read-only review of the validation scope
-  gate, then choose one narrow next planning direction before implementation. Do not proceed to
+- **Runtime integration owner decision review required:** next, perform a read-only review of the
+  runtime integration owner decision, then choose one narrow planning direction before implementation.
+  Do not proceed to
   backend / runtime / model / dependency selection, feature flag implementation, production forced
   termination, production shutdown timeout policy, restart / backoff, production supervisor shutdown
   semantics, a real parent-to-child control channel, default runtime wiring, production H2 integration,
@@ -459,6 +467,9 @@ These boundaries are preserved across all H2 docs:
   — docs-only validation scope gate; keeps CI-safe checks, local/manual evidence, public stdout
   safety, helper privacy, local-first privacy, and evidence claims bounded before future production
   runtime implementation.
+- [`docs/TRACKING_HELPER_PROCESS_H2_RUNTIME_INTEGRATION_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_RUNTIME_INTEGRATION_OWNER_DECISION.md)
+  — docs-only owner decision; keeps production H2 implementation and default runtime wiring
+  unapproved while requiring explicit owner approval before any implementation gate.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
