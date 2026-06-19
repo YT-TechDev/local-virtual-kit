@@ -83,6 +83,10 @@ H2 implementation is approved by this document.
 20. [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md)
     — docs-only gate selecting only `shutdown_graceful_exit` as the first future synthetic shutdown
     smoke slice; keeps other shutdown vectors unapproved.
+21. [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md)
+    — closeout for the `shutdown_graceful_exit` synthetic vector; records implementation at the
+    synthetic-smoke level only (a reconstructed `stopping` label from a private synthetic marker, not
+    a real `stop` exchange); keeps all other shutdown vectors unapproved.
 
 Background:
 
@@ -137,6 +141,16 @@ Background:
 - The graceful shutdown smoke gate selects only `shutdown_graceful_exit` as the first future slice and
   keeps all other shutdown vectors unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md).
+- `shutdown_graceful_exit` is implemented at the synthetic-smoke level only: the
+  `shutdown_graceful_exit` case added to the same smoke reconstructs
+  `not_started -> launching -> waiting_for_ready -> ready -> running -> stopping -> exited` from a
+  private, test-only synthetic `"stopping"` marker emitted before the clean `stopped` line. There is
+  no parent-to-child control channel; `stopping` is a reconstructed lifecycle label, not a real `stop`
+  exchange. All other shutdown vectors (`shutdown_timeout_forced_exit`,
+  `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`), forced termination,
+  shutdown timeout, restart / backoff, and production shutdown / control semantics remain unapproved.
+  See
+  [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -247,6 +261,8 @@ These boundaries are preserved across all H2 docs:
   — docs-only plan for a future synthetic shutdown smoke slice; implementation remains unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md)
   — docs-only gate selecting only `shutdown_graceful_exit` as the first future shutdown smoke slice.
+- [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  — closeout for the `shutdown_graceful_exit` synthetic vector (synthetic-smoke level only).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
