@@ -32,6 +32,9 @@ constexpr int kMaxDelayReadyMs = 600000;
 constexpr int kFailAfterDisabled = -1;
 constexpr int kHelperSchemaVersion = 1;
 constexpr long long kSyntheticTimestampStepMs = 33; // ~30 synthetic fps
+// Filler size for the synthetic oversized-line test mode. Bounded to a few KB
+// (not multi-MB) so the test stays deterministic and memory-safe.
+constexpr int kSyntheticOversizedFillerBytes = 2048;
 
 struct HelperOptions {
   int frameCount = kDefaultFrameCount;
@@ -40,6 +43,7 @@ struct HelperOptions {
   int failAfter = kFailAfterDisabled;
   bool emitUnknownType = false;
   bool emitMalformedLine = false;
+  bool emitOversizedLine = false;
 };
 
 bool parseIntInRange(
@@ -65,7 +69,7 @@ bool parseIntInRange(
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
             "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
-            "[--fail-after N]\n";
+            "[--emit-oversized-line] [--fail-after N]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -83,6 +87,10 @@ void printUsage(std::ostream &output) {
             "intentionally invalid helper-output line after the ready line; the "
             "helper otherwise completes normally. It stays synthetic only and is "
             "not a MotionFrame.\n";
+  output << "--emit-oversized-line is a test-only mode that emits one bounded "
+            "oversized helper-output line (a marker plus safe filler, a few KB) "
+            "after the ready line; the helper otherwise completes normally. It "
+            "stays synthetic only and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -165,6 +173,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       continue;
     }
 
+    if (argument == "--emit-oversized-line") {
+      options.emitOversizedLine = true;
+      continue;
+    }
+
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --fail-after.\n";
@@ -221,6 +234,22 @@ void writeUnknownTypeLine(std::ostream &output) {
 // markers so it cannot perturb lifecycle reconstruction.
 void writeMalformedLine(std::ostream &output) {
   output << "{\"type\":\"malformed-synthetic\" this-is-not-valid-helper-json\n";
+}
+
+// Emits a single deterministic oversized helper-output line: the distinct marker
+// "oversized-synthetic" followed by kSyntheticOversizedFillerBytes safe filler
+// characters. The line is bounded to a few KB so a smoke can exercise an
+// oversized-line size check without memory pressure. It is intentionally NOT a
+// MotionFrame and contains only the marker and repeated safe filler -- no raw
+// data, paths, secrets, pixels, tensors, or model contents. It deliberately omits
+// the ready/result/stopped markers so it cannot perturb lifecycle reconstruction.
+void writeOversizedLine(std::ostream &output) {
+  output << "oversized-synthetic";
+  for (int fillerIndex = 0; fillerIndex < kSyntheticOversizedFillerBytes;
+       ++fillerIndex) {
+    output << 'x';
+  }
+  output << "\n";
 }
 
 // Emits a synthetic internal helper result line. This is intentionally NOT a
@@ -301,6 +330,15 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] emitting synthetic malformed line "
                  "(reason=synthetic-malformed-line)\n";
     writeMalformedLine(std::cout);
+  }
+
+  // Test-only: emit one bounded oversized helper-output line after ready. The
+  // helper otherwise continues normally, modeling an oversized line that a
+  // bounded size check would reject without corrupting the lifecycle.
+  if (options.emitOversizedLine) {
+    std::cerr << "[helper] emitting synthetic oversized line "
+                 "(reason=synthetic-oversized-line)\n";
+    writeOversizedLine(std::cout);
   }
 
   long long emittedResultCount = 0;
