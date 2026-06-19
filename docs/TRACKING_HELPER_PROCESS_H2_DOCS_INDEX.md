@@ -135,6 +135,10 @@ H2 implementation is approved by this document.
     — docs-only helper backend / runtime decision preserving the unapproved status of backend,
     runtime, model / task bundle, dependency, production integration, default runtime wiring, cloud
     inference, and external frame processing choices.
+32. [`docs/TRACKING_HELPER_PROCESS_H2_PROCESS_LIFECYCLE_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROCESS_LIFECYCLE_SCOPE_GATE.md)
+    — docs-only process lifecycle scope gate defining decisions required before production startup,
+    shutdown / control, forced termination, timeout, fallback, restart / backoff, validation, or
+    default runtime wiring; implements nothing.
 
 Background:
 
@@ -257,6 +261,10 @@ Background:
   model / dependency selection, production H2 integration, default runtime wiring, cloud inference,
   or external frame processing. See
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md`](TRACKING_HELPER_PROCESS_H2_HELPER_BACKEND_RUNTIME_DECISION.md).
+- The process lifecycle scope gate has been added and still approves no production lifecycle
+  behavior, real stop / control channel, production forced termination, shutdown timeout policy,
+  restart / backoff, production H2 integration, or default runtime wiring. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_PROCESS_LIFECYCLE_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROCESS_LIFECYCLE_SCOPE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -350,8 +358,8 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **Helper backend / runtime decision review required:** next, perform a read-only review of the
-  helper backend / runtime decision, then choose one narrow next planning direction before any
+- **Process lifecycle scope gate review required:** next, perform a read-only review of the
+  process lifecycle scope gate, then choose one narrow next planning direction before any
   implementation. Do not proceed to backend / runtime / model / dependency selection, production
   forced termination, production shutdown timeout policy, restart / backoff, production supervisor
   shutdown semantics, a real parent-to-child control channel, default runtime wiring, production H2
@@ -420,6 +428,10 @@ These boundaries are preserved across all H2 docs:
   — docs-only helper backend / runtime decision; keeps backend, runtime, model, dependency,
   production integration, default runtime wiring, cloud inference, and external frame processing
   unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_PROCESS_LIFECYCLE_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROCESS_LIFECYCLE_SCOPE_GATE.md)
+  — docs-only process lifecycle scope gate; keeps production lifecycle behavior, real stop / control,
+  forced termination, shutdown timeout policy, restart / backoff, production integration, and default
+  runtime wiring unapproved.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
