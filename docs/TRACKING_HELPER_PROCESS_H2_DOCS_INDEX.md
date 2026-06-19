@@ -80,6 +80,9 @@ H2 implementation is approved by this document.
 19. [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md)
     — docs-only plan for the smallest future synthetic shutdown smoke slice; records candidate
     vectors and invariants while leaving shutdown / control implementation unapproved.
+20. [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md)
+    — docs-only gate selecting only `shutdown_graceful_exit` as the first future synthetic shutdown
+    smoke slice; keeps other shutdown vectors unapproved.
 
 Background:
 
@@ -131,6 +134,9 @@ Background:
 - The synthetic shutdown smoke plan is docs-only; it records candidate future vectors and invariants,
   but shutdown / control implementation remains unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md).
+- The graceful shutdown smoke gate selects only `shutdown_graceful_exit` as the first future slice and
+  keeps all other shutdown vectors unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -204,9 +210,11 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_SHUTDOWN_CONTROL_SCOPE_GATE.md).
   It implements nothing; the `stop` handshake remains designed-only, and shutdown / control stays
   gated before production wiring.
-- **Synthetic shutdown smoke plan added:** the next step is read-only review of
-  [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md)
-  before any shutdown / control implementation.
+- **Synthetic shutdown smoke plan added:** candidate shutdown smoke vectors are recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md).
+- **Graceful shutdown smoke gate added:** the next step is read-only review of
+  [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md)
+  before any implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -237,6 +245,8 @@ These boundaries are preserved across all H2 docs:
   handshake; decisions required before implementation).
 - [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md)
   — docs-only plan for a future synthetic shutdown smoke slice; implementation remains unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md)
+  — docs-only gate selecting only `shutdown_graceful_exit` as the first future shutdown smoke slice.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
