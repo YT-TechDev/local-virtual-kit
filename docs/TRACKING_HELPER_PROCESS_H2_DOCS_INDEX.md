@@ -59,6 +59,10 @@ H2 implementation is approved by this document.
     — closeout for the unknown-message-type synthetic vector (PR #152,
     `unknown_message_type_safe_ignore`); the first helper-output error vector under the gate,
     records implementation state, not production integration.
+15. [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)
+    — closeout for the malformed-line synthetic vector (PR #154, case key `malformed_line`); the
+    second helper-output error vector under the gate; records implementation state without claiming
+    parser-level safe-drop semantics.
 
 Background:
 
@@ -88,9 +92,15 @@ Background:
   lifecycle path (`not_started -> launching -> waiting_for_ready -> ready -> running -> exited`).
   See
   [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md).
-- The remaining gated candidates — malformed and oversized helper output, recorded in
+- The malformed-line vector is implemented (PR #154): the `malformed_line` case added to the same
+  smoke, where a short, intentionally invalid helper output line is captured only in private helper
+  stdout and does not corrupt the normal lifecycle path
+  (`not_started -> launching -> waiting_for_ready -> ready -> running -> exited`). With the current
+  parser-free smoke style it does not claim parser-level safe-drop semantics. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md).
+- The remaining gated candidate — oversized helper output, recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)
-  — remain unimplemented and a future implementation PR must satisfy that gate before any code is
+  — remains unimplemented and a future implementation PR must satisfy that gate before any code is
   added. Shutdown / control-channel vectors require a separate scope decision.
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
@@ -151,11 +161,15 @@ These boundaries are preserved across all H2 docs:
 - **Unknown-message vector merged:** the `unknown_message_type_safe_ignore` vector — the first
   helper-output error vector under the gate — is implemented and merged (PR #152), recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md).
-- **Next safe step:** a future small synthetic-only **malformed** helper output vector planning
-  slice (`malformed_json_line_safe_drop`), gated by
+- **Malformed-line vector merged:** the `malformed_line` vector — the second helper-output error
+  vector under the gate — is implemented and merged (PR #154), recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md).
+- **Next safe step:** a docs-only scope note / gate for the remaining `oversized_message_reject`
+  candidate first, under
   [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md);
-  the oversized vector should follow only after its size bounds / scope are kept narrow. Shutdown /
-  control-channel vectors require a separate scope decision before implementation.
+  a very small oversized vector should follow only if its size bounds / scope are obvious from the
+  current supervisor / source. Shutdown / control-channel vectors require a separate scope decision
+  before implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -175,6 +189,8 @@ These boundaries are preserved across all H2 docs:
   — gate / decision for the next synthetic-only helper-output error vector slice.
 - [`docs/TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNKNOWN_MESSAGE_SMOKE_CLOSEOUT.md)
   — closeout for the unknown-message-type synthetic vector (PR #152).
+- [`docs/TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_MALFORMED_LINE_SMOKE_CLOSEOUT.md)
+  — closeout for the malformed-line synthetic vector (PR #154).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
