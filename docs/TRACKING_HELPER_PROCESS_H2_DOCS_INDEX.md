@@ -87,6 +87,10 @@ H2 implementation is approved by this document.
     — closeout for the `shutdown_graceful_exit` synthetic vector; records implementation at the
     synthetic-smoke level only (a reconstructed `stopping` label from a private synthetic marker, not
     a real `stop` exchange); keeps all other shutdown vectors unapproved.
+22. [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md)
+    — docs-only gate selecting only `shutdown_after_helper_already_exited` as the next future
+    synthetic shutdown smoke candidate; keeps timeout / forced termination and failure-after-stop
+    unapproved.
 
 Background:
 
@@ -151,6 +155,9 @@ Background:
   shutdown timeout, restart / backoff, and production shutdown / control semantics remain unapproved.
   See
   [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md).
+- The already-exited shutdown smoke gate selects only `shutdown_after_helper_already_exited` as the
+  next future candidate and keeps timeout / forced termination and failure-after-stop unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -226,8 +233,11 @@ These boundaries are preserved across all H2 docs:
   gated before production wiring.
 - **Synthetic shutdown smoke plan added:** candidate shutdown smoke vectors are recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md`](TRACKING_HELPER_PROCESS_H2_SYNTHETIC_SHUTDOWN_SMOKE_PLAN.md).
-- **Graceful shutdown smoke gate added:** the next step is read-only review of
-  [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_GATE.md)
+- **Graceful shutdown smoke implemented:** `shutdown_graceful_exit` is recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  at the synthetic-smoke level only.
+- **Already-exited shutdown smoke gate added:** the next step is read-only review of
+  [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md)
   before any implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
@@ -263,6 +273,9 @@ These boundaries are preserved across all H2 docs:
   — docs-only gate selecting only `shutdown_graceful_exit` as the first future shutdown smoke slice.
 - [`docs/TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_GRACEFUL_SHUTDOWN_SMOKE_CLOSEOUT.md)
   — closeout for the `shutdown_graceful_exit` synthetic vector (synthetic-smoke level only).
+- [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md)
+  — docs-only gate selecting only `shutdown_after_helper_already_exited` as the next future shutdown
+  smoke candidate.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
