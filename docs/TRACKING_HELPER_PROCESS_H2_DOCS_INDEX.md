@@ -107,6 +107,11 @@ H2 implementation is approved by this document.
     lifecycle state, no marker, no real `stop` exchange; fallback meaning preserved); keeps
     `shutdown_timeout_forced_exit`, forced termination, shutdown timeout, and restart / backoff
     unapproved.
+26. [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md)
+    — docs-only gate selecting only `shutdown_timeout_forced_exit` as the remaining future synthetic
+    shutdown smoke candidate; keeps production forced termination, production shutdown timeout policy,
+    restart / backoff, production supervisor shutdown semantics, default runtime wiring, and production
+    H2 integration unapproved.
 
 Background:
 
@@ -200,6 +205,11 @@ Background:
   timeout behavior, restart / backoff, and production shutdown / control semantics remain unapproved.
   See
   [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md).
+- The forced-exit shutdown smoke gate selects only `shutdown_timeout_forced_exit` as the remaining
+  future candidate and keeps production forced termination, production shutdown timeout policy,
+  restart / backoff, production supervisor shutdown semantics, default runtime wiring, and production
+  H2 integration unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -286,10 +296,9 @@ These boundaries are preserved across all H2 docs:
   in
   [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md)
   at the synthetic-smoke level only, covering both the failure and timeout fallback paths.
-- **Next scope decision required:** do not proceed to `shutdown_timeout_forced_exit`, forced
-  termination, shutdown timeout behavior, restart / backoff, production shutdown / control semantics,
-  default runtime wiring, or production H2 integration without a separate docs-only scope gate and
-  explicit approval.
+- **Forced-exit shutdown smoke gate added:** the next step is read-only review of
+  [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md)
+  before any implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -336,6 +345,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FAILURE_TIMEOUT_SHUTDOWN_SMOKE_CLOSEOUT.md)
   — closeout for the `shutdown_after_failure_or_timeout` synthetic vector (synthetic-smoke level only;
   both failure and timeout paths).
+- [`docs/TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_FORCED_EXIT_SHUTDOWN_SMOKE_GATE.md)
+  — docs-only gate selecting only `shutdown_timeout_forced_exit` as the remaining future shutdown
+  smoke candidate.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
