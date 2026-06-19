@@ -121,25 +121,67 @@ bool helperStderrIsSafe(const std::string& stderrText) {
   return true;
 }
 
-// Returns true if any line in `text` is longer than `maxLineBytes`. Only line
-// LENGTHS are measured; line content is never copied, stored, printed, or
-// forwarded. This is the smoke-local, test-only oversized-line size check; it is
-// NOT a supervisor or production size/backpressure policy.
-bool hasLineExceeding(const std::string& text, size_t maxLineBytes) {
+// Result of a single bounded, smoke-local scan over captured PRIVATE helper
+// stdout. Lifecycle markers are reconstructed ONLY from lines within the
+// smoke-local size limit: any line longer than `maxLineBytes` is rejected before
+// its content is scanned, so an oversized line can never contribute a lifecycle
+// marker. Only line LENGTHS are measured and only bounded lines are inspected;
+// the oversized payload is never fully stored, printed, or forwarded. This is a
+// smoke-local, test-only size check; it is NOT a supervisor or production
+// size/backpressure/reject policy.
+struct SmokeLineScanResult {
+  bool foundReady = false;
+  bool foundResult = false;
+  bool foundStopped = false;
+  bool rejectedOversizedLine = false;
+};
+
+// Scans `text` line by line with a simple char loop. For each line: if its
+// length exceeds `maxLineBytes` it is rejected (rejectedOversizedLine = true) and
+// NOT scanned for lifecycle markers; otherwise that bounded line alone is scanned
+// for the lifecycle markers. Copying stops as soon as a line exceeds the limit,
+// so the oversized payload is never fully buffered, printed, or forwarded.
+SmokeLineScanResult scanHelperStdoutWithSmokeLineLimit(const std::string& text,
+                                                       size_t maxLineBytes) {
+  SmokeLineScanResult result;
+  std::string boundedLine;
   size_t lineLength = 0;
+  bool lineOversized = false;
   for (size_t index = 0; index <= text.size(); ++index) {
     const bool atEnd = index == text.size();
     const char character = atEnd ? '\n' : text[index];
     if (character == '\n' || character == '\r') {
-      if (lineLength > maxLineBytes) {
-        return true;
+      if (lineOversized) {
+        // Oversized line: rejected before any lifecycle marker scan, so it can
+        // never perturb lifecycle reconstruction.
+        result.rejectedOversizedLine = true;
+      } else if (!boundedLine.empty()) {
+        if (contains(boundedLine, "\"type\":\"ready\"")) {
+          result.foundReady = true;
+        }
+        if (contains(boundedLine, "\"type\":\"result\"")) {
+          result.foundResult = true;
+        }
+        if (contains(boundedLine, "\"type\":\"stopped\"")) {
+          result.foundStopped = true;
+        }
       }
+      boundedLine.clear();
       lineLength = 0;
+      lineOversized = false;
     } else {
       ++lineLength;
+      if (lineLength > maxLineBytes) {
+        // Stop copying once the line exceeds the limit: the oversized payload is
+        // never fully stored, printed, or forwarded; only its rejection matters.
+        lineOversized = true;
+        boundedLine.clear();
+      } else {
+        boundedLine.push_back(character);
+      }
     }
   }
-  return false;
+  return result;
 }
 
 void reportFailure(const std::string& caseName, const std::string& reason) {
@@ -546,14 +588,20 @@ bool runMalformedLineCase(const std::string& helperPath) {
   return true;
 }
 
-// Oversized helper output line is rejected by a smoke-local size check without
-// corrupting the reconstructed state path: not_started -> launching ->
-// waiting_for_ready -> ready -> running -> exited. With --emit-oversized-line the
-// synthetic helper emits one bounded (~2 KB) line after ready, then completes
-// normally. That line is captured only in the helper's PRIVATE stdout (its marker
-// is asserted present, by substring check) and is never forwarded to this smoke's
-// stdout, which stays empty. The case asserts the oversized line exceeds the
-// smoke-local test-only limit (kMaxHelperLineBytesForSmoke), i.e. it is rejected.
+// Oversized helper output line is rejected by a smoke-local size check and
+// excluded from lifecycle reconstruction, without corrupting the reconstructed
+// state path: not_started -> launching -> waiting_for_ready -> ready -> running
+// -> exited. With --emit-oversized-line the synthetic helper emits one bounded
+// (~2 KB) line after ready, then completes normally. That line is captured only
+// in the helper's PRIVATE stdout (its marker is asserted present, by substring
+// check) and is never forwarded to this smoke's stdout, which stays empty.
+//
+// Lifecycle markers (ready/result/stopped) are reconstructed by a smoke-local
+// line scan that rejects any line exceeding kMaxHelperLineBytesForSmoke BEFORE
+// scanning it for markers, so the oversized line cannot contribute a lifecycle
+// marker. The case asserts that a line was rejected (i.e. the oversized line
+// exceeded the limit) and that ready/result/stopped were still observed on
+// bounded lines.
 //
 // Honest scope: the size limit and rejection are SMOKE-LOCAL / TEST-ONLY. They
 // are not a supervisor or production size / backpressure / reject policy; the
@@ -575,13 +623,21 @@ bool runOversizedLineCase(const std::string& helperPath) {
     reportFailure("oversized_line_rejected", "unexpected timeout");
     return false;
   }
-  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+
+  // Smoke-local, test-only line scan: lifecycle markers are reconstructed only
+  // from bounded lines. Any line exceeding kMaxHelperLineBytesForSmoke is
+  // rejected before its lifecycle markers are scanned, so the oversized line is
+  // excluded from lifecycle reconstruction.
+  const SmokeLineScanResult scan = scanHelperStdoutWithSmokeLineLimit(
+      run.stdoutText, kMaxHelperLineBytesForSmoke);
+
+  if (!scan.foundReady) {
     reportFailure("oversized_line_rejected", "missing ready marker");
     return false;
   }
   path.push_back(HelperState::ready);
 
-  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+  if (!scan.foundResult) {
     reportFailure("oversized_line_rejected", "missing result marker");
     return false;
   }
@@ -591,7 +647,7 @@ bool runOversizedLineCase(const std::string& helperPath) {
     reportFailure("oversized_line_rejected", "expected exit code 0");
     return false;
   }
-  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+  if (!scan.foundStopped) {
     reportFailure("oversized_line_rejected", "missing stopped marker");
     return false;
   }
@@ -605,9 +661,10 @@ bool runOversizedLineCase(const std::string& helperPath) {
     return false;
   }
 
-  // Smoke-local, test-only rejection: a line exceeding kMaxHelperLineBytesForSmoke
-  // must be present (only line lengths are measured; no payload is printed).
-  if (!hasLineExceeding(run.stdoutText, kMaxHelperLineBytesForSmoke)) {
+  // Smoke-local, test-only rejection: the scan must have rejected at least one
+  // line exceeding kMaxHelperLineBytesForSmoke (only line lengths are measured;
+  // no payload is printed or fully stored).
+  if (!scan.rejectedOversizedLine) {
     reportFailure("oversized_line_rejected",
                   "no line exceeded the smoke-local size limit");
     return false;
