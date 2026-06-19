@@ -128,6 +128,9 @@ H2 implementation is approved by this document.
     — docs-only post-synthetic next-scope gate defining decisions required before any production H2
     integration, default runtime wiring, real frame access, helper control-channel work, process
     lifecycle policy, or MotionFrame changes.
+30. [`docs/TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md)
+    — docs-only frame / data-flow decision preserving Native Core camera ownership, MotionFrame-only
+    public output, and the unapproved status of helper-owned capture and raw frame transport.
 
 Background:
 
@@ -242,6 +245,10 @@ Background:
   this does not claim production readiness.
 - The post-synthetic next-scope gate has been added and still approves no production H2 work. See
   [`docs/TRACKING_HELPER_PROCESS_H2_POST_SYNTHETIC_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_SYNTHETIC_NEXT_SCOPE_GATE.md).
+- The frame / data-flow decision has been added and still approves no helper-owned camera capture,
+  raw frame IPC, tensor IPC, high-rate frame transport, MotionFrame changes, production H2
+  integration, or default runtime wiring. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -335,11 +342,12 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **Post-synthetic gate review required:** next, perform a read-only review of the post-synthetic
-  next-scope gate, then choose one narrow planning direction before any implementation. Do not proceed
-  to production forced termination, production shutdown timeout policy, restart / backoff, production
-  supervisor shutdown semantics, a real parent-to-child control channel, default runtime wiring, or
-  production H2 integration without separate explicit approval.
+- **Frame / data-flow decision review required:** next, perform a read-only review of the frame /
+  data-flow decision, then choose one narrow planning direction before any implementation. Do not
+  proceed to production forced termination, production shutdown timeout policy, restart / backoff,
+  production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
+  wiring, production H2 integration, helper-owned camera capture, or frame transport without separate
+  explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -396,6 +404,9 @@ These boundaries are preserved across all H2 docs:
   — docs-only handoff for the completed H2 synthetic smoke phase and next scope decision boundary.
 - [`docs/TRACKING_HELPER_PROCESS_H2_POST_SYNTHETIC_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_SYNTHETIC_NEXT_SCOPE_GATE.md)
   — docs-only post-synthetic next-scope gate; approves no production H2 work.
+- [`docs/TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FRAME_DATA_FLOW_DECISION.md)
+  — docs-only frame / data-flow decision; preserves Native Core camera ownership and rejects default
+  frame transport.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
