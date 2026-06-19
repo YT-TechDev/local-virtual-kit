@@ -48,6 +48,9 @@ H2 implementation is approved by this document.
 11. [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md)
     — closeout for the first implemented synthetic-only H2 slice (PR #147,
     `lvk-helper-h2-state-machine-smoke`); records implementation state, not production integration.
+12. [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md)
+    — closeout for the startup-timeout synthetic vector (PR #149,
+    `startup_timeout_fallback`); records implementation state, not production integration.
 
 Background:
 
@@ -66,6 +69,14 @@ Background:
   normal / failure / timeout-silence lifecycle state paths using the existing synthetic helper
   and supervisor. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md).
+- The startup-timeout synthetic vector is implemented (PR #149): the `startup_timeout_fallback`
+  case (`not_started -> launching -> waiting_for_ready -> timed_out -> fallback`) added to the
+  same smoke, covering a pure startup timeout where `ready` is not emitted before the bounded
+  startup timeout. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md).
+- The next gated candidate is a narrowly scoped synthetic-only helper-output error vector group
+  (malformed / unknown / oversized helper output); it remains unimplemented and requires its own
+  gate before any code is added.
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -119,8 +130,13 @@ These boundaries are preserved across all H2 docs:
   ([`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md))
   and the owner decision
   ([`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)).
-- **Next safe step:** either another small synthetic-only H2 implementation slice, or a docs
-  decision / gate for the next H2 slice before any broader integration.
+- **Startup-timeout vector merged:** the `startup_timeout_fallback` vector is implemented and
+  merged (PR #149), recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md).
+- **Next safe step:** a future small synthetic-only helper-output error vector planning slice
+  (malformed / unknown / oversized helper output), or another docs decision / gate if the scope
+  broadens, before any broader integration. Shutdown / control-channel vectors require a separate
+  scope decision before implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -134,6 +150,8 @@ These boundaries are preserved across all H2 docs:
   — owner decision approving a future synthetic-only scoped prototype PR (bounded by the gate).
 - [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_SMOKE_CLOSEOUT.md)
   — closeout for the first implemented synthetic-only H2 slice (PR #147).
+- [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md)
+  — closeout for the startup-timeout synthetic vector (PR #149).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
