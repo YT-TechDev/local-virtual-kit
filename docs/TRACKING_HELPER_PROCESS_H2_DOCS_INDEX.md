@@ -51,6 +51,10 @@ H2 implementation is approved by this document.
 12. [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md)
     — closeout for the startup-timeout synthetic vector (PR #149,
     `startup_timeout_fallback`); records implementation state, not production integration.
+13. [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)
+    — gate / decision for the next synthetic-only slice: a narrowly scoped helper-output error
+    vector group (malformed / unknown / oversized); records the decision and future gates,
+    implements nothing.
 
 Background:
 
@@ -75,8 +79,10 @@ Background:
   startup timeout. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md).
 - The next gated candidate is a narrowly scoped synthetic-only helper-output error vector group
-  (malformed / unknown / oversized helper output); it remains unimplemented and requires its own
-  gate before any code is added.
+  (malformed / unknown / oversized helper output), recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md);
+  it remains unimplemented and a future implementation PR must satisfy that gate before any code is
+  added. Shutdown / control-channel vectors require a separate scope decision.
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -134,9 +140,10 @@ These boundaries are preserved across all H2 docs:
   merged (PR #149), recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md).
 - **Next safe step:** a future small synthetic-only helper-output error vector planning slice
-  (malformed / unknown / oversized helper output), or another docs decision / gate if the scope
-  broadens, before any broader integration. Shutdown / control-channel vectors require a separate
-  scope decision before implementation.
+  (malformed / unknown / oversized helper output), gated by
+  [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md),
+  or another docs decision / gate if the scope broadens, before any broader integration. Shutdown /
+  control-channel vectors require a separate scope decision before implementation.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -152,6 +159,8 @@ These boundaries are preserved across all H2 docs:
   — closeout for the first implemented synthetic-only H2 slice (PR #147).
 - [`docs/TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STARTUP_TIMEOUT_SMOKE_CLOSEOUT.md)
   — closeout for the startup-timeout synthetic vector (PR #149).
+- [`docs/TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md`](TRACKING_HELPER_PROCESS_H2_NEXT_SYNTHETIC_VECTOR_GATE.md)
+  — gate / decision for the next synthetic-only helper-output error vector slice.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
