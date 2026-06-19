@@ -91,6 +91,11 @@ H2 implementation is approved by this document.
     — docs-only gate selecting only `shutdown_after_helper_already_exited` as the next future
     synthetic shutdown smoke candidate; keeps timeout / forced termination and failure-after-stop
     unapproved.
+23. [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md)
+    — closeout for the `shutdown_after_helper_already_exited` synthetic vector; records
+    implementation at the synthetic-smoke level only (a smoke-local idempotent after-exit stop
+    observation that is a no-op over the already-terminal path; no new lifecycle state, no marker,
+    no real `stop` exchange); keeps timeout / forced termination and failure-after-stop unapproved.
 
 Background:
 
@@ -158,6 +163,16 @@ Background:
 - The already-exited shutdown smoke gate selects only `shutdown_after_helper_already_exited` as the
   next future candidate and keeps timeout / forced termination and failure-after-stop unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md).
+- `shutdown_after_helper_already_exited` is implemented at the synthetic-smoke level only: the
+  `shutdown_after_helper_already_exited` case added to the same smoke runs the helper on its normal
+  clean-completion path, reconstructs
+  `not_started -> launching -> waiting_for_ready -> ready -> running -> exited`, and then applies a
+  smoke-local / test-only after-exit stop observation that is a pure idempotent no-op over the
+  already-terminal path. There is no real parent-to-child control channel, no new lifecycle state, and
+  no marker; the observation is not a real `stop` exchange. `shutdown_timeout_forced_exit`,
+  `shutdown_after_failure_or_timeout`, forced termination, shutdown timeout, restart / backoff, and
+  production shutdown / control semantics remain unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -276,6 +291,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_GATE.md)
   — docs-only gate selecting only `shutdown_after_helper_already_exited` as the next future shutdown
   smoke candidate.
+- [`docs/TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ALREADY_EXITED_SHUTDOWN_SMOKE_CLOSEOUT.md)
+  — closeout for the `shutdown_after_helper_already_exited` synthetic vector (synthetic-smoke level
+  only).
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
