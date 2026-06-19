@@ -15,6 +15,12 @@
 // `stopping` is a reconstructed lifecycle label (like failed/timed_out/fallback),
 // not a real parent stop exchange.
 //
+// The already-exited case (shutdown_after_helper_already_exited) runs the helper
+// on its normal clean-completion path and then applies a smoke-local, idempotent
+// "after-exit stop observation" -- a pure no-op over the already-terminal
+// reconstructed path. It also relies on no real control channel and emits no
+// marker.
+//
 // Boundaries (synthetic-only; bounded by the H2 implementation gate and owner
 // decision):
 //   - no camera, no OpenCV, no real frames, no pixels, no tensors, no models
@@ -776,6 +782,116 @@ bool runShutdownGracefulExitCase(const std::string& helperPath) {
   return true;
 }
 
+// Smoke-local / test-only model of a stop / shutdown observation issued AFTER the
+// helper has already reached a clean terminal `exited` state. There is NO real
+// parent-to-child control channel in code, and this does not add one: this is a
+// pure, smoke-local observation over the already-reconstructed lifecycle path,
+// not a real parent stop exchange and not production IPC. Because the helper has
+// already exited, the observation is a safe no-op: it appends no state, leaves the
+// path unchanged, and is idempotent under repeated application. It introduces no
+// fallback, restart/backoff, forced termination, or shutdown timeout behavior.
+//
+// Returns false only if the precondition is violated (the helper is not in the
+// terminal `exited` state), which would mean the case was applied incorrectly.
+bool applyAfterExitStopObservation(std::vector<HelperState>& path) {
+  if (path.empty() || path.back() != HelperState::exited) {
+    return false;
+  }
+  // No-op: a stop after a clean exit changes nothing.
+  return true;
+}
+
+// Shutdown after the helper already exited: not_started -> launching ->
+// waiting_for_ready -> ready -> running -> exited. The synthetic helper is run on
+// its normal clean-completion path (no new flag); the smoke first reconstructs the
+// normal terminal lifecycle, then applies a smoke-local / test-only "after-exit
+// stop observation" (see applyAfterExitStopObservation). The observation is
+// asserted to be safe and idempotent: applied repeatedly it must leave the
+// reconstructed path unchanged. This models that a stop / shutdown request after a
+// clean exit does not corrupt the lifecycle.
+//
+// Honest scope: there is NO real parent-to-child control channel; the observation
+// is a pure smoke-local no-op over the reconstructed path, not a real stop
+// exchange. No marker is emitted; helper stdout stays private and this smoke's
+// stdout stays empty.
+bool runShutdownAfterHelperAlreadyExitedCase(const std::string& helperPath) {
+  const HelperProcessRunResult run =
+      runHelperProcessForSmoke(helperPath, {"--frames", "3"}, kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("shutdown_after_helper_already_exited",
+                  "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("shutdown_after_helper_already_exited", "unexpected timeout");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("shutdown_after_helper_already_exited", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("shutdown_after_helper_already_exited",
+                  "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  if (run.exitCode != 0) {
+    reportFailure("shutdown_after_helper_already_exited", "expected exit code 0");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"stopped\"")) {
+    reportFailure("shutdown_after_helper_already_exited",
+                  "missing stopped marker");
+    return false;
+  }
+  path.push_back(HelperState::exited);
+
+  // The helper has now already reached a clean terminal `exited` state. Apply the
+  // smoke-local after-exit stop observation twice to demonstrate it is safe and
+  // idempotent and never corrupts the reconstructed path.
+  const std::vector<HelperState> pathBeforeObservation = path;
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    if (!applyAfterExitStopObservation(path)) {
+      reportFailure("shutdown_after_helper_already_exited",
+                    "after-exit stop observation precondition not met "
+                    "(helper not in terminal exited state)");
+      return false;
+    }
+    if (path != pathBeforeObservation) {
+      reportFailure("shutdown_after_helper_already_exited",
+                    "after-exit stop observation changed the lifecycle path");
+      return false;
+    }
+  }
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("shutdown_after_helper_already_exited",
+                  "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::exited};
+  if (!checkPath("shutdown_after_helper_already_exited", path, expected)) {
+    return false;
+  }
+
+  reportPath("shutdown_after_helper_already_exited", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -792,7 +908,8 @@ int main(int argc, char* argv[]) {
       !runUnknownMessageTypeCase(helperPath) ||
       !runMalformedLineCase(helperPath) ||
       !runOversizedLineCase(helperPath) ||
-      !runShutdownGracefulExitCase(helperPath)) {
+      !runShutdownGracefulExitCase(helperPath) ||
+      !runShutdownAfterHelperAlreadyExitedCase(helperPath)) {
     return 1;
   }
 
