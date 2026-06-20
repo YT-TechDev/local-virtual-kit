@@ -130,22 +130,31 @@ bool contains(const std::string& haystack, const std::string& needle) {
   return haystack.find(needle) != std::string::npos;
 }
 
-// Smoke-local / test-only ordering check: returns true only if every needle in
-// `orderedNeedles` is present in `haystack` AND appears strictly after the
-// previous needle (each searched from just past the prior match). This is a
-// simple substring-offset check over captured PRIVATE helper stdout; it is NOT a
-// JSON parser and adds no dependency. It is used to assert that private helper
-// lifecycle markers were emitted in the expected order, so a case cannot falsely
-// pass on out-of-order markers.
-bool markersAppearInOrder(const std::string& haystack,
-                          const std::vector<std::string>& orderedNeedles) {
-  size_t searchFrom = 0;
+// Smoke-local / test-only ordering check over captured PRIVATE helper stdout:
+// returns true only if every needle in `orderedNeedles` is present AND the FIRST
+// occurrence of each needle appears strictly after the first occurrence of the
+// previous needle. This is a simple substring-offset check; it is NOT a JSON
+// parser and adds no dependency.
+//
+// Unlike a search-from-prior-match (subsequence) check, comparing FIRST-occurrence
+// offsets is robust when a marker repeats (e.g. the synthetic helper emits multiple
+// "type":"result" lines with --frames 3): a premature earlier occurrence of a later
+// marker cannot be masked by a subsequent occurrence. It is used to assert that
+// private helper lifecycle markers were emitted in the expected order, so a case
+// cannot falsely pass on out-of-order markers. See PR #182 for the repeated-result
+// false-positive this avoids.
+bool markersFirstAppearInOrder(const std::string& haystack,
+                               const std::vector<std::string>& orderedNeedles) {
+  size_t previousPos = std::string::npos;
   for (const std::string& needle : orderedNeedles) {
-    const size_t found = haystack.find(needle, searchFrom);
+    const size_t found = haystack.find(needle);
     if (found == std::string::npos) {
       return false;
     }
-    searchFrom = found + needle.size();
+    if (previousPos != std::string::npos && found <= previousPos) {
+      return false;
+    }
+    previousPos = found;
   }
   return true;
 }
@@ -288,12 +297,14 @@ bool runNormalCase(const std::string& helperPath) {
   }
 
   // Smoke-local ordering assertion using FIRST-occurrence offsets. The helper
-  // emits multiple "result" lines (--frames 3), so a search-from-prior-match check
-  // (markersAppearInOrder) could falsely pass an out-of-order sequence like
+  // emits multiple "result" lines (--frames 3), so a search-from-prior-match
+  // subsequence check could falsely pass an out-of-order sequence like
   // result -> ready -> result -> stopped (it would match ready, then a LATER
   // result). Comparing first-occurrence offsets guarantees the FIRST result appears
   // after ready and before stopped: a premature result before ready, or stopped
   // before result, fails. Substring offsets only (no JSON parser, no dependency).
+  // (The shutdown cases express the same first-occurrence rule via the shared
+  // markersFirstAppearInOrder helper.)
   const size_t readyPos = run.stdoutText.find("\"type\":\"ready\"");
   const size_t resultPos = run.stdoutText.find("\"type\":\"result\"");
   const size_t stoppedPos = run.stdoutText.find("\"type\":\"stopped\"");
@@ -780,9 +791,14 @@ bool runOversizedLineCase(const std::string& helperPath) {
 // and is never forwarded to this smoke's stdout, which stays empty.
 //
 // The private helper stdout markers are also asserted to appear in the exact
-// lifecycle order (ready -> result -> stopping -> stopped) via markersAppearInOrder,
-// mirroring the shutdown_timeout_forced_exit case, so this case cannot falsely pass
-// on out-of-order markers (e.g. a "stopping" emitted after "stopped").
+// lifecycle order by FIRST occurrence
+// (first(ready) < first(result) < first(stopping) < first(stopped)) via
+// markersFirstAppearInOrder, mirroring the shutdown_timeout_forced_exit case. This
+// is smoke-local / synthetic-only validation over captured PRIVATE helper stdout.
+// Because the helper emits multiple "result" lines (--frames 3), a first-occurrence
+// check (not search-from-prior-match) is required so this case cannot falsely pass
+// on out-of-order markers (e.g. a "result" before "ready", or a "stopping" after
+// "stopped").
 bool runShutdownGracefulExitCase(const std::string& helperPath) {
   const HelperProcessRunResult run = runHelperProcessForSmoke(
       helperPath, {"--frames", "3", "--emit-graceful-shutdown"},
@@ -802,17 +818,19 @@ bool runShutdownGracefulExitCase(const std::string& helperPath) {
     return false;
   }
 
-  // Smoke-local ordering assertion: the private helper stdout markers must appear
-  // in the exact lifecycle order before we reconstruct the path. This prevents a
-  // false pass if the helper emitted "stopping" after "stopped" or otherwise out
-  // of order. Uses substring offsets only (no JSON parser), reusing the same
-  // helper as the forced-exit case.
-  if (!markersAppearInOrder(run.stdoutText,
-                            {"\"type\":\"ready\"", "\"type\":\"result\"",
-                             "\"type\":\"stopping\"", "\"type\":\"stopped\""})) {
+  // Smoke-local ordering assertion over captured PRIVATE helper stdout: the
+  // lifecycle markers must appear in the exact order by FIRST occurrence before we
+  // reconstruct the path. First-occurrence comparison (not search-from-prior-match)
+  // is required because the helper emits multiple "result" lines (--frames 3), so a
+  // premature "result" before "ready" cannot be masked by a later "result". This
+  // prevents a false pass on out-of-order markers (e.g. "stopping" after "stopped").
+  if (!markersFirstAppearInOrder(run.stdoutText,
+                                 {"\"type\":\"ready\"", "\"type\":\"result\"",
+                                  "\"type\":\"stopping\"", "\"type\":\"stopped\""})) {
     reportFailure("shutdown_graceful_exit",
                   "private helper stdout markers missing or out of order "
-                  "(expected ready -> result -> stopping -> stopped)");
+                  "(expected first ready -> first result -> first stopping -> "
+                  "stopped)");
     return false;
   }
 
@@ -1201,19 +1219,22 @@ bool runShutdownTimeoutForcedExitCase(const std::string& helperPath) {
     return false;
   }
 
-  // Smoke-local ordering assertion: the private helper stdout markers must appear
-  // in the exact lifecycle order before we reconstruct the path. This prevents a
-  // false pass if the helper emitted "shutdown-timeout" before "stopping" or after
-  // "stopped". Uses substring offsets only (no JSON parser).
-  if (!markersAppearInOrder(run.stdoutText,
-                            {"\"type\":\"ready\"", "\"type\":\"result\"",
-                             "\"type\":\"stopping\"",
-                             "\"type\":\"shutdown-timeout\"",
-                             "\"type\":\"stopped\""})) {
+  // Smoke-local ordering assertion over captured PRIVATE helper stdout: the
+  // lifecycle markers must appear in the exact order by FIRST occurrence before we
+  // reconstruct the path. First-occurrence comparison (not search-from-prior-match)
+  // is required because the helper emits multiple "result" lines (--frames 3), so a
+  // premature "result" before "ready" cannot be masked by a later "result". This
+  // prevents a false pass if the helper emitted "shutdown-timeout" before "stopping"
+  // or after "stopped". Synthetic-only; substring offsets only (no JSON parser).
+  if (!markersFirstAppearInOrder(run.stdoutText,
+                                 {"\"type\":\"ready\"", "\"type\":\"result\"",
+                                  "\"type\":\"stopping\"",
+                                  "\"type\":\"shutdown-timeout\"",
+                                  "\"type\":\"stopped\""})) {
     reportFailure("shutdown_timeout_forced_exit",
                   "private helper stdout markers missing or out of order "
-                  "(expected ready -> result -> stopping -> shutdown-timeout -> "
-                  "stopped)");
+                  "(expected first ready -> first result -> first stopping -> "
+                  "first shutdown-timeout -> stopped)");
     return false;
   }
 
