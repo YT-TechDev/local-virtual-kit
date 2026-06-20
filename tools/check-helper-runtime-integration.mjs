@@ -1,11 +1,19 @@
 #!/usr/bin/env node
-// Helper runtime integration smoke checker (H1d).
+// Helper runtime integration smoke checker (H1d) + H2 Gate 2 smoke-path guard.
 //
-// Runs lvk-tracker-core with the explicit --helper-runtime-smoke path and
-// validates that stdout contains only existing MotionFrame JSON while helper
-// stdout/stderr stay private to Native Core.
+// Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
+// path and validates that stdout contains only existing MotionFrame JSON while
+// helper stdout/stderr stay private to Native Core.
+//
+// Gate 2 guard: runs lvk-tracker-core WITHOUT --helper-runtime-smoke and proves
+// the default runtime path is unchanged -- helper supervision is not entered,
+// stdout is MotionFrame JSON only, and no helper smoke diagnostics or private
+// helper child output leak to stdout/stderr. Synthetic/smoke-only, CI-safe (the
+// default path uses the dummy camera; no real camera, no hardware). See
+// docs/TRACKING_HELPER_PROCESS_H2_SMOKE_PATH_ISOLATION_GUARD_CLOSEOUT.md.
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { parseNativeMotionFrameJson } from "../packages/motion-protocol/src/motion-frame-validation.js";
 
 const trackerPath = process.argv[2] ? resolve(process.argv[2]) : undefined;
 const helperPath = process.argv[3] ? resolve(process.argv[3]) : undefined;
@@ -153,4 +161,106 @@ stderrLines.forEach((line) => {
 
 console.log(
   "Helper runtime integration smoke OK: MotionFrame-only stdout and safe diagnostics.",
+);
+
+// --- H2 Gate 2: default-runtime smoke-path isolation guard ------------------
+// Omitting --helper-runtime-smoke must keep the default lvk-tracker-core path
+// unchanged: helper supervision is NOT entered, stdout stays MotionFrame JSON
+// only, and no helper smoke diagnostics or private helper child output leak.
+
+// Markers that would indicate the helper smoke path was entered or that private
+// helper child output leaked into a public stream. The default runtime emits
+// none of these (MotionFrame has no top-level "type"; the helper contract and
+// the smoke diagnostic prefix do).
+const helperSmokeEntryMarkers = [
+  "[helper-runtime-smoke]",
+  '"source":"synthetic-helper"',
+  '"type":"ready"',
+  '"type":"result"',
+  '"type":"stopped"',
+];
+
+// Raw helper child stderr forms. The synthetic helper writes lines like
+// "[helper] startup: source=synthetic-helper" to ITS OWN stderr; under
+// supervision those are captured privately and never forwarded. If a regression
+// accidentally started the helper on the default path and leaked its stderr,
+// these raw forms would appear even though the smoke prefix and minified JSON
+// contract markers above would not. They are checked separately so the failure
+// message is explicit. Note: "[helper]" is not a substring of the safe
+// "[helper-runtime-smoke]" prefix.
+const helperStderrLeakMarkers = ["[helper]", "source=synthetic-helper"];
+
+const defaultResult = spawnSync(trackerPath, ["--frames", "3"], {
+  encoding: "utf8",
+  maxBuffer: 1024 * 1024,
+});
+
+if (defaultResult.error) {
+  fail(
+    `could not run default ${trackerPath}: ${defaultResult.error.message}`,
+    defaultResult,
+  );
+}
+if (defaultResult.status !== 0) {
+  fail("expected default-runtime exit status 0", defaultResult);
+}
+
+const defaultStdout = defaultResult.stdout ?? "";
+const defaultStdoutLines = defaultStdout
+  .split(/\r?\n/u)
+  .map((line) => line.trim())
+  .filter((line) => line.length > 0);
+
+if (defaultStdoutLines.length !== 3) {
+  fail(
+    `expected exactly 3 default-runtime stdout lines, got ${defaultStdoutLines.length}`,
+    defaultResult,
+  );
+}
+
+// Default stdout must be MotionFrame JSON only: no smoke-path/helper markers and
+// none of the raw-leak markers guarded above.
+for (const marker of [...helperSmokeEntryMarkers, ...forbiddenStdoutMarkers]) {
+  if (defaultStdout.includes(marker)) {
+    fail(
+      `default-runtime stdout leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
+      defaultResult,
+    );
+  }
+}
+
+// Each default-runtime stdout line must validate as native MotionFrame JSON.
+defaultStdoutLines.forEach((line, index) => {
+  if (parseNativeMotionFrameJson(line) === null) {
+    fail(
+      `default-runtime stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+      defaultResult,
+    );
+  }
+});
+
+// Default stderr must not show that the helper smoke path was entered, and must
+// not leak private helper child output -- in either the smoke-diagnostic /
+// minified-contract form or the raw helper child stderr form.
+const defaultStderr = defaultResult.stderr ?? "";
+for (const marker of helperSmokeEntryMarkers) {
+  if (defaultStderr.includes(marker)) {
+    fail(
+      `default-runtime stderr leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
+      defaultResult,
+    );
+  }
+}
+for (const marker of helperStderrLeakMarkers) {
+  if (defaultStderr.includes(marker)) {
+    fail(
+      `default-runtime stderr leaked helper stderr marker ${JSON.stringify(marker)}`,
+      defaultResult,
+    );
+  }
+}
+
+console.log(
+  "Default-runtime guard OK: --helper-runtime-smoke omitted keeps MotionFrame-only " +
+    "stdout, no helper supervision entered, no helper output leaked.",
 );

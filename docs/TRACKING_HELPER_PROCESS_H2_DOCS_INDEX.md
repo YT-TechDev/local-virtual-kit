@@ -273,6 +273,13 @@ H2 implementation is approved by this index itself.
     integration, default helper runtime wiring, production supervisor behavior, fallback MotionFrame
     emission, MotionFrame / Motion Protocol changes, Electron / Web Preview changes, dependencies,
     network behavior, camera access changes, frame / tensor IPC, and readiness claims unapproved.
+56. [`docs/TRACKING_HELPER_PROCESS_H2_SMOKE_PATH_ISOLATION_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_SMOKE_PATH_ISOLATION_GUARD_CLOSEOUT.md)
+    — closeout for the H2 Narrow Implementation Gate 2 slice: an evidence-only default-runtime guard
+    added to `tools/check-helper-runtime-integration.mjs` proving that omitting `--helper-runtime-smoke`
+    keeps default `lvk-tracker-core` stdout MotionFrame-JSON-only, does not enter helper supervision,
+    and leaks no helper stdout/stderr. Records implementation state only; no Native Core runtime source
+    was changed, and no default runtime wiring, production supervisor behavior, fallback MotionFrame
+    emission, MotionFrame schema change, dependency, or readiness claim was added.
 
 Background:
 
