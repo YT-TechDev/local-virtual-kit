@@ -158,6 +158,10 @@ H2 implementation is approved by this document.
     — docs-only Electron / user-facing scope gate defining decisions required before exposing H2 in
     the desktop shell, settings, calibration, status, local config, or user controls; implements
     nothing.
+38. [`docs/TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md`](TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md)
+    — docs-only first implementation gate draft defining the approval boundary, candidate scope,
+    exclusions, validation expectations, and owner-approval requirements for a possible future first
+    H2 implementation gate; implements nothing and grants no approval.
 
 Background:
 
@@ -305,6 +309,10 @@ Background:
   settings, calibration, status controls, feature flag implementation, production H2 integration,
   default runtime wiring, real frame access, MotionFrame changes, or telemetry / network behavior. See
   [`docs/TRACKING_HELPER_PROCESS_H2_ELECTRON_USER_FACING_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ELECTRON_USER_FACING_SCOPE_GATE.md).
+- The first implementation gate draft has been added and still approves no implementation, production
+  H2 integration, default runtime wiring, backend / model / runtime selection, real frame access,
+  Electron UI, MotionFrame changes, or telemetry / network behavior. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md`](TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -398,9 +406,9 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **Electron / user-facing scope gate review required:** next, perform a read-only review of the
-  Electron / user-facing scope gate, then choose one narrow next planning direction before
-  implementation. Do not proceed to backend / runtime / model / dependency selection, feature flag
+- **First implementation gate draft review required:** next, perform a read-only review of the
+  first implementation gate draft, then require an explicit owner decision before any implementation
+  prompt. Do not proceed to backend / runtime / model / dependency selection, feature flag
   implementation, production forced termination, production shutdown timeout policy, restart / backoff,
   production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
   wiring, production H2 integration, helper-owned camera capture, local/manual validation claims,
@@ -492,6 +500,10 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_ELECTRON_USER_FACING_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_ELECTRON_USER_FACING_SCOPE_GATE.md)
   — docs-only Electron / user-facing scope gate; defines decisions and acceptance criteria required
   before exposing H2 in desktop shell, settings, calibration, status, local config, or user controls.
+- [`docs/TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md`](TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md)
+  — docs-only first implementation gate draft; defines the approval boundary, candidate scope,
+  exclusions, validation expectations, and owner-approval requirements for a possible future first H2
+  implementation gate while approving nothing.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
