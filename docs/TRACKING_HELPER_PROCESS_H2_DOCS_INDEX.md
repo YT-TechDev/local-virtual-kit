@@ -12,10 +12,13 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The H2 design **readiness review** is the authoritative latest phase status:
+The latest H2 production-runtime planning boundary is the docs-only owner-decision gate:
+[`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
+It records that H2 is ready for an owner decision, not implementation-ready, and approves no
+implementation. The earlier H2 point-in-time next-step notes have been reconciled. For historical
+design phase status, use this index and the H2 design readiness review:
 [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
-The earlier H2 point-in-time next-step notes have been reconciled. For current phase status,
-use this index and the H2 design readiness review. The scoped H2 prototype
+The scoped H2 prototype
 implementation-gate is now documented in
 [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md);
 any future scoped prototype implementation still requires explicit project-owner approval. No
@@ -38,7 +41,7 @@ H2 implementation is approved by this document.
 7. [`docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md`](TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_MANUAL_VALIDATION.md)
    — manual local validation checklist and safe-evidence / claim rules.
 8. [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
-   — H2 design-doc phase closeout / readiness review (authoritative latest status).
+   — H2 design-doc phase closeout / readiness review (historical design phase status).
 9. [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
    — scoped prototype implementation-gate: intended scope, anticipated changed files, and the
    gates a future implementation PR must satisfy (grants no approval).
@@ -170,6 +173,10 @@ H2 implementation is approved by this document.
     — docs-only next-scope gate after the ordering hardening closeout; requires read-only scope
     review and explicit owner approval before production-runtime, runtime-integration, default-runtime,
     or other H2 implementation planning.
+41. [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
+    — docs-only owner-decision gate after the production-runtime / runtime-integration scope review;
+    records that the next decision is whether to approve drafting a future first implementation prompt
+    or continue planning, while approving no implementation.
 
 Background:
 
@@ -327,13 +334,16 @@ Background:
   out of lifecycle ordering, leaves `oversized_line_rejected` on its bounded-line scan path, and
   approves no production runtime work. See
   [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md).
-- The post-ordering next-scope gate has been added and requires a read-only production-runtime /
-  runtime-integration scope review before any implementation planning. It approves no production H2
-  integration, default runtime wiring, supervisor production behavior, control-channel semantics,
-  forced termination, restart / backoff, backend / model / runtime selection, real camera access,
-  frame transport, MotionFrame change, Electron / Web Preview / Motion Protocol change, dependency,
-  telemetry, cloud, or network behavior. See
+- The read-only production-runtime / runtime-integration scope review required by the post-ordering
+  next-scope gate has completed and returned ready for owner decision, not implementation-ready. See
   [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md).
+- The owner-decision gate is now the current authoritative boundary. It asks the owner to choose one
+  of the documented options and still approves no production H2 integration, default runtime wiring,
+  supervisor production behavior, control-channel semantics, forced termination, restart / backoff,
+  backend / model / runtime selection, real camera access, frame transport, MotionFrame change,
+  Electron / Web Preview / Motion Protocol change, dependency, telemetry, cloud, or network behavior.
+  See
+  [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -365,18 +375,28 @@ These boundaries are preserved across all H2 docs:
 ## What Remains Unapproved
 
 - H2 implementation.
+- Production H2 integration.
+- Production-runtime / runtime-integration planning beyond the owner-decision options.
+- Default `lvk-tracker-core` runtime wiring.
 - IPC implementation.
 - Test implementation.
+- Helper process supervisor production policy.
+- Real control channel.
+- Real forced termination.
 - Restart / backoff implementation.
-- Real frame access.
+- Real camera access.
 - Raw frame / pixel / tensor IPC.
 - High-rate raw frame transport.
 - Helper-owned camera capture.
 - Production helper backend.
+- Backend / model / runtime selection.
+- Dependency additions.
 - MediaPipe / Python runtime / ONNX Runtime production approval.
 - Model / task bundling.
 - MotionFrame schema change.
 - Electron / Web Preview / Motion Protocol changes.
+- Telemetry, analytics, cloud upload, external frame processing, hidden network calls, or new network
+  behavior.
 
 ## Next Recommended Step
 
@@ -435,22 +455,26 @@ These boundaries are preserved across all H2 docs:
 - **Post-ordering next-scope gate added:** the next decision boundary after ordering hardening is
   recorded in
   [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md).
-- **Read-only scope review required:** next, perform a read-only production-runtime /
-  runtime-integration scope review before any implementation planning. Any future docs step should
-  remain explicit and owner-approved. Do not proceed to backend / runtime / model / dependency selection, feature flag
-  implementation, production forced termination, production shutdown timeout policy, restart / backoff,
-  production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
-  wiring, production H2 integration, helper-owned camera capture, local/manual validation claims,
-  production readiness claims, cloud inference, external processing, Electron UI, MotionFrame changes,
-  telemetry / network behavior, CI job changes, validation script implementation, or frame transport
-  without separate explicit approval.
+- **Owner decision required:** the read-only production-runtime / runtime-integration scope review has
+  completed and returned ready for owner decision. The current authoritative next step is for the
+  owner to choose one of the options in
+  [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
+  Do not proceed to backend / runtime / model / dependency selection, feature flag implementation,
+  production forced termination, production shutdown timeout policy, restart / backoff, production
+  supervisor shutdown semantics, a real parent-to-child control channel, default runtime wiring,
+  production H2 integration, helper-owned camera capture, local/manual validation claims, production
+  readiness claims, cloud inference, external processing, Electron UI, MotionFrame changes, telemetry /
+  network behavior, CI job changes, validation script implementation, or frame transport without
+  separate explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
 ## Cross-References
 
+- [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
+  — current authoritative H2 production-runtime planning boundary and owner decision options.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
-  — authoritative latest H2 phase status.
+  — historical H2 design-doc phase status.
 - [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
   — scoped prototype implementation-gate (intended scope, anticipated changed files, gates).
 - [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_OWNER_DECISION.md)
@@ -537,9 +561,10 @@ These boundaries are preserved across all H2 docs:
   — docs-only ordering hardening closeout; records first-occurrence lifecycle marker ordering coverage
   after PR #181 through PR #185 and keeps production runtime work unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md)
-  — docs-only post-ordering next-scope gate; requires read-only scope review and explicit owner
-  approval before production-runtime, runtime-integration, default-runtime, or other H2 implementation
-  planning.
+  — docs-only post-ordering next-scope gate whose required read-only scope review has completed.
+- [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
+  — docs-only owner-decision gate; current authoritative next step is for the owner to choose one of
+  its options, with implementation still unapproved.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
