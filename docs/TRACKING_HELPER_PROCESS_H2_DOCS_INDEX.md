@@ -239,6 +239,11 @@ H2 implementation is approved by this document.
     constraints, and validation evidence while keeping production diagnostics-safety policy behavior,
     implementation, runtime behavior changes, fallback MotionFrame emission, and readiness claims
     unapproved.
+52. [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md)
+    — fifth Option B planning document defining requirements for any future owner-approved H2
+    implementation gate while keeping implementation, default runtime wiring, production supervisor
+    behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
+    behavior, MotionFrame schema changes, runtime behavior changes, and readiness claims unapproved.
 
 Background:
 
@@ -427,6 +432,12 @@ Background:
   runtime behavior changes, fallback MotionFrame emission, and readiness claims remain unapproved.
   See
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
+- The H2 implementation gate requirements document has been added as the next Option B planning
+  document, defining what must be true before any future owner-approved H2 implementation gate can be
+  considered while preserving that implementation, default runtime wiring, production supervisor
+  behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy behavior,
+  MotionFrame schema changes, runtime behavior changes, and readiness claims remain unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
@@ -557,8 +568,10 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md).
   The H2 diagnostics / stdout / stderr safety planning document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
-  The current authoritative next planning step is a source-grounded docs-only H2 implementation gate
-  requirements planning PR. This next step is docs-only planning only. Do not proceed to
+  The H2 implementation gate requirements document has now been added:
+  [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
+  The current authoritative next step is an owner decision point: whether to approve a narrow H2
+  implementation gate. This is only a decision point, not implementation approval. Do not proceed to
   implementation, default `lvk-tracker-core` runtime wiring, production supervisor behavior,
   production diagnostics-safety policy behavior, fallback MotionFrame behavior, fallback MotionFrame
   emission, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
@@ -591,6 +604,9 @@ These boundaries are preserved across all H2 docs:
   — fourth Option B planning document defining diagnostics / stdout / stderr safety boundaries while
   keeping production diagnostics-safety policy behavior, implementation, runtime behavior changes,
   fallback MotionFrame emission, and readiness claims unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md)
+  — fifth Option B planning document defining requirements for any future implementation gate while
+  keeping implementation and production runtime behavior unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
   — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
