@@ -12,10 +12,13 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The H2 design **readiness review** is the authoritative latest phase status:
+The latest H2 production-runtime planning boundary is the docs-only owner-decision gate:
+[`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
+It records that H2 is ready for an owner decision, not implementation-ready, and approves no
+implementation. The earlier H2 point-in-time next-step notes have been reconciled. For historical
+design phase status, use this index and the H2 design readiness review:
 [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
-The earlier H2 point-in-time next-step notes have been reconciled. For current phase status,
-use this index and the H2 design readiness review. The scoped H2 prototype
+The scoped H2 prototype
 implementation-gate is now documented in
 [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md);
 any future scoped prototype implementation still requires explicit project-owner approval. No
@@ -170,6 +173,10 @@ H2 implementation is approved by this document.
     — docs-only next-scope gate after the ordering hardening closeout; requires read-only scope
     review and explicit owner approval before production-runtime, runtime-integration, default-runtime,
     or other H2 implementation planning.
+41. [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
+    — docs-only owner-decision gate after the production-runtime / runtime-integration scope review;
+    records that the next decision is whether to approve drafting a future first implementation prompt
+    or continue planning, while approving no implementation.
 
 Background:
 
