@@ -162,6 +162,10 @@ H2 implementation is approved by this document.
     — docs-only first implementation gate draft defining the approval boundary, candidate scope,
     exclusions, validation expectations, and owner-approval requirements for a possible future first
     H2 implementation gate; implements nothing and grants no approval.
+39. [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md)
+    — docs-only closeout for the H2 synthetic smoke lifecycle marker ordering hardening after PR #181
+    through PR #185; records first-occurrence ordering coverage and preserves production-runtime
+    non-approval boundaries.
 
 Background:
 
@@ -313,6 +317,12 @@ Background:
   H2 integration, default runtime wiring, backend / model / runtime selection, real frame access,
   Electron UI, MotionFrame changes, or telemetry / network behavior. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md`](TRACKING_HELPER_PROCESS_H2_FIRST_IMPLEMENTATION_GATE_DRAFT.md).
+- The H2 synthetic smoke lifecycle marker ordering hardening after PR #181 through PR #185 is
+  documented as complete for the covered synthetic-only cases. The closeout records the
+  first-occurrence ordering rule, keeps `unknown_message_type` and `malformed_line` injected markers
+  out of lifecycle ordering, leaves `oversized_line_rejected` on its bounded-line scan path, and
+  approves no production runtime work. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -406,9 +416,14 @@ These boundaries are preserved across all H2 docs:
   **completes the synthetic shutdown smoke group** (`shutdown_graceful_exit`,
   `shutdown_after_helper_already_exited`, `shutdown_after_failure_or_timeout`,
   `shutdown_timeout_forced_exit`).
-- **First implementation gate draft review required:** next, perform a read-only review of the
-  first implementation gate draft, then require an explicit owner decision before any implementation
-  prompt. Do not proceed to backend / runtime / model / dependency selection, feature flag
+- **Ordering hardening closeout added:** the H2 synthetic smoke lifecycle marker ordering hardening
+  after PR #181 through PR #185 is recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md).
+  It closes the synthetic-only ordering hardening group for the covered cases while keeping
+  `oversized_line_rejected` on its bounded-line scan path and approving no production runtime work.
+- **Read-only scope review required:** next, perform a read-only scope review before any production
+  runtime or runtime-integration planning. Any future docs step should remain explicit and
+  owner-approved. Do not proceed to backend / runtime / model / dependency selection, feature flag
   implementation, production forced termination, production shutdown timeout policy, restart / backoff,
   production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
   wiring, production H2 integration, helper-owned camera capture, local/manual validation claims,
@@ -504,6 +519,9 @@ These boundaries are preserved across all H2 docs:
   — docs-only first implementation gate draft; defines the approval boundary, candidate scope,
   exclusions, validation expectations, and owner-approval requirements for a possible future first H2
   implementation gate while approving nothing.
+- [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md)
+  — docs-only ordering hardening closeout; records first-occurrence lifecycle marker ordering coverage
+  after PR #181 through PR #185 and keeps production runtime work unapproved.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
