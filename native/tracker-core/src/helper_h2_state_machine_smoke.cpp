@@ -915,6 +915,15 @@ bool applyAfterExitStopObservation(std::vector<HelperState>& path) {
 // is a pure smoke-local no-op over the reconstructed path, not a real stop
 // exchange. No marker is emitted; helper stdout stays private and this smoke's
 // stdout stays empty.
+//
+// Because this case runs the helper on the same clean-completion path as the normal
+// case (--frames 3, no injected line), the private helper stdout lifecycle markers
+// are also asserted to appear in the exact order by FIRST occurrence
+// (first(ready) < first(result) < first(stopped)) via markersFirstAppearInOrder.
+// First-occurrence comparison (not search-from-prior-match) is required because the
+// helper emits multiple "result" lines, so a premature "result" before "ready"
+// cannot be masked by a later "result". This is smoke-local / synthetic-only
+// validation over captured PRIVATE helper stdout.
 bool runShutdownAfterHelperAlreadyExitedCase(const std::string& helperPath) {
   const HelperProcessRunResult run =
       runHelperProcessForSmoke(helperPath, {"--frames", "3"}, kNormalTimeoutMs);
@@ -933,6 +942,22 @@ bool runShutdownAfterHelperAlreadyExitedCase(const std::string& helperPath) {
     reportFailure("shutdown_after_helper_already_exited", "unexpected timeout");
     return false;
   }
+
+  // Smoke-local ordering assertion over captured PRIVATE helper stdout: the
+  // lifecycle markers must appear in the exact order by FIRST occurrence before we
+  // reconstruct the path. First-occurrence comparison (not search-from-prior-match)
+  // is required because the helper emits multiple "result" lines (--frames 3), so a
+  // premature "result" before "ready" cannot be masked by a later "result". Mirrors
+  // the normal case; substring offsets only (no JSON parser).
+  if (!markersFirstAppearInOrder(run.stdoutText,
+                                 {"\"type\":\"ready\"", "\"type\":\"result\"",
+                                  "\"type\":\"stopped\""})) {
+    reportFailure("shutdown_after_helper_already_exited",
+                  "private helper stdout markers missing or out of order "
+                  "(expected first ready -> first result -> stopped)");
+    return false;
+  }
+
   if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
     reportFailure("shutdown_after_helper_already_exited", "missing ready marker");
     return false;
