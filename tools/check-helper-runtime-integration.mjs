@@ -364,6 +364,14 @@ unsafeStderrLines.forEach((line) => {
   }
 });
 
+const unsafeDetectionMessage = "unsafe helper diagnostic detected";
+if (!unsafeStderr.includes(unsafeDetectionMessage)) {
+  fail(
+    "unsafe-diagnostic public stderr did not report unsafe helper diagnostic detection",
+    unsafeResult,
+  );
+}
+
 for (const marker of unsafeChildMarkers) {
   if (unsafeStderr.includes(marker)) {
     fail(
