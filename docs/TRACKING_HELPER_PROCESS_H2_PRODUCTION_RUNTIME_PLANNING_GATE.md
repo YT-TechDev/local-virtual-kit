@@ -21,13 +21,22 @@ runtime planning or implementation.
 
 ## What This Gate Allows
 
-This gate allows only a review of the decisions needed before production-runtime planning can begin.
-Possible next PRs are planning-only unless the owner separately approves implementation, such as:
+Before the owner explicitly approves entering production-runtime planning, this gate allows only
+docs-only decision clarification that does not enter production-runtime planning, such as:
+
+- an owner-decision / review gate;
+- a clarification of the approval boundary;
+- a reconciliation note if existing docs appear to imply production-runtime planning approval.
+
+After the owner explicitly approves entering production-runtime planning, possible planning-only PR
+categories may include:
 
 - docs-only production-runtime planning;
 - source-grounded supervisor policy proposal;
 - source-grounded fallback MotionFrame behavior proposal;
 - local/manual validation plan.
+
+Those categories remain planning-only and still do not approve implementation.
 
 ## What This Gate Does Not Allow
 
@@ -86,9 +95,13 @@ behavior.
 
 ## Next Possible PRs
 
-The next possible PRs are planning-only unless the owner separately approves implementation. Any
-implementation PR must be separately approved after planning, with a dedicated scope, validation
-plan, and non-goal list.
+Before the owner decision is recorded, the next possible PRs are limited to an owner-decision /
+review gate or other docs-only decision clarification that does not enter production-runtime
+planning.
+
+After the owner explicitly approves entering production-runtime planning, the next possible PRs may
+be planning-only production-runtime documents. Any implementation PR must still be separately
+approved after planning, with a dedicated scope, validation plan, and non-goal list.
 
 ## Cross-References
 
