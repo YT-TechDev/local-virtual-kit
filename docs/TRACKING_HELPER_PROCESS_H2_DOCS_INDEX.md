@@ -13,13 +13,14 @@ This index is the single place to find the H2 helper-process design documents, t
 order, the current design state, and the one authoritative next step.
 
 The current active H2 implementation boundary is the owner decision approving H2 Narrow
-Implementation Gate 3: Unsafe helper diagnostics fail-closed smoke coverage:
-[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md).
+Implementation Gate 4: Helper runtime failure-case public stdout guard coverage:
+[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md).
 The owner has approved only a future narrow Native Core synthetic/smoke implementation PR to add
-CI-safe evidence for unsafe helper diagnostics / unsafe helper-output fail-closed behavior. H2 Narrow
-Implementation Gate 1 and H2 Narrow Implementation Gate 2 are complete and closed; Gate 3 does not
-reopen them. Production H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2
-runtime wiring, production supervisor behavior, fallback MotionFrame behavior and emission,
+CI-safe public stdout guard evidence for existing explicit helper runtime failure cases. H2 Narrow
+Implementation Gate 1, H2 Narrow Implementation Gate 2, and H2 Narrow Implementation Gate 3 are
+complete and closed; Gate 4 does not reopen them. Production H2 integration, default helper
+runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production supervisor behavior,
+fallback MotionFrame behavior and emission,
 production diagnostics-safety policy behavior, MotionFrame schema changes, Motion Protocol changes,
 Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame
 processing, hidden network calls, new network behavior, camera access changes, helper-owned camera
@@ -301,6 +302,16 @@ H2 implementation is approved by this index itself.
     runtime wiring, production supervisor behavior, production diagnostics-safety policy engine,
     fallback MotionFrame emission, MotionFrame / Motion Protocol change, dependency, or readiness
     claim was added.
+59. [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md)
+    — owner decision approving H2 Narrow Implementation Gate 4: Helper runtime failure-case public
+    stdout guard coverage; authorizes only a future narrow Native Core synthetic/smoke PR to add
+    CI-safe public stdout guard evidence for existing explicit `--helper-runtime-smoke` failure cases
+    such as `launch-failure`, `nonzero-exit`, and `timeout`, while keeping production H2 integration,
+    default helper runtime wiring, production supervisor behavior, production diagnostics policy
+    behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol changes, Electron / Web
+    Preview changes, dependencies, network behavior, camera access changes, frame / tensor IPC, real
+    control-channel work, forced termination, restart / backoff, backend / model / runtime selection,
+    and readiness claims unapproved.
 
 Background:
 
@@ -507,6 +518,13 @@ Background:
   engine, supervisor behavior, fallback MotionFrame emission, default runtime wiring, or readiness
   claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md).
+- The active next owner-approved narrow implementation boundary is H2 Narrow Implementation Gate 4:
+  helper runtime failure-case public stdout guard coverage for existing explicit
+  `--helper-runtime-smoke` failure cases. It approves only a future Native Core synthetic/smoke PR and
+  does not approve production H2 integration, default helper runtime wiring, production supervisor
+  behavior, fallback MotionFrame emission, production diagnostics policy behavior, MotionFrame /
+  Motion Protocol changes, or readiness claims. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
