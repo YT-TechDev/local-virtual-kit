@@ -50,7 +50,8 @@ slice closes exactly that gap.
     and asserts: non-zero exit (fail-closed); **empty** public stdout; no unsafe child marker
     (`unsafe-synthetic-diagnostic`, `modeled-policy-violation`), no raw helper child stderr marker
     (`[helper]`, `source=synthetic-helper`), and no smoke-path/forbidden marker on public stdout;
-    public stderr contains only safe `[helper-runtime-smoke] ` diagnostics and never the unsafe child
+    public stderr contains only safe `[helper-runtime-smoke] ` diagnostics, includes the distinct safe
+    detection diagnostic `unsafe helper diagnostic detected`, and never forwards the unsafe child
     output.
 - No new CMake target, no new dependency, no synthetic helper change (the
   `--emit-unsafe-diagnostic` flag already exists on `main`).
