@@ -228,6 +228,11 @@ H2 implementation is approved by this document.
     questions, and validation evidence while keeping implementation, default runtime wiring,
     production supervisor behavior, fallback MotionFrame behavior, runtime behavior changes, and
     readiness claims unapproved.
+50. [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md)
+    — third Option B planning document proposing fallback MotionFrame behavior planning boundaries,
+    candidate fallback situations, compatibility requirements, validation evidence, and deferred
+    decisions while keeping fallback MotionFrame behavior, fallback emission, implementation,
+    MotionFrame schema changes, runtime behavior changes, and readiness claims unapproved.
 
 Background:
 
@@ -399,11 +404,16 @@ Background:
   planning boundary, including allowed planning topics, forbidden implementation implications,
   deferred decisions, validation evidence requirements, and planning-only next candidates. See
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md).
-- The H2 helper supervisor policy proposal has been added as the next Option B planning document,
+- The H2 helper supervisor policy proposal has been added as an Option B planning document,
   defining planning-only supervisor policy areas for startup, ready / liveness, helper output,
   shutdown, timeout, failure / fallback, restart / backoff questions, and validation evidence while
   preserving that production supervisor behavior remains unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md).
+- The H2 fallback MotionFrame behavior proposal has been added as the next Option B planning document,
+  defining planning-only fallback situations, MotionFrame compatibility requirements, validation
+  evidence, and deferred decisions while preserving that fallback MotionFrame behavior, fallback
+  emission, MotionFrame schema changes, and runtime behavior changes remain unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md).
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
@@ -530,8 +540,10 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md).
   The next Option B planning step, the H2 helper supervisor policy proposal, has also been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md).
-  The current authoritative next planning step is a source-grounded docs-only H2 fallback MotionFrame
-  behavior proposal. This next step is docs-only planning only. Do not proceed to implementation,
+  The H2 fallback MotionFrame behavior proposal has now been added:
+  [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md).
+  The current authoritative next planning step is a source-grounded docs-only H2 diagnostics / stdout /
+  stderr safety planning PR. This next step is docs-only planning only. Do not proceed to implementation,
   default `lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame
   behavior, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
   dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
@@ -555,6 +567,10 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md)
   — second Option B planning document proposing helper supervisor policy areas while keeping
   production supervisor behavior and implementation unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md)
+  — third Option B planning document proposing fallback MotionFrame behavior boundaries while keeping
+  fallback behavior, fallback emission, MotionFrame schema changes, runtime behavior changes, and
+  readiness claims unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
   — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
