@@ -12,13 +12,16 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The latest H2 production-runtime planning boundary is the docs-only planning gate after the
-standalone synthetic-smoke vector phase closeout:
-[`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_PLANNING_GATE.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_PLANNING_GATE.md).
-It records that standalone synthetic-smoke closeout does not claim production readiness and that an
-explicit owner decision is required before any production-runtime planning or implementation. The
-earlier H2 point-in-time next-step notes have been reconciled. For historical
-design phase status, use this index and the H2 design readiness review:
+The current active H2 production-runtime planning boundary is the Option B owner decision:
+[`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md).
+The owner has selected Option B, so docs-only production-runtime planning is now approved. That
+approval is limited to source-grounded docs-only planning; implementation, default
+`lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame behavior,
+runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes, dependencies,
+telemetry, analytics, cloud upload, external frame processing, hidden network calls, new network
+behavior, and readiness claims remain unapproved. The earlier H2 point-in-time next-step notes have
+been reconciled. For historical design phase status, use this index and the H2 design readiness
+review:
 [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
 The scoped H2 prototype
 implementation-gate is now documented in
@@ -374,13 +377,13 @@ Background:
 - The read-only production-runtime / runtime-integration scope review required by the post-ordering
   next-scope gate has completed and returned ready for owner decision, not implementation-ready. See
   [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md).
-- The owner-decision gate is now the current authoritative boundary. It asks the owner to choose one
-  of the documented options and still approves no production H2 integration, default runtime wiring,
-  supervisor production behavior, control-channel semantics, forced termination, restart / backoff,
-  backend / model / runtime selection, real camera access, frame transport, MotionFrame change,
-  Electron / Web Preview / Motion Protocol change, dependency, telemetry, cloud, or network behavior.
-  See
-  [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
+- The Option B decision is now the current active H2 production-runtime planning boundary. The owner
+  has selected docs-only production-runtime planning, limited to source-grounded planning documents;
+  implementation, default runtime wiring, production supervisor behavior, fallback MotionFrame
+  behavior, runtime behavior changes, MotionFrame changes, Electron / Web Preview / Motion Protocol
+  changes, dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network
+  calls, new network behavior, and readiness claims remain unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md).
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
@@ -416,7 +419,7 @@ These boundaries are preserved across all H2 docs:
 
 - H2 implementation.
 - Production H2 integration.
-- Production-runtime / runtime-integration planning beyond the owner-decision options.
+- Production-runtime / runtime-integration implementation beyond source-grounded docs-only planning.
 - Default `lvk-tracker-core` runtime wiring.
 - IPC implementation.
 - Test implementation.
@@ -500,24 +503,28 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
   There is no remaining standalone synthetic-smoke vector to add; this still does not imply production
   readiness.
-- **Owner decision required:** the read-only production-runtime / runtime-integration scope review has
-  completed and returned ready for owner decision. The current authoritative next step is for the
-  owner to choose one of the options in
-  [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
-  Do not proceed to backend / runtime / model / dependency selection, feature flag implementation,
-  production forced termination, production shutdown timeout policy, restart / backoff, production
-  supervisor shutdown semantics, a real parent-to-child control channel, default runtime wiring,
-  production H2 integration, helper-owned camera capture, local/manual validation claims, production
-  readiness claims, cloud inference, external processing, Electron UI, MotionFrame changes, telemetry /
-  network behavior, CI job changes, validation script implementation, or frame transport without
-  separate explicit approval.
+- **Option B decision recorded:** the owner has selected Option B, making
+  [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md)
+  the current active H2 production-runtime planning boundary. The current authoritative next step is
+  source-grounded docs-only production-runtime planning. Do not proceed to implementation, backend /
+  runtime / model / dependency selection, feature flag implementation, production forced termination,
+  production shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, a
+  real parent-to-child control channel, default runtime wiring, production H2 integration,
+  helper-owned camera capture, local/manual validation claims, production readiness claims, cloud
+  inference, external processing, Electron UI, MotionFrame changes, telemetry / network behavior, CI
+  job changes, validation script implementation, or frame transport without separate explicit
+  approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
 ## Cross-References
 
+- [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md)
+  — current active H2 production-runtime planning boundary; records owner selection of Option B for
+  source-grounded docs-only planning while keeping implementation, default runtime wiring, production
+  behavior, runtime behavior changes, and readiness claims unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
-  — current authoritative H2 production-runtime planning boundary and owner decision options.
+  — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
   — historical H2 design-doc phase status.
 - [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md)
@@ -608,8 +615,8 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md)
   — docs-only post-ordering next-scope gate whose required read-only scope review has completed.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
-  — docs-only owner-decision gate; current authoritative next step is for the owner to choose one of
-  its options, with implementation still unapproved.
+  — docs-only owner-decision gate; its option-selection step is superseded by the Option B decision,
+  with implementation still unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_LAUNCH_FAILURE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_LAUNCH_FAILURE_SMOKE_CLOSEOUT.md)
   — closeout for the `launch_failure_fallback` synthetic vector (synthetic-smoke level only).
 - [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_SMOKE_CLOSEOUT.md)
