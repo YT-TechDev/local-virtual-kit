@@ -205,6 +205,11 @@ H2 implementation is approved by this document.
     explicit owner decision before planning or implementation, and keeps production runtime behavior,
     default runtime wiring, MotionFrame, Electron / Web Preview, dependency, telemetry, network,
     camera / frame, and readiness claims unapproved.
+46. [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OWNER_DECISION_RECORD.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OWNER_DECISION_RECORD.md)
+    — docs-only owner-decision record / request after the production-runtime planning gate; records
+    the pending owner decision options without selecting one, and keeps production-runtime planning,
+    production implementation, default runtime wiring, runtime behavior, and readiness claims
+    unapproved unless the owner explicitly chooses otherwise.
 
 Background:
 
