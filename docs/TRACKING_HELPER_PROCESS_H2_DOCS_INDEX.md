@@ -12,10 +12,12 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The latest H2 production-runtime planning boundary is the docs-only owner-decision gate:
-[`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md).
-It records that H2 is ready for an owner decision, not implementation-ready, and approves no
-implementation. The earlier H2 point-in-time next-step notes have been reconciled. For historical
+The latest H2 production-runtime planning boundary is the docs-only planning gate after the
+standalone synthetic-smoke vector phase closeout:
+[`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_PLANNING_GATE.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_PLANNING_GATE.md).
+It records that standalone synthetic-smoke closeout does not claim production readiness and that an
+explicit owner decision is required before any production-runtime planning or implementation. The
+earlier H2 point-in-time next-step notes have been reconciled. For historical
 design phase status, use this index and the H2 design readiness review:
 [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
 The scoped H2 prototype
@@ -197,6 +199,12 @@ H2 implementation is approved by this document.
     `public_stdout_motionframe_only` as a cross-cutting invariant rather than a standalone smoke case,
     and keeps production runtime integration, default runtime wiring, MotionFrame, Electron / Web
     Preview, dependency, telemetry, network, camera / frame, and local/manual readiness unapproved.
+45. [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_PLANNING_GATE.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_PLANNING_GATE.md)
+    — docs-only production-runtime planning gate after the standalone synthetic-smoke vector phase
+    closeout; records that production-runtime planning is not automatically approved, requires an
+    explicit owner decision before planning or implementation, and keeps production runtime behavior,
+    default runtime wiring, MotionFrame, Electron / Web Preview, dependency, telemetry, network,
+    camera / frame, and readiness claims unapproved.
 
 Background:
 
