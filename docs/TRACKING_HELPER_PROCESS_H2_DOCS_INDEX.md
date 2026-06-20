@@ -253,6 +253,13 @@ H2 implementation is approved by this index itself.
     production supervisor behavior, fallback MotionFrame emission, production diagnostics-safety
     policy behavior, MotionFrame changes, Electron / Web Preview changes, dependencies, network
     behavior, and readiness claims unapproved.
+54. [`docs/TRACKING_HELPER_PROCESS_H2_HIGH_VOLUME_CAPTURE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HIGH_VOLUME_CAPTURE_SMOKE_CLOSEOUT.md)
+    — closeout for the first H2 Narrow Implementation Gate 1 slice: smoke-only bounded child
+    stdout/stderr capture (cap + `stdoutTruncated` / `stderrTruncated` flags, enlarged Windows pipe
+    buffer) plus the `high_volume` synthetic supervision smoke case. Records implementation state
+    only; the supervisor stays smoke-only and unwired, and no production supervisor behavior,
+    diagnostics-safety policy engine, fallback MotionFrame emission, MotionFrame schema change, or
+    readiness claim is added.
 
 Background:
 

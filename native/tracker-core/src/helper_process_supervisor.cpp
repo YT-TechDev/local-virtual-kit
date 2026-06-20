@@ -3,9 +3,41 @@
 // Minimal, smoke-only child-process supervision primitive (H1c).
 //
 // Captures child stdout/stderr via pipes (never temporary files), with a
-// bounded timeout that terminates a hung child. Assumes small, bounded child
-// output (the synthetic helper smoke contract). Not a production process
-// manager and not wired into the lvk-tracker-core runtime.
+// bounded timeout that terminates a hung child. Captured output is bounded by a
+// smoke-only cumulative byte cap so even high-volume synthetic output stays
+// bounded, local, and private. Not a production process manager and not wired
+// into the lvk-tracker-core runtime.
+
+#include <cstddef>
+#include <string>
+
+namespace lvk::tracker {
+namespace {
+
+// Appends up to the smoke-only cap into `dest`. Bytes beyond the cap are
+// discarded (the caller still fully drains the pipe so the child never blocks),
+// and `truncated` is set. Only the stored buffer is bounded; pipe draining and
+// exit/timeout detection are unaffected.
+void appendBoundedCapture(
+    std::string& dest,
+    bool& truncated,
+    const char* data,
+    std::size_t length) {
+  if (dest.size() >= kHelperSmokeCapturedStreamByteCap) {
+    truncated = true;
+    return;
+  }
+  const std::size_t remaining = kHelperSmokeCapturedStreamByteCap - dest.size();
+  if (length > remaining) {
+    dest.append(data, remaining);
+    truncated = true;
+  } else {
+    dest.append(data, length);
+  }
+}
+
+}  // namespace
+}  // namespace lvk::tracker
 
 #ifdef _WIN32
 
@@ -32,15 +64,23 @@ std::string buildCommandLine(
   return commandLine;
 }
 
-std::string readAllFromPipe(HANDLE pipe) {
-  std::string contents;
+// Larger explicit read-pipe buffer so a high-volume synthetic child can write
+// its full output without blocking before the parent reads (the Windows path
+// reads after the wait). This keeps high-volume synthetic completion
+// deterministic; the stored capture is still bounded by appendBoundedCapture.
+constexpr DWORD kWindowsPipeBufferBytes = 1u << 20;  // 1 MiB
+
+// Fully drains `pipe` to EOF, storing at most the smoke-only cap into
+// `contents` (setting `truncated` when bytes are discarded). Draining always
+// runs to completion so the child never blocks on a full pipe.
+void readAllFromPipe(HANDLE pipe, std::string& contents, bool& truncated) {
   char buffer[4096];
   DWORD bytesRead = 0;
   while (ReadFile(pipe, buffer, sizeof(buffer), &bytesRead, nullptr) &&
          bytesRead > 0) {
-    contents.append(buffer, bytesRead);
+    appendBoundedCapture(
+        contents, truncated, buffer, static_cast<std::size_t>(bytesRead));
   }
-  return contents;
 }
 
 }  // namespace
@@ -61,10 +101,14 @@ HelperProcessRunResult runHelperProcessForSmoke(
   HANDLE stderrRead = nullptr;
   HANDLE stderrWrite = nullptr;
 
-  if (!CreatePipe(&stdoutRead, &stdoutWrite, &securityAttributes, 0)) {
+  if (!CreatePipe(
+          &stdoutRead, &stdoutWrite, &securityAttributes,
+          kWindowsPipeBufferBytes)) {
     return result;
   }
-  if (!CreatePipe(&stderrRead, &stderrWrite, &securityAttributes, 0)) {
+  if (!CreatePipe(
+          &stderrRead, &stderrWrite, &securityAttributes,
+          kWindowsPipeBufferBytes)) {
     CloseHandle(stdoutRead);
     CloseHandle(stdoutWrite);
     return result;
@@ -122,10 +166,11 @@ HelperProcessRunResult runHelperProcessForSmoke(
     WaitForSingleObject(processInfo.hProcess, INFINITE);
   }
 
-  // Child output is small and bounded; read remaining buffered pipe data after
-  // the process has exited or been terminated.
-  result.stdoutText = readAllFromPipe(stdoutRead);
-  result.stderrText = readAllFromPipe(stderrRead);
+  // Read remaining buffered pipe data after the process has exited or been
+  // terminated. Each stream is fully drained but stored only up to the
+  // smoke-only cap (setting the *Truncated flags when output is high-volume).
+  readAllFromPipe(stdoutRead, result.stdoutText, result.stdoutTruncated);
+  readAllFromPipe(stderrRead, result.stderrText, result.stderrTruncated);
 
   DWORD exitCode = 0;
   if (GetExitCodeProcess(processInfo.hProcess, &exitCode)) {
@@ -272,7 +317,9 @@ HelperProcessRunResult runHelperProcessForSmoke(
     if (stdoutIndex >= 0 && (fds[stdoutIndex].revents & (POLLIN | POLLHUP))) {
       const ssize_t bytesRead = read(stdoutPipe[0], buffer, sizeof(buffer));
       if (bytesRead > 0) {
-        result.stdoutText.append(buffer, static_cast<size_t>(bytesRead));
+        appendBoundedCapture(
+            result.stdoutText, result.stdoutTruncated, buffer,
+            static_cast<std::size_t>(bytesRead));
       } else if (bytesRead == 0) {
         stdoutOpen = false;
       } else if (errno != EINTR && errno != EAGAIN) {
@@ -282,7 +329,9 @@ HelperProcessRunResult runHelperProcessForSmoke(
     if (stderrIndex >= 0 && (fds[stderrIndex].revents & (POLLIN | POLLHUP))) {
       const ssize_t bytesRead = read(stderrPipe[0], buffer, sizeof(buffer));
       if (bytesRead > 0) {
-        result.stderrText.append(buffer, static_cast<size_t>(bytesRead));
+        appendBoundedCapture(
+            result.stderrText, result.stderrTruncated, buffer,
+            static_cast<std::size_t>(bytesRead));
       } else if (bytesRead == 0) {
         stderrOpen = false;
       } else if (errno != EINTR && errno != EAGAIN) {

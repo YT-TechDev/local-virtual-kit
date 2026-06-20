@@ -1,10 +1,11 @@
 // Helper process supervision smoke (H1c).
 //
 // Launches lvk-synthetic-helper as a child process under bounded supervision
-// and validates lifecycle outcomes for three cases: normal completion, helper
-// failure, and timeout/termination. Captured child stdout/stderr are private
-// child-process data and are NOT forwarded to the parent's stdout. Parent
-// diagnostics go to stderr with a safe [supervision-smoke] prefix.
+// and validates lifecycle outcomes for four cases: normal completion, helper
+// failure, timeout/termination, and high-volume output (bounded capture).
+// Captured child stdout/stderr are private child-process data and are NOT
+// forwarded to the parent's stdout. Parent diagnostics go to stderr with a safe
+// [supervision-smoke] prefix.
 //
 // This is synthetic only: no camera, no model, no raw frames, and it is NOT
 // wired into the lvk-tracker-core runtime. Only lightweight string checks are
@@ -25,6 +26,12 @@ using lvk::tracker::runHelperProcessForSmoke;
 
 constexpr int kNormalTimeoutMs = 5000;
 constexpr int kHangTimeoutMs = 200;
+constexpr int kHighVolumeTimeoutMs = 5000;
+// Frame count chosen so the helper emits cumulative stdout far above the
+// smoke-only capture cap (each synthetic result line is a few hundred bytes),
+// deterministically exercising the bounded-capture path. Well within the
+// Windows pipe buffer, so the child still completes cleanly on both platforms.
+constexpr int kHighVolumeFrameCount = 2000;
 
 bool contains(const std::string& haystack, const std::string& needle) {
   return haystack.find(needle) != std::string::npos;
@@ -150,6 +157,66 @@ bool runTimeoutCase(const std::string& helperPath) {
   return true;
 }
 
+// High-volume output: the helper emits far more cumulative stdout than the
+// smoke-only capture cap. This proves the supervisor's captured buffer stays
+// BOUNDED (does not grow without limit), stays PRIVATE (never forwarded to the
+// parent's stdout), and that high-volume output does not corrupt lifecycle
+// handling -- the child still exits cleanly. Because capture is clamped to the
+// cap, the trailing "stopped" line is intentionally beyond the captured prefix;
+// only the early ready/result markers are asserted present. This is a
+// smoke-only safety bound, NOT a production supervisor / backpressure policy.
+bool runHighVolumeCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", std::to_string(kHighVolumeFrameCount)},
+      kHighVolumeTimeoutMs);
+
+  if (!run.launched) {
+    reportFailure("high_volume", "child failed to launch");
+    return false;
+  }
+  if (run.timedOut) {
+    reportFailure("high_volume", "unexpected timeout");
+    return false;
+  }
+  if (run.exitCode != 0) {
+    reportFailure("high_volume", "expected exit code 0");
+    return false;
+  }
+
+  // Bounded capture: the helper emitted far more than the cap, so captured
+  // stdout must be clamped to the cap and flagged truncated.
+  if (run.stdoutText.size() > lvk::tracker::kHelperSmokeCapturedStreamByteCap) {
+    reportFailure("high_volume",
+                  "captured stdout exceeded the smoke-only capture cap");
+    return false;
+  }
+  if (!run.stdoutTruncated) {
+    reportFailure("high_volume",
+                  "expected high-volume stdout to be truncated at the cap");
+    return false;
+  }
+
+  // Lifecycle markers from the early bounded prefix remain recoverable: the
+  // helper emits ready then results before the truncation point.
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("high_volume", "missing ready marker in bounded capture");
+    return false;
+  }
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("high_volume", "missing result marker in bounded capture");
+    return false;
+  }
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("high_volume", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  std::cerr << "[supervision-smoke] high-volume: launched, exitCode=0, capture "
+               "bounded at cap, truncated flag set, safe stderr.\n";
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -162,7 +229,7 @@ int main(int argc, char* argv[]) {
   const std::string helperPath = argv[1];
 
   if (!runNormalCase(helperPath) || !runFailureCase(helperPath) ||
-      !runTimeoutCase(helperPath)) {
+      !runTimeoutCase(helperPath) || !runHighVolumeCase(helperPath)) {
     return 1;
   }
 
