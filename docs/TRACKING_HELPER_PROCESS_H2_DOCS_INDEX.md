@@ -257,10 +257,11 @@ H2 implementation is approved by this index itself.
     — closeout for the first H2 Narrow Implementation Gate 1 slice: smoke-only bounded child
     stdout/stderr capture (cap + `stdoutTruncated` / `stderrTruncated` flags) with full concurrent
     pipe draining (POSIX `poll()` / Windows reader threads) plus the `high_volume` synthetic
-    supervision smoke case. Records implementation state
-    only; the supervisor stays smoke-only and unwired, and no production supervisor behavior,
-    diagnostics-safety policy engine, fallback MotionFrame emission, MotionFrame schema change, or
-    readiness claim is added.
+    supervision smoke case. Records implementation state only: helper supervision behavior remains
+    smoke-scoped / synthetic-scoped, active only through explicit smoke paths, and not entered by the
+    default runtime when the smoke path is omitted. No production supervisor behavior,
+    diagnostics-safety policy engine, fallback MotionFrame emission, MotionFrame schema change,
+    default H2 runtime wiring, or readiness claim is added.
 
 Background:
 

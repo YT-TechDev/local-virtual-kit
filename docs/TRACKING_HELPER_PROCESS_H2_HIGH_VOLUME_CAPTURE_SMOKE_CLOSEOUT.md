@@ -12,9 +12,12 @@ schema. The work is bounded by the owner decision
 ([`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md)),
 which approved exactly one narrow slice: synthetic-only helper output safety hardening.
 
-Unlike the prior standalone synthetic-smoke vectors, this slice **does** make a small, smoke-only
-change to `helper_process_supervisor` (bounding its captured-output buffer). The supervisor remains
-linked only into smoke targets and is **not** wired into the `lvk-tracker-core` runtime.
+Unlike the prior standalone synthetic-smoke vectors, this slice **does** make a small,
+smoke-scoped / synthetic-scoped change to `helper_process_supervisor` (bounding its captured-output
+buffer). In the current native build, `helper_process_supervisor` is also compiled with
+`lvk-tracker-core` to support the explicit `--helper-runtime-smoke` path. That smoke behavior is
+active only through explicit smoke paths, is not entered by the default runtime when the smoke path
+is omitted, and does **not** approve or add default H2 runtime wiring.
 
 ## Approved Gate
 
@@ -104,7 +107,9 @@ the supervisor never opens a camera.
 
 ## Safety Boundaries Preserved
 
-- Synthetic-only; supervisor remains smoke-only and unwired from the default runtime.
+- Synthetic-only; helper supervision behavior remains smoke-scoped / synthetic-scoped, active only
+  through explicit smoke paths, and not entered by the default runtime when the smoke path is
+  omitted.
 - No camera access; no real frames, pixels, or tensors.
 - No helper-owned camera capture; no raw frame / pixel / tensor IPC; no high-rate raw frame
   transport.
