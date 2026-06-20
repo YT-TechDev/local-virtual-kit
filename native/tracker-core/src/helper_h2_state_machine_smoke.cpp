@@ -750,6 +750,11 @@ bool runOversizedLineCase(const std::string& helperPath) {
 // test-only synthetic helper marker; it is NOT a real parent stop exchange. The
 // marker is captured only in the helper's PRIVATE stdout (asserted present there)
 // and is never forwarded to this smoke's stdout, which stays empty.
+//
+// The private helper stdout markers are also asserted to appear in the exact
+// lifecycle order (ready -> result -> stopping -> stopped) via markersAppearInOrder,
+// mirroring the shutdown_timeout_forced_exit case, so this case cannot falsely pass
+// on out-of-order markers (e.g. a "stopping" emitted after "stopped").
 bool runShutdownGracefulExitCase(const std::string& helperPath) {
   const HelperProcessRunResult run = runHelperProcessForSmoke(
       helperPath, {"--frames", "3", "--emit-graceful-shutdown"},
@@ -768,6 +773,21 @@ bool runShutdownGracefulExitCase(const std::string& helperPath) {
     reportFailure("shutdown_graceful_exit", "unexpected timeout");
     return false;
   }
+
+  // Smoke-local ordering assertion: the private helper stdout markers must appear
+  // in the exact lifecycle order before we reconstruct the path. This prevents a
+  // false pass if the helper emitted "stopping" after "stopped" or otherwise out
+  // of order. Uses substring offsets only (no JSON parser), reusing the same
+  // helper as the forced-exit case.
+  if (!markersAppearInOrder(run.stdoutText,
+                            {"\"type\":\"ready\"", "\"type\":\"result\"",
+                             "\"type\":\"stopping\"", "\"type\":\"stopped\""})) {
+    reportFailure("shutdown_graceful_exit",
+                  "private helper stdout markers missing or out of order "
+                  "(expected ready -> result -> stopping -> stopped)");
+    return false;
+  }
+
   if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
     reportFailure("shutdown_graceful_exit", "missing ready marker");
     return false;
