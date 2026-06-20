@@ -171,7 +171,62 @@ std::vector<std::string> buildHelperArguments(
   if (options.smokeCase == HelperRuntimeSmokeCase::Timeout) {
     return {"--frames", "5", "--interval-ms", "1000"};
   }
+  if (options.smokeCase == HelperRuntimeSmokeCase::UnsafeDiagnostic) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-unsafe-diagnostic"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
+}
+
+// Smoke-only: every non-empty helper stderr line must use the safe "[helper] "
+// diagnostic prefix. The synthetic --emit-unsafe-diagnostic mode intentionally
+// emits one line without it, so this returns false when an unsafe diagnostic was
+// captured. Kept file-local on purpose to mirror the equivalent local checks in
+// the other H2 smokes (no new shared module).
+bool helperRuntimeStderrIsSafeForSmoke(const std::string& stderrText) {
+  std::istringstream lines(stderrText);
+  std::string line;
+  while (std::getline(lines, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    if (line.empty()) {
+      continue;
+    }
+    if (line.rfind("[helper] ", 0) != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Smoke-only fail-closed handler for the UnsafeDiagnostic case. Emits NOTHING to
+// public stdout (no MotionFrame, and deliberately no fallback frame), keeps the
+// unsafe child stderr private to Native Core (never forwarded or echoed), writes
+// only a safe "[helper-runtime-smoke] " diagnostic, and returns non-zero so the
+// smoke fails closed. This is smoke-local detection only, NOT a production
+// diagnostics-safety policy engine.
+int handleUnsafeDiagnostic(
+    const HelperProcessRunResult& helperRun,
+    std::ostream& diagnosticsOutput) {
+  if (!helperRun.launched) {
+    writeDiagnostic(diagnosticsOutput, "helper launch failed");
+    return 1;
+  }
+  if (helperRuntimeStderrIsSafeForSmoke(helperRun.stderrText)) {
+    writeDiagnostic(
+        diagnosticsOutput,
+        "expected unsafe helper diagnostic was not captured; failing closed "
+        "(no MotionFrame emitted)");
+    return 1;
+  }
+  writeDiagnostic(
+      diagnosticsOutput,
+      "unsafe helper diagnostic detected; failing closed "
+      "(no MotionFrame emitted)");
+  return 1;
 }
 
 int smokeTimeoutMs(HelperRuntimeSmokeCase smokeCase) {
@@ -190,6 +245,10 @@ int runHelperRuntimeSmoke(
       options.helperPath,
       buildHelperArguments(options),
       smokeTimeoutMs(options.smokeCase));
+
+  if (options.smokeCase == HelperRuntimeSmokeCase::UnsafeDiagnostic) {
+    return handleUnsafeDiagnostic(helperRun, diagnosticsOutput);
+  }
 
   if (handleExpectedFailure(
           helperRun, options.smokeCase, motionFrameOutput, diagnosticsOutput)) {
