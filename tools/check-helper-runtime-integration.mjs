@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Helper runtime integration smoke checker (H1d) + H2 Gate 2 smoke-path guard
-// + H2 Gate 3 unsafe-diagnostic fail-closed guard.
+// + H2 Gate 3 unsafe-diagnostic fail-closed guard
+// + H2 Gate 4 helper runtime failure-case public stdout guards.
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -384,4 +385,149 @@ for (const marker of unsafeChildMarkers) {
 console.log(
   "Unsafe-diagnostic fail-closed guard OK: non-zero exit, empty MotionFrame stdout, " +
     "unsafe helper diagnostic detected and kept private to Native Core.",
+);
+
+// --- H2 Gate 4: explicit helper runtime failure-case public stdout guards -----
+// Each existing explicit --helper-runtime-smoke failure case (launch-failure,
+// nonzero-exit, timeout) must keep public lvk-tracker-core stdout MotionFrame
+// JSON only -- here exactly one PRE-EXISTING fallback MotionFrame (status
+// "lost") emitted by helper_runtime_smoke.cpp -- and must not forward helper
+// diagnostics, lifecycle markers, raw child stderr, policy/error text, or unsafe
+// child output to any public stream. This asserts the EXISTING behavior; it adds
+// no new fallback emission and changes no runtime behavior. The helper child's
+// own stdout/stderr stay private to Native Core. Synthetic/smoke-only, CI-safe.
+
+// Run one explicit failure case and assert the public stdout/stderr boundary.
+// helperArg is the helper path passed to lvk-tracker-core; launch-failure uses a
+// deliberately non-existent path so the helper genuinely fails to launch (with a
+// valid path that case would run normally and not exercise the failure branch).
+const assertFailureCaseStdoutGuard = ({ caseName, helperArg }) => {
+  const caseResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperArg,
+      "--frames",
+      "3",
+      "--helper-runtime-smoke-case",
+      caseName,
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (caseResult.error) {
+    fail(
+      `could not run ${caseName} ${trackerPath}: ${caseResult.error.message}`,
+      caseResult,
+    );
+  }
+
+  // All existing explicit failure cases emit one safe fallback MotionFrame and
+  // exit 0.
+  if (caseResult.status !== 0) {
+    fail(`expected exit status 0 for ${caseName} failure case`, caseResult);
+  }
+
+  const caseStdout = caseResult.stdout ?? "";
+  const caseStdoutLines = caseStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  // Public stdout must be MotionFrame JSON only -- exactly one native MotionFrame.
+  if (caseStdoutLines.length !== 1) {
+    fail(
+      `expected exactly 1 public stdout line for ${caseName}, got ${caseStdoutLines.length}`,
+      caseResult,
+    );
+  }
+
+  // No helper smoke-path markers, forbidden markers, or unsafe child markers may
+  // appear on public stdout (covers helper diagnostics, lifecycle markers, raw
+  // child stderr forms, and unsafe child output).
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (caseStdout.includes(marker)) {
+      fail(
+        `${caseName} public stdout leaked marker ${JSON.stringify(marker)}`,
+        caseResult,
+      );
+    }
+  }
+
+  // The single stdout line must validate as native MotionFrame JSON AND be the
+  // existing fallback MotionFrame, i.e. tracking.status === "lost".
+  caseStdoutLines.forEach((line, index) => {
+    const frame = parseNativeMotionFrameJson(line);
+    if (frame === null) {
+      fail(
+        `${caseName} public stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+        caseResult,
+      );
+    }
+    if (frame.tracking?.status !== "lost") {
+      fail(
+        `${caseName} public stdout line ${index + 1} expected fallback MotionFrame with tracking.status "lost", got ${JSON.stringify(frame.tracking?.status)}`,
+        caseResult,
+      );
+    }
+  });
+
+  // Public stderr must be only safe parent diagnostics; no raw child stderr or
+  // helper child output forwarded.
+  const caseStderr = caseResult.stderr ?? "";
+  const caseStderrLines = caseStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  caseStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `${caseName} public stderr line without safe prefix: ${line}`,
+        caseResult,
+      );
+    }
+  });
+
+  // Even when carried behind the valid "[helper-runtime-smoke] " parent prefix,
+  // public stderr must not contain helper lifecycle / contract markers, raw child
+  // stderr forms, unsafe child output, or other forbidden child JSON / policy /
+  // error text. We reuse the same marker sets as the stdout guard but exclude the
+  // safe parent prefix itself so valid parent diagnostics remain allowed.
+  const forbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of forbiddenStderrMarkers) {
+    if (caseStderr.includes(marker)) {
+      fail(
+        `${caseName} public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        caseResult,
+      );
+    }
+  }
+};
+
+assertFailureCaseStdoutGuard({
+  caseName: "nonzero-exit",
+  helperArg: helperPath,
+});
+assertFailureCaseStdoutGuard({ caseName: "timeout", helperArg: helperPath });
+// launch-failure needs the helper to genuinely fail to launch: pass a path that
+// does not exist so runHelperProcessForSmoke reports launched=false.
+assertFailureCaseStdoutGuard({
+  caseName: "launch-failure",
+  helperArg: `${helperPath}.does-not-exist-lvk-gate4`,
+});
+
+console.log(
+  "Failure-case stdout guard OK: launch-failure, nonzero-exit, timeout keep public " +
+    "stdout MotionFrame-JSON-only and forward no helper child output.",
 );
