@@ -312,6 +312,16 @@ H2 implementation is approved by this index itself.
     Preview changes, dependencies, network behavior, camera access changes, frame / tensor IPC, real
     control-channel work, forced termination, restart / backoff, backend / model / runtime selection,
     and readiness claims unapproved.
+60. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_FAILURE_STDOUT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_FAILURE_STDOUT_GUARD_CLOSEOUT.md)
+    — closeout for the H2 Narrow Implementation Gate 4 slice: checker-only public stdout guards for
+    the existing explicit `--helper-runtime-smoke` failure cases (`launch-failure`, `nonzero-exit`,
+    `timeout`) added to `tools/check-helper-runtime-integration.mjs`, asserting each case exits 0 with
+    exactly one pre-existing fallback MotionFrame (status `lost`, valid native MotionFrame JSON) on
+    public `lvk-tracker-core` stdout and forwards no helper diagnostics, lifecycle markers, raw child
+    stderr, or unsafe child output to any public stream while helper stdout/stderr stay private to
+    Native Core. Records implementation state only; no C++ runtime change, no new fallback MotionFrame
+    emission, no default runtime wiring, production supervisor behavior, production diagnostics-safety
+    policy engine, MotionFrame / Motion Protocol change, dependency, or readiness claim was added.
 
 Background:
 
@@ -525,6 +535,16 @@ Background:
   behavior, fallback MotionFrame emission, production diagnostics policy behavior, MotionFrame /
   Motion Protocol changes, or readiness claims. See
   [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md).
+- The H2 Narrow Implementation Gate 4 slice is implemented at the synthetic/smoke (checker-only)
+  level: `tools/check-helper-runtime-integration.mjs` now guards the existing explicit
+  `--helper-runtime-smoke` failure cases (`launch-failure`, `nonzero-exit`, `timeout`), asserting each
+  exits 0 with exactly one pre-existing fallback MotionFrame (status `lost`, valid native MotionFrame
+  JSON) on public `lvk-tracker-core` stdout and forwards no helper diagnostics, lifecycle markers, raw
+  child stderr, or unsafe child output to any public stream while helper stdout/stderr stay private to
+  Native Core. No C++ runtime change, new fallback MotionFrame emission, default runtime wiring,
+  production supervisor behavior, production diagnostics-safety policy engine, or readiness claim is
+  added. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_FAILURE_STDOUT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_FAILURE_STDOUT_GUARD_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
