@@ -13,17 +13,19 @@ This index is the single place to find the H2 helper-process design documents, t
 order, the current design state, and the one authoritative next step.
 
 The current active H2 implementation boundary is the owner decision approving H2 Narrow
-Implementation Gate 2: Explicit smoke-path isolation and default-runtime guard coverage:
-[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_2_DECISION.md).
-The owner has approved only a future narrow Native Core synthetic/smoke implementation PR to
-strengthen or document test evidence around the explicit smoke path boundary and default-runtime
-guards. H2 Narrow Implementation Gate 1 is complete and closed; Gate 2 does not reopen it. Production
-H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
-production supervisor behavior, fallback MotionFrame behavior and emission, production
-diagnostics-safety policy behavior, MotionFrame schema changes, Motion Protocol changes, Electron /
-Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame processing,
-hidden network calls, new network behavior, camera access changes, helper-owned camera capture, raw
-frame / pixel / tensor IPC, high-rate raw frame transport, and readiness claims remain unapproved.
+Implementation Gate 3: Unsafe helper diagnostics fail-closed smoke coverage:
+[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md).
+The owner has approved only a future narrow Native Core synthetic/smoke implementation PR to add
+CI-safe evidence for unsafe helper diagnostics / unsafe helper-output fail-closed behavior. H2 Narrow
+Implementation Gate 1 and H2 Narrow Implementation Gate 2 are complete and closed; Gate 3 does not
+reopen them. Production H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2
+runtime wiring, production supervisor behavior, fallback MotionFrame behavior and emission,
+production diagnostics-safety policy behavior, MotionFrame schema changes, Motion Protocol changes,
+Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame
+processing, hidden network calls, new network behavior, camera access changes, helper-owned camera
+capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child control
+channel, production forced termination, restart / backoff, backend / model / runtime selection, and
+readiness claims remain unapproved.
 The earlier H2 point-in-time next-step notes have been reconciled. For historical design phase status,
 use this index
 and the H2 design readiness review:
@@ -280,6 +282,15 @@ H2 implementation is approved by this index itself.
     and leaks no helper stdout/stderr. Records implementation state only; no Native Core runtime source
     was changed, and no default runtime wiring, production supervisor behavior, fallback MotionFrame
     emission, MotionFrame schema change, dependency, or readiness claim was added.
+57. [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md)
+    — owner decision approving H2 Narrow Implementation Gate 3: Unsafe helper diagnostics
+    fail-closed smoke coverage; authorizes only a future narrow Native Core synthetic/smoke PR to
+    add CI-safe evidence for unsafe helper diagnostics / unsafe helper-output fail-closed behavior,
+    while keeping production H2 integration, default helper runtime wiring, production diagnostics
+    policy behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol changes, Electron /
+    Web Preview changes, dependencies, network behavior, camera access changes, frame / tensor IPC,
+    real control-channel work, forced termination, restart / backoff, backend / model / runtime
+    selection, and readiness claims unapproved.
 
 Background:
 
@@ -606,11 +617,10 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
   The H2 implementation gate requirements document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
-  H2 Narrow Implementation Gate 1 is complete and closed. The owner has now approved the current
-  next implementation slice:
-  **H2 Narrow Implementation Gate 2: Explicit smoke-path isolation and default-runtime guard
-  coverage**. See
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_2_DECISION.md).
+  H2 Narrow Implementation Gate 1 and Gate 2 are complete and closed. The owner has now approved the
+  current next implementation slice:
+  **H2 Narrow Implementation Gate 3: Unsafe helper diagnostics fail-closed smoke coverage**. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md).
   After this decision PR merges, the next implementation work should be a Claude Code implementation
   prompt for that narrow Native Core synthetic/smoke-only gate. Do not proceed to direct production
   H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
@@ -618,9 +628,10 @@ These boundaries are preserved across all H2 docs:
   behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol changes,
   Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame
   processing, hidden network calls, new network behavior, camera access changes, helper-owned camera
-  capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, local/manual validation
-  claims, webcam / Electron / OBS readiness claims, or production readiness claims without separate
-  explicit approval.
+  capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child
+  control channel, production forced termination, restart / backoff, backend / model / runtime
+  selection, local/manual validation claims, webcam / Electron / OBS readiness claims, or production
+  readiness claims without separate explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
