@@ -217,6 +217,11 @@ H2 implementation is approved by this document.
     — docs-only owner decision selecting Option B: H2 may enter source-grounded production-runtime
     planning only; implementation, default runtime wiring, production behavior, runtime behavior
     changes, and readiness claims remain separately gated and unapproved.
+48. [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md)
+    — first Option B planning document defining the allowed production-runtime planning scope,
+    explicit non-goals, deferred decisions, validation evidence requirements, and next planning-only
+    candidate PRs while keeping implementation, default runtime wiring, production behavior, runtime
+    behavior changes, and readiness claims unapproved.
 
 Background:
 
@@ -384,6 +389,10 @@ Background:
   changes, dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network
   calls, new network behavior, and readiness claims remain unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md).
+- The first Option B planning document now defines the H2 production-runtime scope and non-goals
+  planning boundary, including allowed planning topics, forbidden implementation implications,
+  deferred decisions, validation evidence requirements, and planning-only next candidates. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md).
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
@@ -505,8 +514,12 @@ These boundaries are preserved across all H2 docs:
   readiness.
 - **Option B decision recorded:** the owner has selected Option B, making
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md)
-  the current active H2 production-runtime planning boundary. The current authoritative next step is
-  source-grounded docs-only production-runtime planning. Do not proceed to implementation, backend /
+  the current active H2 production-runtime planning boundary. The first Option B planning step is the
+  H2 production-runtime scope and non-goals plan:
+  [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md).
+  The current authoritative next step is another source-grounded docs-only production-runtime
+  planning PR, such as the H2 helper supervisor policy proposal. Do not proceed to implementation,
+  backend /
   runtime / model / dependency selection, feature flag implementation, production forced termination,
   production shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, a
   real parent-to-child control channel, default runtime wiring, production H2 integration,
@@ -523,6 +536,9 @@ These boundaries are preserved across all H2 docs:
   — current active H2 production-runtime planning boundary; records owner selection of Option B for
   source-grounded docs-only planning while keeping implementation, default runtime wiring, production
   behavior, runtime behavior changes, and readiness claims unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md)
+  — first Option B planning document defining the production-runtime planning scope, non-goals,
+  deferred decisions, validation evidence requirements, and next planning-only PR candidates.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
   — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
