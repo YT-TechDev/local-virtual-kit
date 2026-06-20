@@ -210,6 +210,10 @@ H2 implementation is approved by this document.
     the pending owner decision options without selecting one, and keeps production-runtime planning,
     production implementation, default runtime wiring, runtime behavior, and readiness claims
     unapproved unless the owner explicitly chooses otherwise.
+47. [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md)
+    — docs-only owner decision selecting Option B: H2 may enter source-grounded production-runtime
+    planning only; implementation, default runtime wiring, production behavior, runtime behavior
+    changes, and readiness claims remain separately gated and unapproved.
 
 Background:
 
