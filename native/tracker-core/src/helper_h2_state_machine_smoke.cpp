@@ -1374,6 +1374,86 @@ bool runShutdownTimeoutForcedExitCase(const std::string& helperPath) {
   return true;
 }
 
+// Helper launch failure: not_started -> launching -> failed -> fallback. Native
+// Core attempts to launch a helper executable that does not exist (a path
+// deterministically derived from the real helper path by appending a
+// never-present suffix), so the launch attempt cannot produce a working helper.
+// This exercises the launch-failure boundary of runHelperProcessForSmoke that no
+// other case covers (every other case asserts the helper launched), modeling the
+// documented `launch_failure_fallback` vector
+// (docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md) and the
+// `launching -> failed` transition
+// (docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md).
+//
+// Platform nuance (honest scope): the captured launch-failure signal differs by
+// platform but is deterministic on both, and neither produces a `ready` marker:
+//   - Windows: CreateProcess fails for the missing path, so the supervisor
+//     reports launched == false (no child runs; empty stdout/stderr).
+//   - POSIX: fork() succeeds, but the child's execv() fails for the missing path
+//     and the child exits 127 (no output), so the supervisor reports
+//     launched == true with a non-zero exit and empty stdout.
+// In both cases the helper never reached `ready`, so `failed` is reconstructed
+// from "no ready marker AND the attempt did not yield a cleanly-running helper"
+// (!launched, or a non-zero exit). `waiting_for_ready` is intentionally NOT
+// appended: the documented launch-failure path goes launching -> failed directly.
+// There is no timeout here (distinct from the startup-timeout case). Synthetic
+// only: no camera, no frames, no network, no new dependency; captured private
+// helper data is never forwarded and this smoke's own stdout stays empty.
+bool runLaunchFailureCase(const std::string& helperPath) {
+  // Deterministically unlaunchable path: the real helper path plus a suffix that
+  // cannot exist as an executable. This stays synthetic (no real helper runs).
+  const std::string missingHelperPath = helperPath + ".lvk-does-not-exist";
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      missingHelperPath, {"--frames", "3"}, kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  // Native Core attempted to create the child, so it entered `launching`.
+  path.push_back(HelperState::launching);
+
+  if (run.timedOut) {
+    reportFailure("launch_failure",
+                  "unexpected timeout (launch failure must not be a timeout)");
+    return false;
+  }
+
+  // The missing helper can never emit a ready marker; reaching `ready` would mean
+  // a real helper was launched, contradicting the launch-failure boundary.
+  if (contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("launch_failure",
+                  "unexpected ready marker (helper must not have launched)");
+    return false;
+  }
+
+  // The launch attempt must not have yielded a cleanly-running helper: either the
+  // process could not be created (Windows: launched == false) or it was forked
+  // but exec failed and the child exited non-zero (POSIX: launched == true,
+  // exitCode != 0). A launched helper that exits 0 would not be a launch failure.
+  if (run.launched && run.exitCode == 0) {
+    reportFailure("launch_failure",
+                  "expected launch failure (helper unexpectedly ran to a clean "
+                  "exit)");
+    return false;
+  }
+  path.push_back(HelperState::failed);
+  path.push_back(HelperState::fallback);
+
+  if (!helperStderrIsSafe(run.stderrText)) {
+    reportFailure("launch_failure", "unexpected non-helper stderr line");
+    return false;
+  }
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching, HelperState::failed,
+      HelperState::fallback};
+  if (!checkPath("launch_failure", path, expected)) {
+    return false;
+  }
+
+  reportPath("launch_failure", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -1393,7 +1473,8 @@ int main(int argc, char* argv[]) {
       !runShutdownGracefulExitCase(helperPath) ||
       !runShutdownAfterHelperAlreadyExitedCase(helperPath) ||
       !runShutdownAfterFailureOrTimeoutCase(helperPath) ||
-      !runShutdownTimeoutForcedExitCase(helperPath)) {
+      !runShutdownTimeoutForcedExitCase(helperPath) ||
+      !runLaunchFailureCase(helperPath)) {
     return 1;
   }
 

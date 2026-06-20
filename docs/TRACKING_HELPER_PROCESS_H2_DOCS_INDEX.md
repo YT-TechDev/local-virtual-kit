@@ -177,6 +177,12 @@ H2 implementation is approved by this document.
     — docs-only owner-decision gate after the production-runtime / runtime-integration scope review;
     records that the next decision is whether to approve drafting a future first implementation prompt
     or continue planning, while approving no implementation.
+42. [`docs/TRACKING_HELPER_PROCESS_H2_LAUNCH_FAILURE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_LAUNCH_FAILURE_SMOKE_CLOSEOUT.md)
+    — closeout for the `launch_failure` synthetic vector (design vector `launch_failure_fallback`,
+    path `not_started -> launching -> failed -> fallback`); the first implementation slice under the
+    owner-decision-gate Option B, added at the synthetic-smoke level only by exercising the
+    launch-failure boundary of `runHelperProcessForSmoke`; records implementation state, not
+    production integration, and changes no default `lvk-tracker-core` runtime behavior.
 
 Background:
 
