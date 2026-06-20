@@ -180,6 +180,16 @@ const helperSmokeEntryMarkers = [
   '"type":"stopped"',
 ];
 
+// Raw helper child stderr forms. The synthetic helper writes lines like
+// "[helper] startup: source=synthetic-helper" to ITS OWN stderr; under
+// supervision those are captured privately and never forwarded. If a regression
+// accidentally started the helper on the default path and leaked its stderr,
+// these raw forms would appear even though the smoke prefix and minified JSON
+// contract markers above would not. They are checked separately so the failure
+// message is explicit. Note: "[helper]" is not a substring of the safe
+// "[helper-runtime-smoke]" prefix.
+const helperStderrLeakMarkers = ["[helper]", "source=synthetic-helper"];
+
 const defaultResult = spawnSync(trackerPath, ["--frames", "3"], {
   encoding: "utf8",
   maxBuffer: 1024 * 1024,
@@ -230,12 +240,21 @@ defaultStdoutLines.forEach((line, index) => {
 });
 
 // Default stderr must not show that the helper smoke path was entered, and must
-// not leak private helper child output.
+// not leak private helper child output -- in either the smoke-diagnostic /
+// minified-contract form or the raw helper child stderr form.
 const defaultStderr = defaultResult.stderr ?? "";
 for (const marker of helperSmokeEntryMarkers) {
   if (defaultStderr.includes(marker)) {
     fail(
       `default-runtime stderr leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
+      defaultResult,
+    );
+  }
+}
+for (const marker of helperStderrLeakMarkers) {
+  if (defaultStderr.includes(marker)) {
+    fail(
+      `default-runtime stderr leaked helper stderr marker ${JSON.stringify(marker)}`,
       defaultResult,
     );
   }

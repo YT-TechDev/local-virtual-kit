@@ -47,8 +47,11 @@ path; the default-runtime guard was the missing evidence.
     - stdout contains **none** of the smoke-path / helper markers (`[helper-runtime-smoke]`,
       `"source":"synthetic-helper"`, helper contract `"type":"ready"` / `"result"` / `"stopped"`)
       nor any raw-leak marker — i.e. default stdout is MotionFrame JSON only;
-    - stderr shows **no** `[helper-runtime-smoke]` diagnostics and no helper child markers, proving
-      the smoke path was not entered and nothing private leaked.
+    - stderr shows **no** smoke-path / minified-contract markers (`[helper-runtime-smoke]`,
+      `"source":"synthetic-helper"`, helper contract `"type":"ready"` / `"result"` / `"stopped"`)
+      **and no raw helper child stderr markers** (`[helper]`, `source=synthetic-helper` — the form
+      the synthetic helper actually writes, e.g. `[helper] startup: source=synthetic-helper`),
+      proving the smoke path was not entered and nothing private leaked.
   - CI-safe: the default path uses the dummy camera, so no real camera, OS camera permission, or
     hardware is involved.
 - No Native Core runtime source was edited (the dispatch guard already exists in `main.cpp`).
