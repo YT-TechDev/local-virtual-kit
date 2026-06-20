@@ -458,11 +458,19 @@ const assertFailureCaseStdoutGuard = ({ caseName, helperArg }) => {
     }
   }
 
-  // The single stdout line must validate as native MotionFrame JSON.
+  // The single stdout line must validate as native MotionFrame JSON AND be the
+  // existing fallback MotionFrame, i.e. tracking.status === "lost".
   caseStdoutLines.forEach((line, index) => {
-    if (parseNativeMotionFrameJson(line) === null) {
+    const frame = parseNativeMotionFrameJson(line);
+    if (frame === null) {
       fail(
         `${caseName} public stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+        caseResult,
+      );
+    }
+    if (frame.tracking?.status !== "lost") {
+      fail(
+        `${caseName} public stdout line ${index + 1} expected fallback MotionFrame with tracking.status "lost", got ${JSON.stringify(frame.tracking?.status)}`,
         caseResult,
       );
     }
@@ -485,10 +493,22 @@ const assertFailureCaseStdoutGuard = ({ caseName, helperArg }) => {
     }
   });
 
-  for (const marker of unsafeChildMarkers) {
+  // Even when carried behind the valid "[helper-runtime-smoke] " parent prefix,
+  // public stderr must not contain helper lifecycle / contract markers, raw child
+  // stderr forms, unsafe child output, or other forbidden child JSON / policy /
+  // error text. We reuse the same marker sets as the stdout guard but exclude the
+  // safe parent prefix itself so valid parent diagnostics remain allowed.
+  const forbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of forbiddenStderrMarkers) {
     if (caseStderr.includes(marker)) {
       fail(
-        `${caseName} public stderr leaked helper child marker ${JSON.stringify(marker)}`,
+        `${caseName} public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
         caseResult,
       );
     }
