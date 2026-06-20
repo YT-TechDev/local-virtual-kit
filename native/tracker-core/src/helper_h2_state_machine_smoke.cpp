@@ -263,10 +263,12 @@ bool checkPath(const std::string& caseName,
 // -> exited.
 //
 // The private helper stdout markers are asserted to appear in the exact lifecycle
-// order (ready -> result -> stopped) via markersAppearInOrder, mirroring the
-// shutdown_graceful_exit and shutdown_timeout_forced_exit cases, so this canonical
-// case cannot falsely pass on out-of-order markers (e.g. a "stopped" emitted before
-// "result"). Uses substring offsets only (no JSON parser).
+// order (first ready -> first result -> stopped) by comparing FIRST-occurrence
+// offsets, so this canonical case cannot falsely pass on out-of-order markers (e.g.
+// a "stopped" emitted before "result", or a "result" emitted before "ready"). A
+// search-from-prior-match check is intentionally NOT used here because the helper
+// emits multiple "result" lines (--frames 3). Uses substring offsets only (no JSON
+// parser).
 bool runNormalCase(const std::string& helperPath) {
   const HelperProcessRunResult run =
       runHelperProcessForSmoke(helperPath, {"--frames", "3"}, kNormalTimeoutMs);
@@ -285,16 +287,22 @@ bool runNormalCase(const std::string& helperPath) {
     return false;
   }
 
-  // Smoke-local ordering assertion: the private helper stdout lifecycle markers
-  // must appear in the exact order before we reconstruct the path. This prevents a
-  // false pass if the helper emitted them out of order. Reuses the same helper as
-  // the shutdown cases.
-  if (!markersAppearInOrder(run.stdoutText,
-                            {"\"type\":\"ready\"", "\"type\":\"result\"",
-                             "\"type\":\"stopped\""})) {
+  // Smoke-local ordering assertion using FIRST-occurrence offsets. The helper
+  // emits multiple "result" lines (--frames 3), so a search-from-prior-match check
+  // (markersAppearInOrder) could falsely pass an out-of-order sequence like
+  // result -> ready -> result -> stopped (it would match ready, then a LATER
+  // result). Comparing first-occurrence offsets guarantees the FIRST result appears
+  // after ready and before stopped: a premature result before ready, or stopped
+  // before result, fails. Substring offsets only (no JSON parser, no dependency).
+  const size_t readyPos = run.stdoutText.find("\"type\":\"ready\"");
+  const size_t resultPos = run.stdoutText.find("\"type\":\"result\"");
+  const size_t stoppedPos = run.stdoutText.find("\"type\":\"stopped\"");
+  if (readyPos == std::string::npos || resultPos == std::string::npos ||
+      stoppedPos == std::string::npos ||
+      !(readyPos < resultPos && resultPos < stoppedPos)) {
     reportFailure("normal",
                   "private helper stdout markers missing or out of order "
-                  "(expected ready -> result -> stopped)");
+                  "(expected first ready -> first result -> stopped)");
     return false;
   }
 
