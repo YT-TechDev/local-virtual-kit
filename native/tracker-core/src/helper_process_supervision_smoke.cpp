@@ -26,12 +26,16 @@ using lvk::tracker::runHelperProcessForSmoke;
 
 constexpr int kNormalTimeoutMs = 5000;
 constexpr int kHangTimeoutMs = 200;
-constexpr int kHighVolumeTimeoutMs = 5000;
-// Frame count chosen so the helper emits cumulative stdout far above the
-// smoke-only capture cap (each synthetic result line is a few hundred bytes),
-// deterministically exercising the bounded-capture path. Well within the
-// Windows pipe buffer, so the child still completes cleanly on both platforms.
-constexpr int kHighVolumeFrameCount = 2000;
+// Generous timeout: the high-volume child writes tens of MB; draining is fast,
+// but the headroom keeps the case deterministic on slow / loaded CI runners.
+constexpr int kHighVolumeTimeoutMs = 30000;
+// Frame count chosen so the helper emits cumulative stdout far above BOTH the
+// smoke-only capture cap and any OS pipe buffer (~100000 result lines, tens of
+// MB, well over 1 MiB). Because the supervisor drains stdout/stderr concurrently
+// while the child runs, the child never blocks on a full pipe and completes
+// cleanly on both Windows and POSIX, deterministically exercising the
+// bounded-capture path; captured stdout stays clamped to the cap.
+constexpr int kHighVolumeFrameCount = 100000;
 
 bool contains(const std::string& haystack, const std::string& needle) {
   return haystack.find(needle) != std::string::npos;
@@ -157,14 +161,17 @@ bool runTimeoutCase(const std::string& helperPath) {
   return true;
 }
 
-// High-volume output: the helper emits far more cumulative stdout than the
-// smoke-only capture cap. This proves the supervisor's captured buffer stays
-// BOUNDED (does not grow without limit), stays PRIVATE (never forwarded to the
-// parent's stdout), and that high-volume output does not corrupt lifecycle
-// handling -- the child still exits cleanly. Because capture is clamped to the
-// cap, the trailing "stopped" line is intentionally beyond the captured prefix;
-// only the early ready/result markers are asserted present. This is a
-// smoke-only safety bound, NOT a production supervisor / backpressure policy.
+// High-volume output: the helper emits cumulative stdout far above both the
+// smoke-only capture cap and any OS pipe buffer (tens of MB). This proves the
+// supervisor drains stdout/stderr concurrently while the child runs (so the
+// child never blocks on a full pipe, regardless of volume), that the captured
+// buffer stays BOUNDED (does not grow without limit), that it stays PRIVATE
+// (never forwarded to the parent's stdout, which the check tool asserts is
+// empty), and that high-volume output does not corrupt lifecycle handling -- the
+// child still exits cleanly. Because capture is clamped to the cap, the trailing
+// "stopped" line is intentionally beyond the captured prefix; only the early
+// ready/result markers are asserted present. This is a smoke-only safety bound,
+// NOT a production supervisor / backpressure policy.
 bool runHighVolumeCase(const std::string& helperPath) {
   const HelperProcessRunResult run = runHelperProcessForSmoke(
       helperPath, {"--frames", std::to_string(kHighVolumeFrameCount)},

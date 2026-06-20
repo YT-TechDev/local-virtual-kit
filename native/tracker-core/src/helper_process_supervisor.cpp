@@ -44,6 +44,8 @@ void appendBoundedCapture(
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <thread>
+
 namespace lvk::tracker {
 namespace {
 
@@ -64,16 +66,16 @@ std::string buildCommandLine(
   return commandLine;
 }
 
-// Larger explicit read-pipe buffer so a high-volume synthetic child can write
-// its full output without blocking before the parent reads (the Windows path
-// reads after the wait). This keeps high-volume synthetic completion
-// deterministic; the stored capture is still bounded by appendBoundedCapture.
-constexpr DWORD kWindowsPipeBufferBytes = 1u << 20;  // 1 MiB
-
-// Fully drains `pipe` to EOF, storing at most the smoke-only cap into
-// `contents` (setting `truncated` when bytes are discarded). Draining always
-// runs to completion so the child never blocks on a full pipe.
-void readAllFromPipe(HANDLE pipe, std::string& contents, bool& truncated) {
+// Drains `pipe` to EOF on a dedicated reader thread, storing at most the
+// smoke-only cap into `contents` (setting `truncated` when bytes are
+// discarded). It is run concurrently with the child (started right after launch
+// and joined after the wait), so the child never blocks on a full pipe
+// regardless of pipe buffer size or output volume -- this is the high-volume
+// safety mechanism, not any enlarged buffer. Windows ReadFile is synchronous, so
+// a dedicated thread per stream mirrors the intent of the POSIX poll() loop. The
+// two streams are drained by separate threads that each write only their own
+// `result` members, so no synchronization is needed.
+void drainPipeToEof(HANDLE pipe, std::string& contents, bool& truncated) {
   char buffer[4096];
   DWORD bytesRead = 0;
   while (ReadFile(pipe, buffer, sizeof(buffer), &bytesRead, nullptr) &&
@@ -101,14 +103,12 @@ HelperProcessRunResult runHelperProcessForSmoke(
   HANDLE stderrRead = nullptr;
   HANDLE stderrWrite = nullptr;
 
-  if (!CreatePipe(
-          &stdoutRead, &stdoutWrite, &securityAttributes,
-          kWindowsPipeBufferBytes)) {
+  // Default pipe buffer size: capture safety comes from concurrent draining
+  // (below), not from buffer size.
+  if (!CreatePipe(&stdoutRead, &stdoutWrite, &securityAttributes, 0)) {
     return result;
   }
-  if (!CreatePipe(
-          &stderrRead, &stderrWrite, &securityAttributes,
-          kWindowsPipeBufferBytes)) {
+  if (!CreatePipe(&stderrRead, &stderrWrite, &securityAttributes, 0)) {
     CloseHandle(stdoutRead);
     CloseHandle(stdoutWrite);
     return result;
@@ -157,6 +157,17 @@ HelperProcessRunResult runHelperProcessForSmoke(
 
   result.launched = true;
 
+  // Drain stdout/stderr concurrently while the child runs so it can never block
+  // on a full pipe (the high-volume safety property), even for output far larger
+  // than the pipe buffer. Each reader writes only its own result members, so no
+  // synchronization is required; storage stays bounded by appendBoundedCapture.
+  std::thread stdoutReader([&]() {
+    drainPipeToEof(stdoutRead, result.stdoutText, result.stdoutTruncated);
+  });
+  std::thread stderrReader([&]() {
+    drainPipeToEof(stderrRead, result.stderrText, result.stderrTruncated);
+  });
+
   const DWORD waitTimeout =
       timeoutMs > 0 ? static_cast<DWORD>(timeoutMs) : INFINITE;
   const DWORD waitResult = WaitForSingleObject(processInfo.hProcess, waitTimeout);
@@ -166,11 +177,12 @@ HelperProcessRunResult runHelperProcessForSmoke(
     WaitForSingleObject(processInfo.hProcess, INFINITE);
   }
 
-  // Read remaining buffered pipe data after the process has exited or been
-  // terminated. Each stream is fully drained but stored only up to the
-  // smoke-only cap (setting the *Truncated flags when output is high-volume).
-  readAllFromPipe(stdoutRead, result.stdoutText, result.stdoutTruncated);
-  readAllFromPipe(stderrRead, result.stderrText, result.stderrTruncated);
+  // The child has exited or been terminated; its write ends are now closed, so
+  // the readers observe EOF and finish. Join them before touching the captured
+  // buffers (captured text is bounded to the smoke-only cap, with the *Truncated
+  // flags set on high-volume output).
+  stdoutReader.join();
+  stderrReader.join();
 
   DWORD exitCode = 0;
   if (GetExitCodeProcess(processInfo.hProcess, &exitCode)) {

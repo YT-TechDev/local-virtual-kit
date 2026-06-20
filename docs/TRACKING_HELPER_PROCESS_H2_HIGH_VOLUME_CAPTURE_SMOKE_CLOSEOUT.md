@@ -43,19 +43,25 @@ concern.
   - Added `appendBoundedCapture(...)`, a small helper that appends at most the cap into the
     captured string and sets the truncation flag; bytes beyond the cap are discarded while the pipe
     is **still fully drained**, so the child never blocks and exit/timeout detection is unchanged.
-  - Applied the bound on both the Windows `readAllFromPipe` path and the POSIX `poll()` read loop.
-  - Enlarged the Windows `CreatePipe` read buffer to 1 MiB so a high-volume synthetic child can
-    write its full output without blocking before the parent reads (the Windows path reads after
-    the wait), keeping high-volume completion deterministic. POSIX already drains concurrently via
-    `poll()`.
+  - **Drains stdout/stderr concurrently while the child runs** so the child can never block on a
+    full pipe regardless of output volume or pipe buffer size — this is the high-volume safety
+    mechanism. POSIX already drained concurrently via its `poll()` loop; the Windows path now spawns
+    a small reader thread per stream (Windows `ReadFile` is synchronous), started right after
+    `CreateProcess` and after closing the parent-side write handles, and **joined before returning**.
+    Timeout / terminate behavior is preserved (on timeout the child is terminated, the readers then
+    observe EOF and finish). The reader threads stay local to `runHelperProcessForSmoke`; each writes
+    only its own stream's `result` members, so no synchronization is needed.
+  - Uses the **default** `CreatePipe` buffer size: capture safety comes from concurrent draining,
+    not from any enlarged pipe buffer.
   - Existing smokes (all well under the cap) are unaffected: no truncation, flags stay `false`.
 - `native/tracker-core/src/helper_process_supervision_smoke.cpp`
-  - Added the `high_volume` case: runs the helper with `--frames 2000` (cumulative stdout far above
-    the cap) and asserts the child **launched**, did **not** time out, **exited 0**, captured
-    stdout is **clamped to the cap** (`<= kHelperSmokeCapturedStreamByteCap`), `stdoutTruncated` is
-    **set**, the early `ready` / `result` markers remain recoverable from the bounded prefix, and
-    helper stderr stays safe. The trailing `stopped` line is intentionally beyond the cap and is
-    not asserted.
+  - Added the `high_volume` case: runs the helper with `--frames 100000` (cumulative stdout of tens
+    of MB, far above both the cap and any OS pipe buffer) and asserts the child **launched**, did
+    **not** time out, **exited 0**, captured stdout is **clamped to the cap**
+    (`<= kHelperSmokeCapturedStreamByteCap`), `stdoutTruncated` is **set**, the early `ready` /
+    `result` markers remain recoverable from the bounded prefix, and helper stderr stays safe (the
+    check tool additionally asserts the parent's stdout stays empty). The trailing `stopped` line is
+    intentionally beyond the cap and is not asserted.
   - The smoke's own stdout stays empty; only safe `[supervision-smoke]` diagnostics go to stderr.
 - No new CMake target (the case extends the existing `lvk-helper-process-supervision-smoke`; the
   bound lives in the already-linked `helper_process_supervisor`).
