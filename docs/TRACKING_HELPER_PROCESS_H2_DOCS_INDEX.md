@@ -166,6 +166,10 @@ H2 implementation is approved by this document.
     — docs-only closeout for the H2 synthetic smoke lifecycle marker ordering hardening after PR #181
     through PR #185; records first-occurrence ordering coverage and preserves production-runtime
     non-approval boundaries.
+40. [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md)
+    — docs-only next-scope gate after the ordering hardening closeout; requires read-only scope
+    review and explicit owner approval before production-runtime, runtime-integration, default-runtime,
+    or other H2 implementation planning.
 
 Background:
 
@@ -323,6 +327,13 @@ Background:
   out of lifecycle ordering, leaves `oversized_line_rejected` on its bounded-line scan path, and
   approves no production runtime work. See
   [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md).
+- The post-ordering next-scope gate has been added and requires a read-only production-runtime /
+  runtime-integration scope review before any implementation planning. It approves no production H2
+  integration, default runtime wiring, supervisor production behavior, control-channel semantics,
+  forced termination, restart / backoff, backend / model / runtime selection, real camera access,
+  frame transport, MotionFrame change, Electron / Web Preview / Motion Protocol change, dependency,
+  telemetry, cloud, or network behavior. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -421,9 +432,12 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md).
   It closes the synthetic-only ordering hardening group for the covered cases while keeping
   `oversized_line_rejected` on its bounded-line scan path and approving no production runtime work.
-- **Read-only scope review required:** next, perform a read-only scope review before any production
-  runtime or runtime-integration planning. Any future docs step should remain explicit and
-  owner-approved. Do not proceed to backend / runtime / model / dependency selection, feature flag
+- **Post-ordering next-scope gate added:** the next decision boundary after ordering hardening is
+  recorded in
+  [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md).
+- **Read-only scope review required:** next, perform a read-only production-runtime /
+  runtime-integration scope review before any implementation planning. Any future docs step should
+  remain explicit and owner-approved. Do not proceed to backend / runtime / model / dependency selection, feature flag
   implementation, production forced termination, production shutdown timeout policy, restart / backoff,
   production supervisor shutdown semantics, a real parent-to-child control channel, default runtime
   wiring, production H2 integration, helper-owned camera capture, local/manual validation claims,
@@ -522,6 +536,10 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_ORDERING_HARDENING_CLOSEOUT.md)
   — docs-only ordering hardening closeout; records first-occurrence lifecycle marker ordering coverage
   after PR #181 through PR #185 and keeps production runtime work unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md`](TRACKING_HELPER_PROCESS_H2_POST_ORDERING_NEXT_SCOPE_GATE.md)
+  — docs-only post-ordering next-scope gate; requires read-only scope review and explicit owner
+  approval before production-runtime, runtime-integration, default-runtime, or other H2 implementation
+  planning.
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](LOCAL_RUNTIME_CHECKLIST.md) — local/manual validation
   claim rules and reporting template.
 - [`docs/TRACKING_SPEC.md`](TRACKING_SPEC.md) — Native Core tracking output and fallback
