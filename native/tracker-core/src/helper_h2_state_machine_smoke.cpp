@@ -534,6 +534,15 @@ bool runStartupTimeoutCase(const std::string& helperPath) {
 // (asserted present there) and is never forwarded to this smoke's stdout, which
 // stays empty. No fallback is triggered; the path is identical to the normal
 // case.
+//
+// The lifecycle markers are asserted to appear in the exact order by FIRST
+// occurrence (first(ready) < first(result) < first(stopped)) via
+// markersFirstAppearInOrder, mirroring the normal case. This is independent of the
+// injected unknown marker, which keeps its own separate presence assertion: the
+// point is that the unknown line does not corrupt lifecycle ordering. The unknown
+// marker is deliberately NOT part of the ordering chain (its emit position is a
+// helper implementation detail). First-occurrence (not search-from-prior-match) is
+// required because the helper emits multiple "result" lines.
 bool runUnknownMessageTypeCase(const std::string& helperPath) {
   const HelperProcessRunResult run = runHelperProcessForSmoke(
       helperPath, {"--frames", "3", "--emit-unknown-type"}, kNormalTimeoutMs);
@@ -551,6 +560,23 @@ bool runUnknownMessageTypeCase(const std::string& helperPath) {
     reportFailure("unknown_message_type", "unexpected timeout");
     return false;
   }
+
+  // Smoke-local ordering assertion over captured PRIVATE helper stdout: the
+  // lifecycle markers must appear in the exact order by FIRST occurrence before we
+  // reconstruct the path. First-occurrence comparison (not search-from-prior-match)
+  // is required because the helper emits multiple "result" lines (--frames 3), so a
+  // premature "result" before "ready" cannot be masked by a later "result". The
+  // injected unknown marker is intentionally excluded here (it keeps its own
+  // separate presence assertion below). Substring offsets only (no JSON parser).
+  if (!markersFirstAppearInOrder(run.stdoutText,
+                                 {"\"type\":\"ready\"", "\"type\":\"result\"",
+                                  "\"type\":\"stopped\""})) {
+    reportFailure("unknown_message_type",
+                  "private helper stdout markers missing or out of order "
+                  "(expected first ready -> first result -> stopped)");
+    return false;
+  }
+
   if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
     reportFailure("unknown_message_type", "missing ready marker");
     return false;
@@ -612,6 +638,15 @@ bool runUnknownMessageTypeCase(const std::string& helperPath) {
 // private; it does NOT demonstrate general parser "safe drop" semantics, which
 // remain future production work. This corresponds to the design vector
 // malformed_json_line_safe_drop but verifies only that narrower property.
+//
+// The lifecycle markers are asserted to appear in the exact order by FIRST
+// occurrence (first(ready) < first(result) < first(stopped)) via
+// markersFirstAppearInOrder, mirroring the normal case. This is independent of the
+// injected malformed marker, which keeps its own separate presence assertion: the
+// point is that the malformed line does not corrupt lifecycle ordering. The
+// malformed marker is deliberately NOT part of the ordering chain. First-occurrence
+// (not search-from-prior-match) is required because the helper emits multiple
+// "result" lines.
 bool runMalformedLineCase(const std::string& helperPath) {
   const HelperProcessRunResult run = runHelperProcessForSmoke(
       helperPath, {"--frames", "3", "--emit-malformed-line"}, kNormalTimeoutMs);
@@ -629,6 +664,23 @@ bool runMalformedLineCase(const std::string& helperPath) {
     reportFailure("malformed_line", "unexpected timeout");
     return false;
   }
+
+  // Smoke-local ordering assertion over captured PRIVATE helper stdout: the
+  // lifecycle markers must appear in the exact order by FIRST occurrence before we
+  // reconstruct the path. First-occurrence comparison (not search-from-prior-match)
+  // is required because the helper emits multiple "result" lines (--frames 3), so a
+  // premature "result" before "ready" cannot be masked by a later "result". The
+  // injected malformed marker is intentionally excluded here (it keeps its own
+  // separate presence assertion below). Substring offsets only (no JSON parser).
+  if (!markersFirstAppearInOrder(run.stdoutText,
+                                 {"\"type\":\"ready\"", "\"type\":\"result\"",
+                                  "\"type\":\"stopped\""})) {
+    reportFailure("malformed_line",
+                  "private helper stdout markers missing or out of order "
+                  "(expected first ready -> first result -> stopped)");
+    return false;
+  }
+
   if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
     reportFailure("malformed_line", "missing ready marker");
     return false;
