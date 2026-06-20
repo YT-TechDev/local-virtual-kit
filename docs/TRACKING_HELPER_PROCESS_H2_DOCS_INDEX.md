@@ -233,6 +233,12 @@ H2 implementation is approved by this document.
     candidate fallback situations, compatibility requirements, validation evidence, and deferred
     decisions while keeping fallback MotionFrame behavior, fallback emission, implementation,
     MotionFrame schema changes, runtime behavior changes, and readiness claims unapproved.
+51. [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md)
+    — fourth Option B planning document defining diagnostics / stdout / stderr safety planning
+    boundaries, unsafe diagnostics categories, candidate size / count / rate questions, privacy
+    constraints, and validation evidence while keeping production diagnostics-safety policy behavior,
+    implementation, runtime behavior changes, fallback MotionFrame emission, and readiness claims
+    unapproved.
 
 Background:
 
@@ -414,6 +420,13 @@ Background:
   evidence, and deferred decisions while preserving that fallback MotionFrame behavior, fallback
   emission, MotionFrame schema changes, and runtime behavior changes remain unapproved. See
   [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md).
+- The H2 diagnostics / stdout / stderr safety planning document has been added as the next Option B
+  planning document, defining planning-only public stdout, helper stdout, helper stderr, unsafe
+  diagnostics, bounded capture, local-only handling, privacy-safe summary, and validation evidence
+  boundaries while preserving that production diagnostics-safety policy behavior, implementation,
+  runtime behavior changes, fallback MotionFrame emission, and readiness claims remain unapproved.
+  See
+  [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
@@ -542,10 +555,13 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md).
   The H2 fallback MotionFrame behavior proposal has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md).
-  The current authoritative next planning step is a source-grounded docs-only H2 diagnostics / stdout /
-  stderr safety planning PR. This next step is docs-only planning only. Do not proceed to implementation,
-  default `lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame
-  behavior, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
+  The H2 diagnostics / stdout / stderr safety planning document has now been added:
+  [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
+  The current authoritative next planning step is a source-grounded docs-only H2 implementation gate
+  requirements planning PR. This next step is docs-only planning only. Do not proceed to
+  implementation, default `lvk-tracker-core` runtime wiring, production supervisor behavior,
+  production diagnostics-safety policy behavior, fallback MotionFrame behavior, fallback MotionFrame
+  emission, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
   dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
   new network behavior, readiness claims, backend / runtime / model selection, feature flag
   implementation, production forced termination, production shutdown timeout policy, restart /
@@ -571,6 +587,10 @@ These boundaries are preserved across all H2 docs:
   — third Option B planning document proposing fallback MotionFrame behavior boundaries while keeping
   fallback behavior, fallback emission, MotionFrame schema changes, runtime behavior changes, and
   readiness claims unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md)
+  — fourth Option B planning document defining diagnostics / stdout / stderr safety boundaries while
+  keeping production diagnostics-safety policy behavior, implementation, runtime behavior changes,
+  fallback MotionFrame emission, and readiness claims unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
   — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
