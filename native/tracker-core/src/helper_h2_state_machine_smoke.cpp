@@ -261,6 +261,12 @@ bool checkPath(const std::string& caseName,
 
 // Normal run: not_started -> launching -> waiting_for_ready -> ready -> running
 // -> exited.
+//
+// The private helper stdout markers are asserted to appear in the exact lifecycle
+// order (ready -> result -> stopped) via markersAppearInOrder, mirroring the
+// shutdown_graceful_exit and shutdown_timeout_forced_exit cases, so this canonical
+// case cannot falsely pass on out-of-order markers (e.g. a "stopped" emitted before
+// "result"). Uses substring offsets only (no JSON parser).
 bool runNormalCase(const std::string& helperPath) {
   const HelperProcessRunResult run =
       runHelperProcessForSmoke(helperPath, {"--frames", "3"}, kNormalTimeoutMs);
@@ -278,6 +284,20 @@ bool runNormalCase(const std::string& helperPath) {
     reportFailure("normal", "unexpected timeout");
     return false;
   }
+
+  // Smoke-local ordering assertion: the private helper stdout lifecycle markers
+  // must appear in the exact order before we reconstruct the path. This prevents a
+  // false pass if the helper emitted them out of order. Reuses the same helper as
+  // the shutdown cases.
+  if (!markersAppearInOrder(run.stdoutText,
+                            {"\"type\":\"ready\"", "\"type\":\"result\"",
+                             "\"type\":\"stopped\""})) {
+    reportFailure("normal",
+                  "private helper stdout markers missing or out of order "
+                  "(expected ready -> result -> stopped)");
+    return false;
+  }
+
   if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
     reportFailure("normal", "missing ready marker");
     return false;
