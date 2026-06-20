@@ -10,6 +10,13 @@ enum class HelperRuntimeSmokeCase {
   LaunchFailure,
   NonzeroExit,
   Timeout,
+  // Smoke-only: the synthetic helper emits one unsafe stderr diagnostic (lacking
+  // the safe "[helper] " prefix) and otherwise completes cleanly. The runtime
+  // smoke must FAIL CLOSED -- detect the unsafe child stderr, emit NOTHING to
+  // public stdout (no MotionFrame, and deliberately no fallback frame), keep the
+  // unsafe child stderr private, and return non-zero. This is smoke-local
+  // detection only, NOT a production diagnostics-safety policy engine.
+  UnsafeDiagnostic,
 };
 
 struct HelperRuntimeSmokeOptions {

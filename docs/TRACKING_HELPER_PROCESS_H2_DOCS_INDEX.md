@@ -291,6 +291,16 @@ H2 implementation is approved by this index itself.
     Web Preview changes, dependencies, network behavior, camera access changes, frame / tensor IPC,
     real control-channel work, forced termination, restart / backoff, backend / model / runtime
     selection, and readiness claims unapproved.
+58. [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md)
+    — closeout for the H2 Narrow Implementation Gate 3 slice: a smoke-only `unsafe-diagnostic` case
+    on the explicit `--helper-runtime-smoke` runtime path (`runHelperRuntimeSmoke`) that runs the
+    synthetic helper with `--emit-unsafe-diagnostic`, detects the unsafe child stderr, and **fails
+    closed** — empty public `lvk-tracker-core` stdout (no MotionFrame, no fallback frame), non-zero
+    exit, unsafe child stderr kept private to Native Core — proven by new assertions in
+    `tools/check-helper-runtime-integration.mjs`. Records implementation state only; no default
+    runtime wiring, production supervisor behavior, production diagnostics-safety policy engine,
+    fallback MotionFrame emission, MotionFrame / Motion Protocol change, dependency, or readiness
+    claim was added.
 
 Background:
 
@@ -488,6 +498,15 @@ Background:
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
+- The H2 Narrow Implementation Gate 3 slice is implemented at the synthetic/smoke level: a smoke-only
+  `unsafe-diagnostic` case on the explicit `--helper-runtime-smoke` runtime path runs the synthetic
+  helper with `--emit-unsafe-diagnostic`, detects the unsafe child stderr, and fails closed with
+  empty public `lvk-tracker-core` stdout (no MotionFrame, no fallback frame) and a non-zero exit
+  while keeping the unsafe child stderr private to Native Core; proven by new
+  `tools/check-helper-runtime-integration.mjs` assertions. No production diagnostics-safety policy
+  engine, supervisor behavior, fallback MotionFrame emission, default runtime wiring, or readiness
+  claim is added. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
