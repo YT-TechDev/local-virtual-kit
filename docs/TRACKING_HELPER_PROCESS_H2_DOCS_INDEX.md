@@ -557,10 +557,11 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_FALLBACK_MOTIONFRAME_BEHAVIOR_PROPOSAL.md).
   The H2 diagnostics / stdout / stderr safety planning document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
-  The current authoritative next planning step is a source-grounded docs-only H2 local/manual
-  validation plan. This next step is docs-only planning only. Do not proceed to implementation,
-  default `lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame
-  behavior, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
+  The current authoritative next planning step is a source-grounded docs-only H2 implementation gate
+  requirements planning PR. This next step is docs-only planning only. Do not proceed to
+  implementation, default `lvk-tracker-core` runtime wiring, production supervisor behavior,
+  production diagnostics-safety policy behavior, fallback MotionFrame behavior, fallback MotionFrame
+  emission, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
   dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
   new network behavior, readiness claims, backend / runtime / model selection, feature flag
   implementation, production forced termination, production shutdown timeout policy, restart /

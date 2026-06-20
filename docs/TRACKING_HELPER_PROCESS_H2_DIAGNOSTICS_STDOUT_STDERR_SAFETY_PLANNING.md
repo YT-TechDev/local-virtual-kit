@@ -238,14 +238,16 @@ This PR and document do not approve, implement, or imply approval for:
 
 ## Next Possible Planning PRs
 
-The next planning candidates are docs-only candidates, not implementation approvals:
+The next planning candidate is a docs-only candidate, not an implementation approval:
 
-1. H2 local/manual validation plan.
-2. H2 implementation gate requirements.
+1. H2 implementation gate requirements.
 
-Recommended next planning PR: H2 local/manual validation plan, limited to documentation and
-explicitly preserving that implementation, runtime behavior changes, production diagnostics-safety
-policy behavior, fallback MotionFrame emission, and readiness claims remain unapproved.
+Recommended next planning PR: H2 implementation gate requirements, limited to documentation and
+explicitly preserving that implementation, default `lvk-tracker-core` runtime wiring, production
+supervisor behavior, production diagnostics-safety policy behavior, fallback MotionFrame emission,
+runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes, dependencies,
+telemetry, analytics, cloud upload, external frame processing, hidden network calls, new network
+behavior, and readiness claims remain unapproved.
 
 ## Cross-References
 
