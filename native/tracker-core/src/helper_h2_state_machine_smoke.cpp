@@ -1454,6 +1454,96 @@ bool runLaunchFailureCase(const std::string& helperPath) {
   return true;
 }
 
+// Unsafe diagnostics fail closed: not_started -> launching -> waiting_for_ready
+// -> ready -> running -> failed -> fallback. With --emit-unsafe-diagnostic the
+// synthetic helper, on its otherwise-clean completion path, emits one stderr line
+// that intentionally violates the safe-diagnostic contract (it omits the required
+// "[helper] " prefix), modeling an unsafe diagnostic (e.g. raw pixels, paths,
+// secrets). Native Core must treat such output as a policy violation and FAIL
+// CLOSED to fallback, per the designed state machine
+// (docs/TRACKING_HELPER_PROCESS_H2_HANDSHAKE_STATE_MACHINE.md: "Unsafe
+// diagnostics -- treat as a policy violation and fail closed") and the documented
+// `unsafe_diagnostics_fail_closed` vector
+// (docs/TRACKING_HELPER_PROCESS_H2_STATE_MACHINE_TEST_VECTORS.md).
+//
+// Honest scope: this is smoke-local detection only. The unsafe diagnostic is
+// DETECTED by the existing helperStderrIsSafe() check (asserted to return false
+// here), and `failed` / `fallback` are reconstructed labels -- exactly like the
+// other cases reconstruct fallback. This is NOT a production policy engine, NOT a
+// production fail-closed MotionFrame emission, and NOT a supervisor change. The
+// terminal state is `fallback`, NOT `exited`: the policy violation takes
+// precedence over the helper's clean exit 0. The unsafe line stays in the
+// helper's PRIVATE captured stderr and is NEVER forwarded to this smoke's stdout
+// (which stays empty) or echoed to its stderr.
+bool runUnsafeDiagnosticsFailClosedCase(const std::string& helperPath) {
+  const HelperProcessRunResult run = runHelperProcessForSmoke(
+      helperPath, {"--frames", "3", "--emit-unsafe-diagnostic"},
+      kNormalTimeoutMs);
+
+  std::vector<HelperState> path = {HelperState::not_started};
+
+  if (!run.launched) {
+    reportFailure("unsafe_diagnostics_fail_closed", "child failed to launch");
+    return false;
+  }
+  path.push_back(HelperState::launching);
+  path.push_back(HelperState::waiting_for_ready);
+
+  if (run.timedOut) {
+    reportFailure("unsafe_diagnostics_fail_closed", "unexpected timeout");
+    return false;
+  }
+
+  // The helper reaches ready/running before the unsafe diagnostic. Assert the
+  // lifecycle markers appear in order by FIRST occurrence (first ready before
+  // first result); first-occurrence (not search-from-prior-match) is required
+  // because the helper emits multiple "result" lines (--frames 3). Substring
+  // offsets only (no JSON parser).
+  if (!markersFirstAppearInOrder(
+          run.stdoutText, {"\"type\":\"ready\"", "\"type\":\"result\""})) {
+    reportFailure("unsafe_diagnostics_fail_closed",
+                  "private helper stdout markers missing or out of order "
+                  "(expected first ready -> first result)");
+    return false;
+  }
+
+  if (!contains(run.stdoutText, "\"type\":\"ready\"")) {
+    reportFailure("unsafe_diagnostics_fail_closed", "missing ready marker");
+    return false;
+  }
+  path.push_back(HelperState::ready);
+
+  if (!contains(run.stdoutText, "\"type\":\"result\"")) {
+    reportFailure("unsafe_diagnostics_fail_closed", "missing result marker");
+    return false;
+  }
+  path.push_back(HelperState::running);
+
+  // The policy violation: the helper emitted an unsafe stderr diagnostic. The
+  // existing safe-diagnostic detector must flag it (return false). If stderr were
+  // safe, the unsafe line was not emitted/captured and the case is invalid.
+  if (helperStderrIsSafe(run.stderrText)) {
+    reportFailure("unsafe_diagnostics_fail_closed",
+                  "expected unsafe helper stderr diagnostic to be detected");
+    return false;
+  }
+  // Fail closed: the unsafe diagnostic forces failed -> fallback, taking
+  // precedence over the helper's clean exit 0 (terminal is fallback, not exited).
+  path.push_back(HelperState::failed);
+  path.push_back(HelperState::fallback);
+
+  const std::vector<HelperState> expected = {
+      HelperState::not_started, HelperState::launching,
+      HelperState::waiting_for_ready, HelperState::ready,
+      HelperState::running, HelperState::failed, HelperState::fallback};
+  if (!checkPath("unsafe_diagnostics_fail_closed", path, expected)) {
+    return false;
+  }
+
+  reportPath("unsafe_diagnostics_fail_closed", path);
+  return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -1474,7 +1564,8 @@ int main(int argc, char* argv[]) {
       !runShutdownAfterHelperAlreadyExitedCase(helperPath) ||
       !runShutdownAfterFailureOrTimeoutCase(helperPath) ||
       !runShutdownTimeoutForcedExitCase(helperPath) ||
-      !runLaunchFailureCase(helperPath)) {
+      !runLaunchFailureCase(helperPath) ||
+      !runUnsafeDiagnosticsFailClosedCase(helperPath)) {
     return 1;
   }
 

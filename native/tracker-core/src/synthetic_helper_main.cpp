@@ -46,6 +46,7 @@ struct HelperOptions {
   bool emitOversizedLine = false;
   bool emitGracefulShutdown = false;
   bool emitTimeoutForcedShutdown = false;
+  bool emitUnsafeDiagnostic = false;
 };
 
 bool parseIntInRange(
@@ -110,6 +111,13 @@ void printUsage(std::ostream &output) {
             "helper-driven: there is NO real parent stop message, NO real forced "
             "kill, and NO production shutdown-timeout policy; the helper simply "
             "exits cleanly. It stays synthetic only and is not a MotionFrame.\n";
+  output << "--emit-unsafe-diagnostic is a test-only mode that emits one stderr "
+            "line that intentionally violates the safe-diagnostic contract (it "
+            "omits the required \"[helper] \" prefix), modeling an unsafe "
+            "diagnostic that Native Core must treat as a policy violation and "
+            "fail closed. The line is a benign synthetic marker only: it carries "
+            "no raw data, paths, secrets, pixels, tensors, or model contents. The "
+            "helper otherwise completes normally and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -204,6 +212,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--emit-graceful-shutdown") {
       options.emitGracefulShutdown = true;
+      continue;
+    }
+
+    if (argument == "--emit-unsafe-diagnostic") {
+      options.emitUnsafeDiagnostic = true;
       continue;
     }
 
@@ -426,6 +439,19 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] error: simulated failure after " << emittedResultCount
               << " result frames (reason=simulated-fail-after)\n";
     return 1;
+  }
+
+  // Test-only: emit one stderr line that intentionally VIOLATES the
+  // safe-diagnostic contract by omitting the required "[helper] " prefix. It
+  // models an unsafe diagnostic (e.g. raw pixels, paths, secrets) that Native
+  // Core must treat as a policy violation and fail closed. The line is a benign
+  // synthetic marker only -- it carries no raw data, paths, secrets, pixels,
+  // tensors, or model contents. The helper otherwise completes normally (it
+  // still emits the clean "stopped" line and exits 0); the smoke's detection of
+  // the unsafe line is what forces a fail-closed reconstruction.
+  if (options.emitUnsafeDiagnostic) {
+    std::cerr << "unsafe-synthetic-diagnostic: modeled-policy-violation "
+                 "(reason=synthetic-unsafe-diagnostic)\n";
   }
 
   // Test-only: on the clean completion path, emit one private synthetic
