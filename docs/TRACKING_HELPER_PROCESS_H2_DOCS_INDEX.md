@@ -222,6 +222,12 @@ H2 implementation is approved by this document.
     explicit non-goals, deferred decisions, validation evidence requirements, and next planning-only
     candidate PRs while keeping implementation, default runtime wiring, production behavior, runtime
     behavior changes, and readiness claims unapproved.
+49. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md)
+    — second Option B planning document proposing helper supervisor policy areas for startup,
+    ready / liveness, helper output, shutdown, timeout, failure / fallback, restart / backoff
+    questions, and validation evidence while keeping implementation, default runtime wiring,
+    production supervisor behavior, fallback MotionFrame behavior, runtime behavior changes, and
+    readiness claims unapproved.
 
 Background:
 
@@ -393,6 +399,11 @@ Background:
   planning boundary, including allowed planning topics, forbidden implementation implications,
   deferred decisions, validation evidence requirements, and planning-only next candidates. See
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md).
+- The H2 helper supervisor policy proposal has been added as the next Option B planning document,
+  defining planning-only supervisor policy areas for startup, ready / liveness, helper output,
+  shutdown, timeout, failure / fallback, restart / backoff questions, and validation evidence while
+  preserving that production supervisor behavior remains unapproved. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md).
 - The standalone H2 design-vector synthetic-smoke phase is complete after PR #191, with the
   read-only closeout review returning ready with notes and no blocking issues. See
   [`docs/TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_STANDALONE_SMOKE_VECTOR_PHASE_CLOSEOUT.md).
@@ -514,19 +525,21 @@ These boundaries are preserved across all H2 docs:
   readiness.
 - **Option B decision recorded:** the owner has selected Option B, making
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md)
-  the current active H2 production-runtime planning boundary. The first Option B planning step is the
-  H2 production-runtime scope and non-goals plan:
+  the current active H2 production-runtime planning boundary. The first Option B planning step, the
+  H2 production-runtime scope and non-goals plan, has been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md).
-  The current authoritative next step is another source-grounded docs-only production-runtime
-  planning PR, such as the H2 helper supervisor policy proposal. Do not proceed to implementation,
-  backend /
-  runtime / model / dependency selection, feature flag implementation, production forced termination,
-  production shutdown timeout policy, restart / backoff, production supervisor shutdown semantics, a
-  real parent-to-child control channel, default runtime wiring, production H2 integration,
-  helper-owned camera capture, local/manual validation claims, production readiness claims, cloud
-  inference, external processing, Electron UI, MotionFrame changes, telemetry / network behavior, CI
-  job changes, validation script implementation, or frame transport without separate explicit
-  approval.
+  The next Option B planning step, the H2 helper supervisor policy proposal, has also been added:
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md).
+  The current authoritative next planning step is a source-grounded docs-only H2 fallback MotionFrame
+  behavior proposal. This next step is docs-only planning only. Do not proceed to implementation,
+  default `lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame
+  behavior, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
+  dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
+  new network behavior, readiness claims, backend / runtime / model selection, feature flag
+  implementation, production forced termination, production shutdown timeout policy, restart /
+  backoff, a real parent-to-child control channel, production H2 integration, helper-owned camera
+  capture, local/manual validation claims, cloud inference, CI job changes, validation script
+  implementation, or frame transport without separate explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -539,6 +552,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_AND_NONGOALS_PLAN.md)
   — first Option B planning document defining the production-runtime planning scope, non-goals,
   deferred decisions, validation evidence requirements, and next planning-only PR candidates.
+- [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md`](TRACKING_HELPER_PROCESS_H2_HELPER_SUPERVISOR_POLICY_PROPOSAL.md)
+  — second Option B planning document proposing helper supervisor policy areas while keeping
+  production supervisor behavior and implementation unapproved.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
   — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
