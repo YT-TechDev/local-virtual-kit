@@ -12,22 +12,24 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 production-runtime planning boundary is the Option B owner decision:
-[`docs/TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OPTION_B_DECISION.md).
-The owner has selected Option B, so docs-only production-runtime planning is now approved. That
-approval is limited to source-grounded docs-only planning; implementation, default
-`lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame behavior,
-runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes, dependencies,
-telemetry, analytics, cloud upload, external frame processing, hidden network calls, new network
-behavior, and readiness claims remain unapproved. The earlier H2 point-in-time next-step notes have
-been reconciled. For historical design phase status, use this index and the H2 design readiness
-review:
+The current active H2 implementation boundary is the owner decision approving H2 Narrow
+Implementation Gate 1: Synthetic-only helper output safety hardening:
+[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md).
+The owner has approved only a future narrow implementation PR within the source-grounded
+synthetic-only Native Core helper output safety hardening scope. Production H2 integration, default
+`lvk-tracker-core` runtime wiring, production supervisor behavior, fallback MotionFrame behavior and
+emission, production diagnostics-safety policy behavior, runtime behavior changes outside the
+approved synthetic-only slice, MotionFrame schema changes, Electron / Web Preview changes,
+dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
+new network behavior, and readiness claims remain unapproved. The earlier H2 point-in-time
+next-step notes have been reconciled. For historical design phase status, use this index
+and the H2 design readiness review:
 [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md).
 The scoped H2 prototype
 implementation-gate is now documented in
 [`docs/TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md`](TRACKING_HELPER_PROCESS_H2_PROTOTYPE_IMPLEMENTATION_GATE.md);
 any future scoped prototype implementation still requires explicit project-owner approval. No
-H2 implementation is approved by this document.
+H2 implementation is approved by this index itself.
 
 ## H2 Docs Reading Order
 
@@ -244,6 +246,13 @@ H2 implementation is approved by this document.
     implementation gate while keeping implementation, default runtime wiring, production supervisor
     behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
     behavior, MotionFrame schema changes, runtime behavior changes, and readiness claims unapproved.
+53. [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md)
+    — owner decision approving H2 Narrow Implementation Gate 1: Synthetic-only helper output safety
+    hardening; authorizes only a future narrow source-grounded Native Core synthetic helper
+    supervision safety hardening PR while keeping production H2 integration, default runtime wiring,
+    production supervisor behavior, fallback MotionFrame emission, production diagnostics-safety
+    policy behavior, MotionFrame changes, Electron / Web Preview changes, dependencies, network
+    behavior, and readiness claims unapproved.
 
 Background:
 
@@ -570,17 +579,20 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
   The H2 implementation gate requirements document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
-  The current authoritative next step is an owner decision point: whether to approve a narrow H2
-  implementation gate. This is only a decision point, not implementation approval. Do not proceed to
-  implementation, default `lvk-tracker-core` runtime wiring, production supervisor behavior,
-  production diagnostics-safety policy behavior, fallback MotionFrame behavior, fallback MotionFrame
-  emission, runtime behavior changes, MotionFrame schema changes, Electron / Web Preview changes,
-  dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
-  new network behavior, readiness claims, backend / runtime / model selection, feature flag
-  implementation, production forced termination, production shutdown timeout policy, restart /
-  backoff, a real parent-to-child control channel, production H2 integration, helper-owned camera
-  capture, local/manual validation claims, cloud inference, CI job changes, validation script
-  implementation, or frame transport without separate explicit approval.
+  The owner has now approved the current approved next implementation slice:
+  **H2 Narrow Implementation Gate 1: Synthetic-only helper output safety hardening**. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md).
+  The next implementation work should be a narrow implementation PR, preferably handled by Claude
+  Code, and only within the approved source-grounded Native Core synthetic helper supervision safety
+  hardening scope. Do not proceed to default `lvk-tracker-core` runtime wiring, production supervisor
+  behavior, production diagnostics-safety policy behavior, fallback MotionFrame behavior, fallback
+  MotionFrame emission, runtime behavior changes outside the approved synthetic-only slice, MotionFrame
+  schema changes, Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload,
+  external frame processing, hidden network calls, new network behavior, readiness claims, backend /
+  runtime / model selection, feature flag implementation, production forced termination, production
+  shutdown timeout policy, restart / backoff, a real parent-to-child control channel, production H2
+  integration, helper-owned camera capture, local/manual validation claims, cloud inference, CI job
+  changes, validation script implementation, or frame transport without separate explicit approval.
 - No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
   access until separately scoped and approved. All safety boundaries remain preserved.
 
@@ -607,6 +619,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md)
   — fifth Option B planning document defining requirements for any future implementation gate while
   keeping implementation and production runtime behavior unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md)
+  — owner decision approving only H2 Narrow Implementation Gate 1: Synthetic-only helper output
+  safety hardening for a future narrow implementation PR.
 - [`docs/TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md`](TRACKING_HELPER_PROCESS_H2_OWNER_DECISION_GATE.md)
   — historical owner-decision gate and option set superseded by the recorded Option B decision.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md`](TRACKING_HELPER_PROCESS_H2_DESIGN_READINESS_REVIEW.md)
