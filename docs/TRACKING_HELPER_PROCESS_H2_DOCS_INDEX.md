@@ -183,6 +183,14 @@ H2 implementation is approved by this document.
     owner-decision-gate Option B, added at the synthetic-smoke level only by exercising the
     launch-failure boundary of `runHelperProcessForSmoke`; records implementation state, not
     production integration, and changes no default `lvk-tracker-core` runtime behavior.
+43. [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_SMOKE_CLOSEOUT.md)
+    — closeout for the `unsafe_diagnostics_fail_closed` synthetic vector (path
+    `not_started -> launching -> waiting_for_ready -> ready -> running -> failed -> fallback`); a
+    helper-emitted unsafe stderr diagnostic is detected as a policy violation and reconstructs a
+    fail-closed fallback at the synthetic-smoke level only (smoke-local detection, not a production
+    policy engine or fallback emission); brings every standalone design vector to synthetic-smoke
+    coverage; records implementation state, not production integration, and changes no default
+    `lvk-tracker-core` runtime behavior.
 
 Background:
 
