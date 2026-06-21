@@ -12,13 +12,12 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 implementation boundary is the owner decision approving H2 Narrow
-Implementation Gate 5: Helper runtime normal-path public stream guard coverage:
-[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md).
-The owner has approved only a future narrow Native Core synthetic/smoke implementation PR to add
-CI-safe public stream guard evidence for the existing explicit helper runtime normal/success path. H2
-Narrow Implementation Gate 1, H2 Narrow Implementation Gate 2, H2 Narrow Implementation Gate 3, and
-H2 Narrow Implementation Gate 4 are complete and closed; Gate 5 does not reopen them. Production H2
+The current active H2 boundary is the post-Gate-5 owner decision boundary:
+[`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md).
+H2 Narrow Implementation Gate 5 is closed. H2 Narrow Implementation Gate 1, H2 Narrow Implementation
+Gate 2, H2 Narrow Implementation Gate 3, H2 Narrow Implementation Gate 4, and H2 Narrow
+Implementation Gate 5 are complete and closed and are not reopened. The next step is an owner
+decision boundary, not direct implementation. Production H2
 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production
 supervisor behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
 behavior, MotionFrame schema changes, Motion Protocol changes,
@@ -343,6 +342,14 @@ H2 implementation is approved by this index itself.
     only; no C++ runtime change, no new fallback MotionFrame emission, no default runtime wiring,
     production supervisor behavior, production diagnostics-safety policy engine, MotionFrame / Motion
     Protocol change, dependency, or readiness claim was added.
+63. [`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md)
+    — docs-only post-Gate-5 owner decision boundary; records that H2 Narrow Implementation Gate 5 is
+    closed, Gates 1 through 5 remain closed and are not reopened, and the next active H2 boundary is
+    owner choice among continued docs-only planning, drafting a future narrow implementation gate, or
+    pausing H2 implementation planning for another LVK area. Approves no production H2 integration,
+    default helper runtime wiring, production supervisor behavior, diagnostics-safety policy engine
+    behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron / Web
+    Preview change, dependency, network behavior, or readiness claim.
 
 Background:
 
@@ -549,6 +556,11 @@ Background:
   engine, supervisor behavior, fallback MotionFrame emission, default runtime wiring, or readiness
   claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md).
+- The post-Gate-5 owner decision boundary is the next active H2 boundary. H2 Narrow Implementation
+  Gate 5 is closed, Gates 1 through 5 remain closed and are not reopened, and the next step is owner
+  choice among continued docs-only planning, drafting a future narrow implementation gate, or pausing
+  H2 implementation planning for another LVK area. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md).
 - The H2 Narrow Implementation Gate 5 slice is implemented at the synthetic/smoke (checker-only)
   level: `tools/check-helper-runtime-integration.mjs` now guards the existing explicit
   `--helper-runtime-smoke` normal/success path, asserting the run exits 0 with exactly 3 native
@@ -700,12 +712,11 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
   The H2 implementation gate requirements document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
-  H2 Narrow Implementation Gate 1, Gate 2, Gate 3, and Gate 4 are complete and closed. The owner has
-  now approved the current next implementation slice:
-  **H2 Narrow Implementation Gate 5: Helper runtime normal-path public stream guard coverage**. See
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md).
-  After this decision PR merges, the next implementation work should be a Claude Code implementation
-  prompt for that narrow Native Core synthetic/smoke-only gate. Do not proceed to direct production
+  H2 Narrow Implementation Gate 5 is closed. H2 Narrow Implementation Gate 1, Gate 2, Gate 3, Gate 4,
+  and Gate 5 are complete and closed and are not reopened. The next active H2 boundary is the
+  post-Gate-5 owner decision boundary:
+  [`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md).
+  Do not proceed to direct production
   H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
   production supervisor behavior, production diagnostics-safety policy behavior, fallback MotionFrame
   behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol changes,
@@ -741,9 +752,12 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md)
   — fifth Option B planning document defining requirements for any future implementation gate while
   keeping implementation and production runtime behavior unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_5_OWNER_DECISION.md)
+  — current active H2 boundary after Gate 5 closeout; records owner decision options and approves no
+  direct implementation or production runtime behavior.
 - [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md)
   — owner decision approving only H2 Narrow Implementation Gate 5: Helper runtime normal-path public
-  stream guard coverage for a future narrow implementation PR.
+  stream guard coverage for a future narrow implementation PR; Gate 5 is now closed.
 - [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md)
   — owner decision approving only H2 Narrow Implementation Gate 1: Synthetic-only helper output
   safety hardening for a future narrow implementation PR.
