@@ -11,7 +11,8 @@
     "pretypecheck": "pnpm --filter @lvk/motion-protocol build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node ../../tools/check-web-preview-native-status-badge.mjs"
   },
   "dependencies": {
     "@lvk/motion-protocol": "workspace:*",
