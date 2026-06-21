@@ -128,6 +128,25 @@ function findRepoRoot(): string {
   return resolve(__dirname, '../../../..')
 }
 
+function describeTrackerSpawnError(error: Error): string {
+  const errno = error as NodeJS.ErrnoException
+  if (errno.code === 'ENOENT') {
+    return (
+      `Native tracker binary not accessible (ENOENT): the file may have been deleted, ` +
+      `built for a different platform, or depend on a missing shared library. ` +
+      `Rebuild with: cmake -S native/tracker-core -B native/tracker-core/build && ` +
+      `cmake --build native/tracker-core/build. Detail: ${error.message}`
+    )
+  }
+  if (errno.code === 'EACCES') {
+    return (
+      `Native tracker binary not executable (EACCES): check file permissions on the ` +
+      `built binary. Detail: ${error.message}`
+    )
+  }
+  return `Native tracker failed to start: ${error.message}`
+}
+
 function truncateStatusMessage(message: string): string {
   const normalized = message.trim().replace(/\s+/g, ' ')
   if (normalized.length <= MAX_STATUS_MESSAGE_LENGTH) {
@@ -425,7 +444,7 @@ export class NativePipelineManager {
         this.status = {
           ...this.status,
           nativeTrackerStatus: 'error',
-          lastError: `Native tracker failed: ${truncateStatusMessage(error.message)}`
+          lastError: truncateStatusMessage(describeTrackerSpawnError(error))
         }
         this.terminateBridgeAfterTrackerExit(childProcess)
       } else {
