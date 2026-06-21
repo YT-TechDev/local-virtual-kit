@@ -45,13 +45,19 @@ const createInitialTrackingFallbackState = (): TrackingFallbackState => {
   };
 };
 
+// Local-first reassurance shown in the badge for every non-OBS preview: the Web
+// Preview only ever consumes MotionFrame data locally and never receives or sends
+// camera frames. Purely presentational; it asserts no protocol or runtime change.
+const PREVIEW_LOCAL_PRIVACY_NOTE =
+  "Local preview only · No camera frames leave this device.";
+
 function getAvatarPreviewLabel(source: PreviewSource) {
   return source === "native"
     ? "Native MotionFrame avatar preview"
-    : "Dummy MotionFrame avatar preview";
+    : "Local demo MotionFrame avatar preview";
 }
 
-type StatusIndicatorVariant = "active" | "waiting" | "inactive";
+type StatusIndicatorVariant = "active" | "waiting" | "inactive" | "demo";
 
 function getNativeStatusIndicatorVariant(
   status: NativeMotionConnectionStatus,
@@ -68,6 +74,19 @@ function getNativeStatusIndicatorVariant(
     case "disabled":
       return null;
   }
+}
+
+function getBadgeIndicatorVariant(
+  source: PreviewSource,
+  status: NativeMotionConnectionStatus,
+): StatusIndicatorVariant | null {
+  // The local demo source is always a deterministic, local-only preview, so it
+  // gets its own steady "demo" indicator rather than a native connection state.
+  if (source !== "native") {
+    return "demo";
+  }
+
+  return getNativeStatusIndicatorVariant(status);
 }
 
 function getNativeStatusText(status: NativeMotionConnectionStatus) {
@@ -116,8 +135,9 @@ function getSourceBadgeContent(
   }
 
   return {
-    label: "Source: Dummy MotionFrame",
-    helper: null,
+    label: "Source: Local demo MotionFrame",
+    helper:
+      "No native runtime connected — showing a built-in local demo MotionFrame so the preview stays useful offline.",
   };
 }
 
@@ -200,8 +220,7 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
   const isObsMode = mode === "obs";
   const avatarPreviewLabel = getAvatarPreviewLabel(source);
   const sourceBadgeContent = getSourceBadgeContent(source, nativeStatus);
-  const nativeIndicatorVariant =
-    source === "native" ? getNativeStatusIndicatorVariant(nativeStatus) : null;
+  const badgeIndicatorVariant = getBadgeIndicatorVariant(source, nativeStatus);
   const shellClassName = `preview-shell preview-shell--${mode}`;
   const panelClassName = `preview-panel preview-panel--${mode}`;
 
@@ -213,9 +232,9 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           aria-label="Preview source status"
         >
           <span className="preview-source-badge__label">
-            {nativeIndicatorVariant !== null && (
+            {badgeIndicatorVariant !== null && (
               <span
-                className={`preview-source-badge__indicator preview-source-badge__indicator--${nativeIndicatorVariant}`}
+                className={`preview-source-badge__indicator preview-source-badge__indicator--${badgeIndicatorVariant}`}
                 aria-hidden="true"
               />
             )}
@@ -226,6 +245,9 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
               {sourceBadgeContent.helper}
             </span>
           )}
+          <span className="preview-source-badge__note">
+            {PREVIEW_LOCAL_PRIVACY_NOTE}
+          </span>
         </aside>
       )}
       <section className={panelClassName} aria-label={avatarPreviewLabel}>
