@@ -12,14 +12,14 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the H2 Foundation Gate 1 decision:
-[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_DECISION.md).
+The current active H2 boundary is the H2 Foundation Gate 1 inventory/map closeout status:
+[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_INVENTORY_MAP.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_INVENTORY_MAP.md).
 H2 Narrow Implementation Gates 1 through 7 are closed at the synthetic/smoke checker level and are
 not reopened. Gate 7 is implemented only for helper runtime normal-path zero-frame public stream
 guard coverage on the explicit `lvk-tracker-core --helper-runtime-smoke <helper> --frames 0` path;
-it does not approve production runtime behavior. Foundation Gate 1 is docs-only and source-grounded;
-it defines a future inventory and runtime boundary map, not direct implementation and not production
-H2 integration. Production H2 integration, default helper runtime wiring, default `lvk-tracker-core`
+it does not approve production runtime behavior. Foundation Gate 1 produced a docs-only
+source-grounded inventory and runtime boundary map, not direct implementation and not production H2
+integration. Production H2 integration, default helper runtime wiring, default `lvk-tracker-core`
 H2 runtime wiring, production supervisor behavior, fallback MotionFrame behavior and emission,
 production diagnostics-safety policy behavior, MotionFrame schema changes, Motion Protocol changes,
 Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame
@@ -27,6 +27,8 @@ processing, hidden network calls, new network behavior, camera access changes, h
 capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child control
 channel, production forced termination, restart / backoff, backend / model / runtime selection,
 readiness claims, and H2 foundation implementation remain unapproved.
+The recommended next step is a future owner-approved first narrow foundation implementation gate;
+implementation remains unapproved until that gate is reviewed and merged.
 Gate 7 added no production runtime behavior and no readiness claim.
 The earlier H2 point-in-time next-step notes have been reconciled. For historical design phase status,
 use this index
@@ -415,6 +417,15 @@ H2 implementation is approved by this index itself.
     slice without implementing it, and keeps production H2 integration, default helper runtime wiring,
     production supervisor behavior, diagnostics-safety policy engine behavior, fallback MotionFrame
     emission, MotionFrame / Motion Protocol changes, Electron / Web Preview changes, dependencies,
+    network behavior, readiness claims, and foundation implementation unapproved.
+
+71. [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_INVENTORY_MAP.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_INVENTORY_MAP.md)
+    — docs-only source-grounded H2 Foundation Gate 1 inventory and runtime boundary map. Records
+    current Native Core default-runtime and explicit `--helper-runtime-smoke` boundaries, public /
+    private stdout/stderr evidence, MotionFrame / Motion Protocol and Electron / Web Preview
+    exclusions, and one recommended smallest future foundation implementation slice while keeping
+    implementation, production H2 integration, default helper runtime wiring, production supervisor
+    behavior, diagnostics-safety policy engine behavior, fallback MotionFrame emission, dependencies,
     network behavior, readiness claims, and foundation implementation unapproved.
 
 Background:
