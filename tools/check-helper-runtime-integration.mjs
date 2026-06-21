@@ -3,7 +3,8 @@
 // + H2 Gate 3 unsafe-diagnostic fail-closed guard
 // + H2 Gate 4 helper runtime failure-case public stdout guards
 // + H2 Gate 5 helper runtime normal-path public stream guard
-// + H2 Gate 6 helper runtime normal-path frame-count variation guards.
+// + H2 Gate 6 helper runtime normal-path frame-count variation guards
+// + H2 Gate 7 helper runtime normal-path zero-frame public stream guard.
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -22,6 +23,12 @@
 // source-supported small positive frame counts (1 and 5) and applies the same
 // public stdout/stderr boundary assertions. Synthetic/smoke-only, CI-safe. See
 // docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md.
+//
+// Gate 7 guard: runs the same explicit normal/success smoke path for the
+// source-supported zero-frame edge case (--frames 0) and applies the same public
+// stdout/stderr boundary assertions, with exactly zero public stdout lines.
+// Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md.
 //
 // Gate 2 guard: runs lvk-tracker-core WITHOUT --helper-runtime-smoke and proves
 // the default runtime path is unchanged -- helper supervision is not entered,
@@ -558,8 +565,10 @@ console.log(
 // reaches any public stream. The helper child's own stdout/stderr stay private to
 // Native Core. Gate 5 keeps the existing --frames 3 positive control intact; Gate
 // 6 adds source-supported small positive frame-count variation checks for
-// --frames 1 and --frames 5. Asserts EXISTING behavior only; adds no runtime
-// behavior. Synthetic/smoke-only, CI-safe.
+// --frames 1 and --frames 5. Gate 7 adds the source-supported zero-frame
+// normal/success edge case, asserting exactly zero public stdout lines while the
+// helper ready/stopped lifecycle stays private to Native Core. Asserts EXISTING
+// behavior only; adds no runtime behavior. Synthetic/smoke-only, CI-safe.
 
 const assertNormalPathPublicStreamGuard = (frameCount, gateLabel) => {
   const normalResult = spawnSync(
@@ -677,4 +686,11 @@ for (const frameCount of [1, 5]) {
 console.log(
   "Normal-path frame-count guard OK: helper runtime normal/success path keeps public " +
     "streams clean for --frames 1 and --frames 5.",
+);
+
+assertNormalPathPublicStreamGuard(0, "Gate 7");
+
+console.log(
+  "Zero-frame normal-path guard OK: helper runtime normal/success path exits cleanly " +
+    "with zero public stdout lines and safe public stderr only for --frames 0.",
 );
