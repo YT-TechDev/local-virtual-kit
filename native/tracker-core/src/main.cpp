@@ -59,6 +59,7 @@ struct TrackerOptions {
   std::string helperRuntimeSmokePath;
   lvk::tracker::HelperRuntimeSmokeCase helperRuntimeSmokeCase =
       lvk::tracker::HelperRuntimeSmokeCase::Normal;
+  bool helperRuntimeSmokeCaseSet = false;
   std::string faceCascadePath;
 };
 
@@ -520,6 +521,7 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
         return false;
       }
 
+      options.helperRuntimeSmokeCaseSet = true;
       ++argIndex;
       continue;
     }
@@ -557,6 +559,20 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
     }
 
     std::cerr << "Unknown argument: " << argument << "\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
+  // A helper runtime smoke case only has meaning when the explicit synthetic
+  // helper runtime smoke is actually invoked via --helper-runtime-smoke PATH.
+  // Selecting a case without the path used to be parsed and then silently
+  // ignored as the run fell through to the default camera runtime. Make that
+  // checker-only assumption explicit and fail closed instead of silently
+  // discarding the requested helper runtime state.
+  if (options.helperRuntimeSmokeCaseSet &&
+      options.helperRuntimeSmokePath.empty()) {
+    std::cerr << "--helper-runtime-smoke-case requires --helper-runtime-smoke "
+                 "PATH.\n";
     printUsage(std::cerr);
     return false;
   }

@@ -90,6 +90,13 @@ const checks = [
     expectStatus: "failure",
     stderrIncludes: "Unsupported face detector",
   },
+  {
+    name: "reject helper runtime smoke case without smoke path",
+    args: ["--helper-runtime-smoke-case", "nonzero-exit"],
+    expectStatus: "failure",
+    stderrIncludes:
+      "--helper-runtime-smoke-case requires --helper-runtime-smoke",
+  },
 ];
 
 const fail = (message) => {
