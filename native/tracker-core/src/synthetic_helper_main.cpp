@@ -49,6 +49,7 @@ struct HelperOptions {
   bool emitUnsafeDiagnostic = false;
   bool skipReady = false;
   bool skipStopped = false;
+  bool emitMalformedReady = false;
 };
 
 bool parseIntInRange(
@@ -76,7 +77,7 @@ void printUsage(std::ostream &output) {
             "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
             "[--emit-oversized-line] [--emit-graceful-shutdown] "
             "[--emit-timeout-forced-shutdown] [--fail-after N] "
-            "[--skip-ready] [--skip-stopped]\n";
+            "[--skip-ready] [--skip-stopped] [--emit-malformed-ready]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -134,6 +135,17 @@ void printUsage(std::ostream &output) {
             "vector so Native Core can confirm it fails closed when the stopped "
             "boundary is absent. It stays synthetic only and is not a "
             "MotionFrame.\n";
+  output << "--emit-malformed-ready is a test-only mode that emits a \"ready\" "
+            "line with an invalid schema version (schemaVersion:10 instead of 1) "
+            "in place of the normal ready line; the helper otherwise completes "
+            "normally (emits result frames, the \"stopped\" line, and exits 0). "
+            "The value 10 is chosen to directly test that the lifecycle "
+            "observation does not accept schemaVersion via a bare substring "
+            "match of \"schemaVersion\":1 (which would match schemaVersion:10). "
+            "It is smoke-local / test-only and models a malformed-ready failure "
+            "vector so Native Core can confirm it fails closed when the ready "
+            "line is present but carries an invalid schema version. It stays "
+            "synthetic only and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -246,6 +258,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       continue;
     }
 
+    if (argument == "--emit-malformed-ready") {
+      options.emitMalformedReady = true;
+      continue;
+    }
+
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --fail-after.\n";
@@ -278,6 +295,21 @@ void writeReadyLine(std::ostream &output) {
   output << "{"
          << "\"type\":\"ready\","
          << "\"schemaVersion\":" << kHelperSchemaVersion << ","
+         << "\"source\":\"synthetic-helper\"}\n";
+}
+
+// Emits a malformed "ready" line with an invalid schema version (10 instead of
+// 1). The value 10 is chosen deliberately: it shares the digit "1" with the
+// valid version, so the lifecycle observation must NOT rely on a bare
+// "schemaVersion":1 substring match (which would also match "schemaVersion":10)
+// and must instead match the exact boundary "schemaVersion":1, or
+// "schemaVersion":1}. It is intentionally NOT a MotionFrame and contains no
+// raw data, paths, secrets, pixels, tensors, or model contents. Smoke-local /
+// test-only.
+void writeMalformedReadyLine(std::ostream &output) {
+  output << "{"
+         << "\"type\":\"ready\","
+         << "\"schemaVersion\":10,"
          << "\"source\":\"synthetic-helper\"}\n";
 }
 
@@ -411,7 +443,13 @@ int main(int argc, char *argv[]) {
   // Test-only: skip the "ready" lifecycle boundary so Native Core can confirm it
   // fails closed when the ready boundary is absent. The helper otherwise
   // completes normally (emits result frames, the "stopped" line, and exits 0).
-  if (!options.skipReady) {
+  // --emit-malformed-ready takes precedence and emits a malformed ready line in
+  // place of the normal one.
+  if (options.emitMalformedReady) {
+    std::cerr << "[helper] startup: emitting malformed ready line "
+                 "(reason=synthetic-malformed-ready)\n";
+    writeMalformedReadyLine(std::cout);
+  } else if (!options.skipReady) {
     writeReadyLine(std::cout);
   } else {
     std::cerr << "[helper] startup: skipping ready line "
