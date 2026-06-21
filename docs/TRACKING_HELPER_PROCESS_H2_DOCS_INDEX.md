@@ -332,6 +332,17 @@ H2 implementation is approved by this index itself.
     network behavior, camera access changes, frame / tensor IPC, real control-channel work, forced
     termination, restart / backoff, backend / model / runtime selection, and readiness claims
     unapproved.
+62. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_STREAM_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_STREAM_GUARD_CLOSEOUT.md)
+    — closeout for the H2 Narrow Implementation Gate 5 slice: a checker-only normal-path public stream
+    guard for the existing explicit `--helper-runtime-smoke` normal/success path added to
+    `tools/check-helper-runtime-integration.mjs`, asserting the run exits 0 with exactly 3 native
+    MotionFrame JSON lines on public `lvk-tracker-core` stdout, public stderr (if any) only safe parent
+    `[helper-runtime-smoke] ` diagnostics, and no helper lifecycle marker, helper diagnostic, raw child
+    stderr, child stdout JSON, policy/error text, unsafe child output, or smoke-only marker on any
+    public stream while helper stdout/stderr stay private to Native Core. Records implementation state
+    only; no C++ runtime change, no new fallback MotionFrame emission, no default runtime wiring,
+    production supervisor behavior, production diagnostics-safety policy engine, MotionFrame / Motion
+    Protocol change, dependency, or readiness claim was added.
 
 Background:
 
@@ -538,13 +549,18 @@ Background:
   engine, supervisor behavior, fallback MotionFrame emission, default runtime wiring, or readiness
   claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md).
-- The active next owner-approved narrow implementation boundary is H2 Narrow Implementation Gate 5:
-  helper runtime normal-path public stream guard coverage for the existing explicit
-  `--helper-runtime-smoke` normal/success path. It approves only a future Native Core
-  synthetic/smoke PR and does not approve production H2 integration, default helper runtime wiring,
-  production supervisor behavior, fallback MotionFrame emission, production diagnostics policy
-  behavior, MotionFrame / Motion Protocol changes, or readiness claims. See
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md).
+- The H2 Narrow Implementation Gate 5 slice is implemented at the synthetic/smoke (checker-only)
+  level: `tools/check-helper-runtime-integration.mjs` now guards the existing explicit
+  `--helper-runtime-smoke` normal/success path, asserting the run exits 0 with exactly 3 native
+  MotionFrame JSON lines on public `lvk-tracker-core` stdout, public stderr (if any) only safe parent
+  `[helper-runtime-smoke] ` diagnostics, and no helper lifecycle marker, helper diagnostic, raw child
+  stderr, child stdout JSON, policy/error text, unsafe child output, or smoke-only marker on any public
+  stream while helper stdout/stderr stay private to Native Core. No C++ runtime change, new fallback
+  MotionFrame emission, default runtime wiring, production supervisor behavior, production
+  diagnostics-safety policy engine, or readiness claim is added. The owner decision is
+  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md);
+  the implementation closeout is
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_STREAM_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_STREAM_GUARD_CLOSEOUT.md).
 - The H2 Narrow Implementation Gate 4 slice is implemented at the synthetic/smoke (checker-only)
   level: `tools/check-helper-runtime-integration.mjs` now guards the existing explicit
   `--helper-runtime-smoke` failure cases (`launch-failure`, `nonzero-exit`, `timeout`), asserting each
