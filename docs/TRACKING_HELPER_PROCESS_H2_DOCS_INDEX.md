@@ -12,14 +12,15 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the post-Gate-6 owner decision boundary:
-[`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_6_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_6_OWNER_DECISION.md).
-H2 Narrow Implementation Gate 6 is closed at the synthetic/smoke checker level for helper runtime
-normal-path frame-count variation public stream guard coverage. H2 Narrow Implementation Gates 1
-through 6 remain closed and are not reopened. The next active boundary is the post-Gate-6 owner
-decision boundary, not direct implementation. Gate 6 remains bounded to the implemented narrow
-synthetic/smoke-only checker coverage for helper runtime normal-path frame-count variation public
-stream guards; it does not approve production runtime behavior. Production H2
+The current active H2 boundary is the Gate 7 decision:
+[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_7_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_7_DECISION.md).
+The post-Gate-6 owner decision selected Option B: approve drafting a future narrow implementation
+gate document for review. H2 Narrow Implementation Gate 6 is closed at the synthetic/smoke checker
+level for helper runtime normal-path frame-count variation public stream guard coverage. H2 Narrow
+Implementation Gates 1 through 6 remain closed and are not reopened. Gate 7 approves only a future
+narrow synthetic/smoke-only checker implementation for helper runtime normal-path zero-frame public
+stream guard coverage; it does not approve production runtime behavior. H2 foundation implementation
+planning remains a future owner decision after Gate 7 and is not approved by this PR. Production H2
 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production
 supervisor behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
 behavior, MotionFrame schema changes, Motion Protocol changes,
@@ -28,7 +29,8 @@ processing, hidden network calls, new network behavior, camera access changes, h
 capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child control
 channel, production forced termination, restart / backoff, backend / model / runtime selection, and
 readiness claims remain unapproved.
-Gate 6 added no production runtime behavior and no readiness claim.
+Gate 6 added no production runtime behavior and no readiness claim. Gate 7 is documentation-only in
+this PR.
 The earlier H2 point-in-time next-step notes have been reconciled. For historical design phase status,
 use this index
 and the H2 design readiness review:
@@ -379,6 +381,15 @@ H2 implementation is approved by this index itself.
     default helper runtime wiring, production supervisor behavior, diagnostics-safety policy engine
     behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron / Web
     Preview change, dependency, network behavior, or readiness claim.
+67. [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_7_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_7_DECISION.md)
+    — owner decision approving H2 Narrow Implementation Gate 7: Helper runtime normal-path zero-frame
+    public stream guard coverage; records the post-Gate-6 Option B choice and authorizes only a
+    future narrow synthetic/smoke-only checker implementation for the explicit
+    `lvk-tracker-core --helper-runtime-smoke <helper> --frames 0` path, subject to source
+    confirmation. Approves no production runtime behavior, production H2 integration, default helper
+    runtime wiring, production supervisor behavior, diagnostics-safety policy engine behavior,
+    fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron / Web Preview
+    change, dependency, network behavior, readiness claim, or H2 foundation implementation planning.
 
 Background:
 
