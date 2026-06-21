@@ -94,15 +94,15 @@ function getNativeStatusText(status: NativeMotionConnectionStatus) {
     case "disabled":
       return "Disabled";
     case "connecting":
-      return "Connecting";
+      return "Connecting to bridge";
     case "connected":
-      return "Connected";
+      return "Receiving native frames";
     case "connected_waiting_for_frame":
-      return "Connected · Waiting for frames";
+      return "Bridge open · Waiting for first frame";
     case "reconnecting":
-      return "Reconnecting";
+      return "Bridge disconnected · Retrying";
     case "fallback":
-      return "No frames · Bridge open";
+      return "Bridge open · No recent frames";
   }
 }
 
@@ -111,13 +111,13 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
     case "connected":
       return "Connected to localhost and receiving valid native MotionFrames.";
     case "connected_waiting_for_frame":
-      return "Connected to localhost, but no valid native frames have arrived yet; fallback preview remains safe.";
+      return "The localhost bridge accepted the preview connection, but no valid native MotionFrame has arrived yet.";
     case "connecting":
-      return "Opening localhost MotionFrame connection; fallback preview remains safe.";
+      return "Opening the localhost MotionFrame bridge connection; the fallback avatar stays visible while waiting.";
     case "reconnecting":
-      return "Native connection was interrupted; retrying with safe fallback behavior.";
+      return "The localhost bridge connection closed or is unavailable; retrying without changing transport behavior.";
     case "fallback":
-      return "Bridge WebSocket is open but no valid frames arrived in the last 1.8s; showing static fallback avatar until frames resume.";
+      return "The bridge is still connected, but valid native MotionFrames have paused; showing the fallback avatar until frames resume.";
     case "disabled":
       return "Native MotionFrame input is disabled for the current preview source.";
   }
