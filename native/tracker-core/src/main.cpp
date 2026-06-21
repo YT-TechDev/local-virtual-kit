@@ -59,6 +59,7 @@ struct TrackerOptions {
   std::string helperRuntimeSmokePath;
   lvk::tracker::HelperRuntimeSmokeCase helperRuntimeSmokeCase =
       lvk::tracker::HelperRuntimeSmokeCase::Normal;
+  bool helperRuntimeSmokeCaseSet = false;
   std::string faceCascadePath;
 };
 
@@ -144,7 +145,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
-            "[--helper-runtime-smoke PATH] [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout]\n";
+            "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout]]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -173,7 +174,7 @@ void printUsage(std::ostream &output) {
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
-  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, and helper-lifecycle-handshake-timeout. Defaults to normal.\n";
+  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, and helper-lifecycle-handshake-timeout. Defaults to normal.\n";
 }
 
 void handleStopSignal(int) {
@@ -520,6 +521,7 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
         return false;
       }
 
+      options.helperRuntimeSmokeCaseSet = true;
       ++argIndex;
       continue;
     }
@@ -557,6 +559,20 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
     }
 
     std::cerr << "Unknown argument: " << argument << "\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
+  // A helper runtime smoke case only has meaning when the explicit synthetic
+  // helper runtime smoke is actually invoked via --helper-runtime-smoke PATH.
+  // Selecting a case without the path used to be parsed and then silently
+  // ignored as the run fell through to the default camera runtime. Make that
+  // checker-only assumption explicit and fail closed instead of silently
+  // discarding the requested helper runtime state.
+  if (options.helperRuntimeSmokeCaseSet &&
+      options.helperRuntimeSmokePath.empty()) {
+    std::cerr << "--helper-runtime-smoke-case requires --helper-runtime-smoke "
+                 "PATH.\n";
     printUsage(std::cerr);
     return false;
   }
