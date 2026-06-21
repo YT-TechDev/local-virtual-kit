@@ -45,6 +45,15 @@ const runSmokeCheck = async () => {
     fail("preview-source-badge must be rendered on an aside element");
   }
 
+  const guardedBadgePattern =
+    /\{!\s*isObsMode\s*&&\s*\(\s*<aside\b(?=[\s\S]*?className=["']preview-source-badge["'])/;
+
+  if (!guardedBadgePattern.test(source)) {
+    fail(
+      "preview-source-badge must stay behind the existing !isObsMode && (...) guard",
+    );
+  }
+
   const badgeTag = badgeTagMatch[0];
 
   const requiredAttributes = [
