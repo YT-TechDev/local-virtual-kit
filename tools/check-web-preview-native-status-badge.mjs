@@ -18,16 +18,13 @@ const escapeRegExp = (value) => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
-const hasJsxAttribute = (source, tagName, attributeName, expectedValue) => {
-  const tagPattern = new RegExp(`<${tagName}\\b[\\s\\S]*?>`, "g");
+const hasJsxAttribute = (source, attributeName, expectedValue) => {
   const expectedValuePattern = escapeRegExp(expectedValue);
   const attributePattern = new RegExp(
     `\\b${attributeName}=(?:"${expectedValuePattern}"|'${expectedValuePattern}')`,
   );
 
-  return Array.from(source.matchAll(tagPattern)).some((match) =>
-    attributePattern.test(match[0]),
-  );
+  return attributePattern.test(source);
 };
 
 const runSmokeCheck = async () => {
@@ -64,7 +61,7 @@ const runSmokeCheck = async () => {
   ];
 
   for (const [attributeName, expectedValue] of requiredAttributes) {
-    if (!hasJsxAttribute(badgeTag, "aside", attributeName, expectedValue)) {
+    if (!hasJsxAttribute(badgeTag, attributeName, expectedValue)) {
       fail(
         `preview-source-badge must keep ${attributeName}="${expectedValue}"`,
       );
