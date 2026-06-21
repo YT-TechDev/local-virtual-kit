@@ -7,8 +7,8 @@
 // + H2 Gate 7 helper runtime normal-path zero-frame public stream guard
 // + H2 helper lifecycle handshake explicit-smoke guard (zero public stdout)
 // + H2 helper lifecycle handshake failure guards (launch-failure, nonzero-exit,
-//   timeout, missing-ready, missing-stopped: fail closed with zero public
-//   stdout, safe parent stderr only).
+//   timeout, missing-ready, missing-stopped, malformed-ready: fail closed with
+//   zero public stdout, safe parent stderr only).
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -1040,9 +1040,23 @@ assertLifecycleHandshakeFailureGuard({
   expectedDiagnostic: "helper stopped boundary missing",
 });
 
+// malformed-ready: the synthetic helper emits a "ready" line with an invalid
+// schema version (schemaVersion:99 instead of 1) and otherwise completes
+// cleanly (exits 0, no timeout, emits the "stopped" boundary). The parent
+// observation must fail closed: non-zero exit, empty public stdout (no
+// MotionFrame, no fallback frame), and only a safe "[helper-runtime-smoke] "
+// failure diagnostic on public stderr. Helper stdout/stderr stay private to
+// Native Core. This is explicit-smoke-only and adds no default runtime behavior.
+assertLifecycleHandshakeFailureGuard({
+  vectorLabel: "lifecycle-handshake malformed-ready",
+  caseName: "helper-lifecycle-handshake-malformed-ready",
+  helperArg: helperPath,
+  expectedDiagnostic: "helper ready line malformed",
+});
+
 console.log(
   "Lifecycle-handshake failure guards OK: launch-failure, nonzero-exit, timeout, " +
-    "missing-ready, and missing-stopped each fail closed with non-zero exit, zero " +
-    "public stdout lines, safe parent-prefixed stderr only, and helper stdout/stderr " +
-    "kept private to Native Core.",
+    "missing-ready, missing-stopped, and malformed-ready each fail closed with " +
+    "non-zero exit, zero public stdout lines, safe parent-prefixed stderr only, " +
+    "and helper stdout/stderr kept private to Native Core.",
 );

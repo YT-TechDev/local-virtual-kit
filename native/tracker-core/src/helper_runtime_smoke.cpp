@@ -189,6 +189,13 @@ std::vector<std::string> buildHelperArguments(
       HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingStopped) {
     return {"--frames", std::to_string(options.frameCount), "--skip-stopped"};
   }
+  if (options.smokeCase ==
+      HelperRuntimeSmokeCase::HelperLifecycleHandshakeMalformedReady) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-malformed-ready"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 
@@ -270,14 +277,18 @@ int handleLifecycleHandshake(
   // Observe the lifecycle boundary from the private captured helper stdout. None of
   // these lines are forwarded to public stdout.
   bool sawReady = false;
+  bool sawMalformedReady = false;
   bool sawStopped = false;
   std::istringstream lines(helperRun.stdoutText);
   std::string line;
   while (std::getline(lines, line)) {
-    if (containsToken(line, "\"type\":\"ready\"") &&
-        containsToken(line, "\"schemaVersion\":1") &&
-        containsToken(line, "\"source\":\"synthetic-helper\"")) {
-      sawReady = true;
+    if (containsToken(line, "\"type\":\"ready\"")) {
+      if (containsToken(line, "\"schemaVersion\":1") &&
+          containsToken(line, "\"source\":\"synthetic-helper\"")) {
+        sawReady = true;
+      } else {
+        sawMalformedReady = true;
+      }
     } else if (
         containsToken(line, "\"type\":\"stopped\"") &&
         containsToken(line, "\"schemaVersion\":1")) {
@@ -285,6 +296,10 @@ int handleLifecycleHandshake(
     }
   }
 
+  if (sawMalformedReady) {
+    writeDiagnostic(diagnosticsOutput, "helper ready line malformed");
+    return 1;
+  }
   if (!sawReady) {
     writeDiagnostic(diagnosticsOutput, "helper ready boundary missing");
     return 1;
@@ -332,7 +347,9 @@ int runHelperRuntimeSmoke(
       options.smokeCase ==
           HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingReady ||
       options.smokeCase ==
-          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingStopped) {
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingStopped ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMalformedReady) {
     return handleLifecycleHandshake(helperRun, diagnosticsOutput);
   }
 
