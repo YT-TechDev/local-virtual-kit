@@ -12,15 +12,17 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the Gate 6 owner decision:
-[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md).
-The post-Gate-5 owner decision selected Option B: approve drafting a future narrow implementation
-gate document for review. H2 Narrow Implementation Gate 5 is closed. H2 Narrow Implementation Gate
+The current active H2 boundary is the Gate 6 implementation closeout:
+[`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md).
+H2 Narrow Implementation Gate 6 is implemented at the synthetic/smoke checker level for helper
+runtime normal-path frame-count variation public stream guard coverage. The post-Gate-5 owner
+decision selected Option B: approve drafting a future narrow implementation gate document for review.
+H2 Narrow Implementation Gate 5 is closed. H2 Narrow Implementation Gate
 1, H2 Narrow Implementation Gate 2, H2 Narrow Implementation Gate 3, H2 Narrow Implementation Gate
-4, and H2 Narrow Implementation Gate 5 are complete and closed and are not reopened. Gate 6 approves
-only a future narrow synthetic/smoke-only checker implementation for helper runtime normal-path
-frame-count variation public stream guard coverage; it does not approve production runtime behavior.
-Production H2
+4, and H2 Narrow Implementation Gate 5 are complete and closed and are not reopened. Gate 6 is
+bounded to the implemented narrow synthetic/smoke-only checker coverage for helper runtime
+normal-path frame-count variation public stream guards; it does not approve production runtime
+behavior. Production H2
 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production
 supervisor behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
 behavior, MotionFrame schema changes, Motion Protocol changes,
@@ -29,6 +31,7 @@ processing, hidden network calls, new network behavior, camera access changes, h
 capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child control
 channel, production forced termination, restart / backoff, backend / model / runtime selection, and
 readiness claims remain unapproved.
+Gate 6 added no production runtime behavior and no readiness claim.
 The earlier H2 point-in-time next-step notes have been reconciled. For historical design phase status,
 use this index
 and the H2 design readiness review:
@@ -362,6 +365,15 @@ H2 implementation is approved by this index itself.
     integration, default helper runtime wiring, production supervisor behavior, diagnostics-safety
     policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol changes,
     Electron / Web Preview changes, dependencies, network behavior, and readiness claims unapproved.
+65. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md)
+    — closeout for the H2 Narrow Implementation Gate 6 slice: a synthetic/smoke-only checker update
+    extending the explicit helper runtime normal/success public stream guard beyond `--frames 3` with
+    source-supported `--frames 1` and `--frames 5` checks. Records implementation state only; the
+    Gate 5 `--frames 3` positive control and Gate 2 / Gate 3 / Gate 4 / Gate 5 checks remain intact,
+    with no C++ runtime change, production H2 integration, default runtime wiring, production
+    supervisor behavior, diagnostics-safety policy engine behavior, fallback MotionFrame emission,
+    MotionFrame / Motion Protocol change, Electron / Web Preview change, dependency, network
+    behavior, or readiness claim added.
 
 Background:
 
@@ -568,12 +580,17 @@ Background:
   engine, supervisor behavior, fallback MotionFrame emission, default runtime wiring, or readiness
   claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md).
-- The post-Gate-5 owner decision selected Option B for drafting a future narrow implementation gate.
-  The current active H2 boundary is the Gate 6 decision, which approves only a future narrow
-  synthetic/smoke-only checker implementation for helper runtime normal-path frame-count variation
-  public stream guard coverage, not production runtime behavior. H2 Narrow Implementation Gate 5 is
-  closed, and Gates 1 through 5 remain closed and are not reopened. See
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md).
+- The H2 Narrow Implementation Gate 6 slice is implemented at the synthetic/smoke checker level:
+  `tools/check-helper-runtime-integration.mjs` extends the explicit helper runtime normal/success
+  public stream guard beyond `--frames 3` with source-supported `--frames 1` and `--frames 5` checks,
+  asserting exact frame counts, native MotionFrame JSON-only public stdout, safe parent-prefixed
+  public stderr if present, and no helper lifecycle markers, helper diagnostics, unsafe child output,
+  raw child stderr, child stdout JSON forms, policy/error text, or smoke-only markers on public
+  streams. Gates 1 through 5 remain closed and intact. No C++ runtime change, production H2
+  integration, default runtime wiring, production supervisor behavior, diagnostics-safety policy
+  engine behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron /
+  Web Preview change, dependency, network behavior, or readiness claim is added. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md).
 - The H2 Narrow Implementation Gate 5 slice is implemented at the synthetic/smoke (checker-only)
   level: `tools/check-helper-runtime-integration.mjs` now guards the existing explicit
   `--helper-runtime-smoke` normal/success path, asserting the run exits 0 with exactly 3 native
@@ -725,13 +742,12 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
   The H2 implementation gate requirements document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
-  H2 Narrow Implementation Gate 5 is closed. H2 Narrow Implementation Gate 1, Gate 2, Gate 3, Gate 4,
-  and Gate 5 are complete and closed and are not reopened. The post-Gate-5 owner decision selected
-  Option B for drafting a future narrow implementation gate. The next active H2 boundary is the Gate
-  6 decision:
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md).
-  Gate 6 approves only a future narrow synthetic/smoke-only checker implementation, not production
-  runtime behavior. Do not proceed to direct production
+  H2 Narrow Implementation Gate 6 is implemented at the synthetic/smoke checker level. H2 Narrow
+  Implementation Gate 1, Gate 2, Gate 3, Gate 4, and Gate 5 are complete and closed and are not
+  reopened. The Gate 6 closeout is:
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md).
+  Gate 6 remains bounded to helper runtime normal-path frame-count variation public stream guard
+  coverage, not production runtime behavior. Do not proceed to direct production
   H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
   production supervisor behavior, production diagnostics-safety policy behavior, fallback MotionFrame
   behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol changes,
