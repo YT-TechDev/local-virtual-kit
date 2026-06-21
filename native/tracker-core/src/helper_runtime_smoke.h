@@ -49,6 +49,16 @@ enum class HelperRuntimeSmokeCase {
   // diagnostic, and return non-zero. This is a smoke-local observation only, NOT
   // a production handshake, control channel, supervisor, or fallback behavior.
   HelperLifecycleHandshakeMissingReady,
+  // Smoke-only failure guard for the lifecycle-handshake observation:
+  // missing-stopped. The synthetic helper emits the "ready" lifecycle boundary
+  // and otherwise completes cleanly (exits 0, no timeout), but never emits the
+  // "stopped" lifecycle boundary. The parent observation must FAIL CLOSED --
+  // detect the missing stopped, emit NOTHING to public stdout (no MotionFrame,
+  // and deliberately no fallback frame), keep helper stdout/stderr private to
+  // Native Core, write only a safe "[helper-runtime-smoke] " parent diagnostic,
+  // and return non-zero. This is a smoke-local observation only, NOT a
+  // production handshake, control channel, supervisor, or fallback behavior.
+  HelperLifecycleHandshakeMissingStopped,
 };
 
 struct HelperRuntimeSmokeOptions {

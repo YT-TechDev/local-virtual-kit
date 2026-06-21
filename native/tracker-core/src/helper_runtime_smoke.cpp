@@ -185,6 +185,10 @@ std::vector<std::string> buildHelperArguments(
       HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingReady) {
     return {"--frames", std::to_string(options.frameCount), "--skip-ready"};
   }
+  if (options.smokeCase ==
+      HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingStopped) {
+    return {"--frames", std::to_string(options.frameCount), "--skip-stopped"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 
@@ -326,7 +330,9 @@ int runHelperRuntimeSmoke(
       options.smokeCase ==
           HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout ||
       options.smokeCase ==
-          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingReady) {
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingReady ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingStopped) {
     return handleLifecycleHandshake(helperRun, diagnosticsOutput);
   }
 

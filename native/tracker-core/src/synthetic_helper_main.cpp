@@ -48,6 +48,7 @@ struct HelperOptions {
   bool emitTimeoutForcedShutdown = false;
   bool emitUnsafeDiagnostic = false;
   bool skipReady = false;
+  bool skipStopped = false;
 };
 
 bool parseIntInRange(
@@ -74,7 +75,8 @@ void printUsage(std::ostream &output) {
   output << "Usage: lvk-synthetic-helper [--frames N] [--interval-ms N] "
             "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
             "[--emit-oversized-line] [--emit-graceful-shutdown] "
-            "[--emit-timeout-forced-shutdown] [--fail-after N]\n";
+            "[--emit-timeout-forced-shutdown] [--fail-after N] "
+            "[--skip-ready] [--skip-stopped]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -125,6 +127,13 @@ void printUsage(std::ostream &output) {
             "smoke-local / test-only and models a missing-ready failure vector "
             "so Native Core can confirm it fails closed when the ready boundary "
             "is absent. It stays synthetic only and is not a MotionFrame.\n";
+  output << "--skip-stopped is a test-only mode that emits the \"ready\" "
+            "lifecycle boundary line and result frames normally, but skips "
+            "emitting the \"stopped\" lifecycle boundary line before exiting 0. "
+            "It is smoke-local / test-only and models a missing-stopped failure "
+            "vector so Native Core can confirm it fails closed when the stopped "
+            "boundary is absent. It stays synthetic only and is not a "
+            "MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -229,6 +238,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--skip-ready") {
       options.skipReady = true;
+      continue;
+    }
+
+    if (argument == "--skip-stopped") {
+      options.skipStopped = true;
       continue;
     }
 
@@ -497,6 +511,17 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] shutdown-timeout: reason=synthetic-shutdown-timeout "
                  "(reason=synthetic-timeout-forced-shutdown)\n";
     writeShutdownTimeoutLine(std::cout, "synthetic-shutdown-timeout");
+  }
+
+  // Test-only: skip the "stopped" lifecycle boundary so Native Core can confirm
+  // it fails closed when the stopped boundary is absent. The helper has already
+  // emitted the "ready" line and result frames normally; it exits 0 cleanly
+  // without ever emitting "stopped".
+  if (options.skipStopped) {
+    std::cerr << "[helper] shutdown: skipping stopped line "
+                 "(reason=synthetic-skip-stopped), emittedResultCount="
+              << emittedResultCount << "\n";
+    return 0;
   }
 
   writeStoppedLine(std::cout, "completed");
