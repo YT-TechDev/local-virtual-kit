@@ -2,7 +2,8 @@
 // Helper runtime integration smoke checker (H1d) + H2 Gate 2 smoke-path guard
 // + H2 Gate 3 unsafe-diagnostic fail-closed guard
 // + H2 Gate 4 helper runtime failure-case public stdout guards
-// + H2 Gate 5 helper runtime normal-path public stream guard.
+// + H2 Gate 5 helper runtime normal-path public stream guard
+// + H2 Gate 6 helper runtime normal-path frame-count variation guards.
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -16,6 +17,11 @@
 // unsafe child output, or smoke-only marker reaches any public stream. Helper
 // stdout/stderr stay private to Native Core. Synthetic/smoke-only, CI-safe. See
 // docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_STREAM_GUARD_CLOSEOUT.md.
+//
+// Gate 6 guard: runs the same explicit normal/success smoke path for additional
+// source-supported small positive frame counts (1 and 5) and applies the same
+// public stdout/stderr boundary assertions. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md.
 //
 // Gate 2 guard: runs lvk-tracker-core WITHOUT --helper-runtime-smoke and proves
 // the default runtime path is unchanged -- helper supervision is not entered,
@@ -542,116 +548,133 @@ console.log(
     "stdout MotionFrame-JSON-only and forward no helper child output.",
 );
 
-// --- H2 Gate 5: helper runtime normal-path public stream guard ----------------
+// --- H2 Gates 5/6: helper runtime normal-path public stream guards -----------
 // The existing explicit --helper-runtime-smoke NORMAL/SUCCESS path must keep the
 // public lvk-tracker-core stream boundary clean: public stdout is MotionFrame
-// JSON only (exactly 3 native MotionFrame lines for --frames 3 here), public
-// stderr -- if present -- is only safe parent [helper-runtime-smoke] diagnostics,
-// and no helper lifecycle marker, helper diagnostic, raw child stderr form, child
-// stdout JSON marker, policy/error text, unsafe child output, or smoke-only marker
+// JSON only (exactly N native MotionFrame lines for --frames N), public stderr --
+// if present -- is only safe parent [helper-runtime-smoke] diagnostics, and no
+// helper lifecycle marker, helper diagnostic, raw child stderr form, child stdout
+// JSON marker, policy/error text, unsafe child output, or smoke-only marker
 // reaches any public stream. The helper child's own stdout/stderr stay private to
-// Native Core. The positive control above asserts the basic shape; this Gate 5
-// section asserts the same normal/success run against the full marker sets used by
-// the later gates, without weakening the positive control. Asserts EXISTING
-// behavior only; adds no runtime behavior. Synthetic/smoke-only, CI-safe.
+// Native Core. Gate 5 keeps the existing --frames 3 positive control intact; Gate
+// 6 adds source-supported small positive frame-count variation checks for
+// --frames 1 and --frames 5. Asserts EXISTING behavior only; adds no runtime
+// behavior. Synthetic/smoke-only, CI-safe.
 
-const normalResult = spawnSync(
-  trackerPath,
-  ["--helper-runtime-smoke", helperPath, "--frames", "3"],
-  { encoding: "utf8", maxBuffer: 1024 * 1024 },
-);
-
-if (normalResult.error) {
-  fail(
-    `could not run normal-path ${trackerPath}: ${normalResult.error.message}`,
-    normalResult,
+const assertNormalPathPublicStreamGuard = (frameCount, gateLabel) => {
+  const normalResult = spawnSync(
+    trackerPath,
+    ["--helper-runtime-smoke", helperPath, "--frames", String(frameCount)],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
   );
-}
 
-// The normal/success smoke path exits 0.
-if (normalResult.status !== 0) {
-  fail("expected exit status 0 for normal-path smoke", normalResult);
-}
-
-const normalStdout = normalResult.stdout ?? "";
-const normalStdoutLines = normalStdout
-  .split(/\r?\n/u)
-  .map((line) => line.trim())
-  .filter((line) => line.length > 0);
-
-// Public stdout must be MotionFrame JSON only -- exactly 3 lines for --frames 3.
-if (normalStdoutLines.length !== 3) {
-  fail(
-    `expected exactly 3 normal-path public stdout lines, got ${normalStdoutLines.length}`,
-    normalResult,
-  );
-}
-
-// No helper smoke-path markers, forbidden markers, or unsafe child markers may
-// appear on public stdout (covers helper lifecycle markers, helper diagnostics,
-// raw child stderr forms, child stdout JSON markers, policy/error text, unsafe
-// child output, and smoke-only markers).
-for (const marker of [
-  ...helperSmokeEntryMarkers,
-  ...forbiddenStdoutMarkers,
-  ...unsafeChildMarkers,
-]) {
-  if (normalStdout.includes(marker)) {
+  if (normalResult.error) {
     fail(
-      `normal-path public stdout leaked marker ${JSON.stringify(marker)}`,
+      `could not run ${gateLabel} normal-path --frames ${frameCount} ${trackerPath}: ${normalResult.error.message}`,
       normalResult,
     );
   }
-}
 
-// Each stdout line must validate as native MotionFrame JSON.
-normalStdoutLines.forEach((line, index) => {
-  if (parseNativeMotionFrameJson(line) === null) {
+  // The normal/success smoke path exits 0.
+  if (normalResult.status !== 0) {
     fail(
-      `normal-path public stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+      `expected exit status 0 for ${gateLabel} normal-path --frames ${frameCount} smoke`,
       normalResult,
     );
   }
-});
 
-// Public stderr, if non-empty, must be only safe parent [helper-runtime-smoke]
-// diagnostics; no raw child stderr or helper child output forwarded.
-const normalStderr = normalResult.stderr ?? "";
-const normalStderrLines = normalStderr
-  .split(/\r?\n/u)
-  .map((line) => line.trim())
-  .filter((line) => line.length > 0);
+  const normalStdout = normalResult.stdout ?? "";
+  const normalStdoutLines = normalStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
-normalStderrLines.forEach((line) => {
-  if (!line.startsWith("[helper-runtime-smoke] ")) {
+  // Public stdout must be MotionFrame JSON only -- exactly N lines for --frames N.
+  if (normalStdoutLines.length !== frameCount) {
     fail(
-      `normal-path public stderr line without safe prefix: ${line}`,
+      `expected exactly ${frameCount} ${gateLabel} normal-path public stdout lines, got ${normalStdoutLines.length}`,
       normalResult,
     );
   }
-});
 
-// Even behind the safe parent prefix, public stderr must not carry helper
-// lifecycle / contract markers, raw child stderr forms, unsafe child output, or
-// other forbidden child JSON / policy / error text. Same set Gate 4 builds, minus
-// the safe parent prefix itself so valid parent diagnostics remain allowed.
-const normalForbiddenStderrMarkers = [
-  ...helperSmokeEntryMarkers.filter(
-    (marker) => marker !== "[helper-runtime-smoke]",
-  ),
-  ...forbiddenStdoutMarkers,
-  ...unsafeChildMarkers,
-];
-for (const marker of normalForbiddenStderrMarkers) {
-  if (normalStderr.includes(marker)) {
-    fail(
-      `normal-path public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
-      normalResult,
-    );
+  // No helper smoke-path markers, forbidden markers, or unsafe child markers may
+  // appear on public stdout (covers helper lifecycle markers, helper diagnostics,
+  // raw child stderr forms, child stdout JSON markers, policy/error text, unsafe
+  // child output, and smoke-only markers).
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (normalStdout.includes(marker)) {
+      fail(
+        `${gateLabel} normal-path --frames ${frameCount} public stdout leaked marker ${JSON.stringify(marker)}`,
+        normalResult,
+      );
+    }
   }
-}
+
+  // Each stdout line must validate as native MotionFrame JSON.
+  normalStdoutLines.forEach((line, index) => {
+    if (parseNativeMotionFrameJson(line) === null) {
+      fail(
+        `${gateLabel} normal-path --frames ${frameCount} public stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+        normalResult,
+      );
+    }
+  });
+
+  // Public stderr, if non-empty, must be only safe parent [helper-runtime-smoke]
+  // diagnostics; no raw child stderr or helper child output forwarded.
+  const normalStderr = normalResult.stderr ?? "";
+  const normalStderrLines = normalStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  normalStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `${gateLabel} normal-path --frames ${frameCount} public stderr line without safe prefix: ${line}`,
+        normalResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output, or
+  // other forbidden child JSON / policy / error text. Same set Gate 4 builds,
+  // minus the safe parent prefix itself so valid parent diagnostics remain
+  // allowed.
+  const normalForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of normalForbiddenStderrMarkers) {
+    if (normalStderr.includes(marker)) {
+      fail(
+        `${gateLabel} normal-path --frames ${frameCount} public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        normalResult,
+      );
+    }
+  }
+};
+
+assertNormalPathPublicStreamGuard(3, "Gate 5");
 
 console.log(
   "Normal-path stream guard OK: helper runtime normal/success path keeps public stdout " +
     "MotionFrame-JSON-only, public stderr safe parent diagnostics only, helper output private.",
+);
+
+for (const frameCount of [1, 5]) {
+  assertNormalPathPublicStreamGuard(frameCount, "Gate 6");
+}
+
+console.log(
+  "Normal-path frame-count guard OK: helper runtime normal/success path keeps public " +
+    "streams clean for --frames 1 and --frames 5.",
 );
