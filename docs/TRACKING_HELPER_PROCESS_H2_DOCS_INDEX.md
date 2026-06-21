@@ -12,8 +12,8 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the H2 Foundation Gate 1 boundary assertion closeout:
-[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md).
+The current active H2 boundary is the post Foundation Gate 1 boundary assertion owner decision:
+[`docs/TRACKING_HELPER_PROCESS_H2_POST_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_DECISION.md).
 This first foundation implementation slice is **explicit-smoke-only and Native Core bounded**
 (checker-only): it adds one named foundation-boundary consolidation assertion to
 `tools/check-helper-runtime-integration.mjs` that re-exercises, by reusing the existing Gate 2 and
@@ -30,9 +30,10 @@ source-grounded inventory and runtime boundary map and is complete, and the firs
 implementation gate decision authorized this explicit-smoke-only foundation boundary assertion
 slice, now closed out above. Any further foundation implementation beyond this consolidation
 remains unapproved until a future owner-approved implementation gate is reviewed and merged. The
-recommended next owner decision after this closeout is to either approve a separate owner-reviewed
-implementation gate for the next foundation slice or pause H2 and move to another LVK area;
-production runtime work stays unapproved meanwhile. Production H2 integration, default helper runtime wiring,
+recommended next owner direction after this closeout is Option B: approve drafting the next
+narrow foundation implementation gate. This index and decision record do not approve implementation;
+a future owner-approved implementation gate and a later implementation PR are required before any
+implementation work proceeds. Production H2 integration, default helper runtime wiring,
 default `lvk-tracker-core` H2 runtime wiring, production supervisor behavior, fallback MotionFrame
 behavior and emission, production diagnostics-safety policy behavior, MotionFrame schema changes,
 Motion Protocol changes, Electron / Web Preview changes, dependencies, telemetry, analytics, cloud
@@ -461,6 +462,14 @@ H2 implementation is approved by this index itself.
     diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
     Protocol changes, Electron / Web Preview changes, dependencies, network behavior, camera access
     changes, and readiness claims remain unapproved.
+74. [`docs/TRACKING_HELPER_PROCESS_H2_POST_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_DECISION.md)
+    — docs-only owner decision record after PR #224 and the H2 Foundation Implementation Gate 1
+    boundary assertion closeout. Records that the closeout is complete, checker-only,
+    explicit-smoke-only, Native Core/checker bounded, and consolidation-based; Gates 1 through 7
+    remain closed, Foundation Gate 1 inventory/map remains closed, and no new implementation is
+    approved. Recommends Option B — drafting the next narrow foundation implementation gate — while
+    requiring a future owner-approved implementation gate and later implementation PR before any
+    implementation proceeds.
 
 Background:
 
