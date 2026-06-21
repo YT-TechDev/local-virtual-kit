@@ -223,76 +223,85 @@ const helperSmokeEntryMarkers = [
 // "[helper-runtime-smoke]" prefix.
 const helperStderrLeakMarkers = ["[helper]", "source=synthetic-helper"];
 
-const defaultResult = spawnSync(trackerPath, ["--frames", "3"], {
-  encoding: "utf8",
-  maxBuffer: 1024 * 1024,
-});
+// Extracted as a reusable guard so the later H2 Foundation Boundary consolidation
+// can re-exercise the exact same default-runtime isolation evidence without
+// duplicating logic. Behavior is unchanged from the original inline Gate 2 block.
+const assertDefaultRuntimeIsolationGuard = () => {
+  const defaultResult = spawnSync(trackerPath, ["--frames", "3"], {
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+  });
 
-if (defaultResult.error) {
-  fail(
-    `could not run default ${trackerPath}: ${defaultResult.error.message}`,
-    defaultResult,
-  );
-}
-if (defaultResult.status !== 0) {
-  fail("expected default-runtime exit status 0", defaultResult);
-}
-
-const defaultStdout = defaultResult.stdout ?? "";
-const defaultStdoutLines = defaultStdout
-  .split(/\r?\n/u)
-  .map((line) => line.trim())
-  .filter((line) => line.length > 0);
-
-if (defaultStdoutLines.length !== 3) {
-  fail(
-    `expected exactly 3 default-runtime stdout lines, got ${defaultStdoutLines.length}`,
-    defaultResult,
-  );
-}
-
-// Default stdout must be MotionFrame JSON only: no smoke-path/helper markers and
-// none of the raw-leak markers guarded above.
-for (const marker of [...helperSmokeEntryMarkers, ...forbiddenStdoutMarkers]) {
-  if (defaultStdout.includes(marker)) {
+  if (defaultResult.error) {
     fail(
-      `default-runtime stdout leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
+      `could not run default ${trackerPath}: ${defaultResult.error.message}`,
       defaultResult,
     );
   }
-}
+  if (defaultResult.status !== 0) {
+    fail("expected default-runtime exit status 0", defaultResult);
+  }
 
-// Each default-runtime stdout line must validate as native MotionFrame JSON.
-defaultStdoutLines.forEach((line, index) => {
-  if (parseNativeMotionFrameJson(line) === null) {
+  const defaultStdout = defaultResult.stdout ?? "";
+  const defaultStdoutLines = defaultStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (defaultStdoutLines.length !== 3) {
     fail(
-      `default-runtime stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+      `expected exactly 3 default-runtime stdout lines, got ${defaultStdoutLines.length}`,
       defaultResult,
     );
   }
-});
 
-// Default stderr must not show that the helper smoke path was entered, and must
-// not leak private helper child output -- in either the smoke-diagnostic /
-// minified-contract form or the raw helper child stderr form.
-const defaultStderr = defaultResult.stderr ?? "";
-for (const marker of helperSmokeEntryMarkers) {
-  if (defaultStderr.includes(marker)) {
-    fail(
-      `default-runtime stderr leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
-      defaultResult,
-    );
+  // Default stdout must be MotionFrame JSON only: no smoke-path/helper markers and
+  // none of the raw-leak markers guarded above.
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+  ]) {
+    if (defaultStdout.includes(marker)) {
+      fail(
+        `default-runtime stdout leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
+        defaultResult,
+      );
+    }
   }
-}
-for (const marker of helperStderrLeakMarkers) {
-  if (defaultStderr.includes(marker)) {
-    fail(
-      `default-runtime stderr leaked helper stderr marker ${JSON.stringify(marker)}`,
-      defaultResult,
-    );
-  }
-}
 
+  // Each default-runtime stdout line must validate as native MotionFrame JSON.
+  defaultStdoutLines.forEach((line, index) => {
+    if (parseNativeMotionFrameJson(line) === null) {
+      fail(
+        `default-runtime stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+        defaultResult,
+      );
+    }
+  });
+
+  // Default stderr must not show that the helper smoke path was entered, and must
+  // not leak private helper child output -- in either the smoke-diagnostic /
+  // minified-contract form or the raw helper child stderr form.
+  const defaultStderr = defaultResult.stderr ?? "";
+  for (const marker of helperSmokeEntryMarkers) {
+    if (defaultStderr.includes(marker)) {
+      fail(
+        `default-runtime stderr leaked smoke-path/helper marker ${JSON.stringify(marker)}`,
+        defaultResult,
+      );
+    }
+  }
+  for (const marker of helperStderrLeakMarkers) {
+    if (defaultStderr.includes(marker)) {
+      fail(
+        `default-runtime stderr leaked helper stderr marker ${JSON.stringify(marker)}`,
+        defaultResult,
+      );
+    }
+  }
+};
+
+assertDefaultRuntimeIsolationGuard();
 console.log(
   "Default-runtime guard OK: --helper-runtime-smoke omitted keeps MotionFrame-only " +
     "stdout, no helper supervision entered, no helper output leaked.",
@@ -693,4 +702,29 @@ assertNormalPathPublicStreamGuard(0, "Gate 7");
 console.log(
   "Zero-frame normal-path guard OK: helper runtime normal/success path exits cleanly " +
     "with zero public stdout lines and safe public stderr only for --frames 0.",
+);
+
+// --- H2 Foundation Boundary: explicit-smoke-only consolidation assertion -------
+// H2 Foundation Implementation Gate 1: explicit-smoke-only foundation boundary
+// assertion. This block adds NO new runtime behavior, NO new --helper-runtime-smoke
+// case, NO C++ change, and NO default runtime wiring. It is an honest CONSOLIDATION
+// that re-exercises, under one named foundation-boundary assertion, the two boundary
+// facts already proven above by reusing the existing guard helpers:
+//   (1) the default lvk-tracker-core path (no --helper-runtime-smoke) never enters
+//       helper supervision and keeps public stdout MotionFrame-JSON-only -- reuses
+//       the Gate 2 default-runtime isolation guard; and
+//   (2) the explicit --helper-runtime-smoke normal/success path keeps the public
+//       stdout/stderr boundary clean while helper stdout/stderr stay private to
+//       Native Core -- reuses the Gate 5/6/7 normal-path public stream guard.
+// It asserts EXISTING behavior only and makes NO new production runtime guarantee.
+// Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md.
+
+assertDefaultRuntimeIsolationGuard();
+assertNormalPathPublicStreamGuard(3, "Foundation boundary");
+
+console.log(
+  "Foundation boundary consolidation OK: default path stays out of helper supervision " +
+    "and the explicit smoke path keeps public streams clean with helper output private. " +
+    "Consolidates existing Gate 2 + Gate 5/6/7 evidence; asserts no new runtime guarantee.",
 );
