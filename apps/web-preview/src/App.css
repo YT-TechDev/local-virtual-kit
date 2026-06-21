@@ -54,7 +54,8 @@
   top: 1rem;
   left: 1rem;
   z-index: 1;
-  max-width: min(22rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  max-width: min(28rem, calc(100vw - 2rem));
   display: grid;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
@@ -70,15 +71,17 @@
 
 .preview-source-badge__label {
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 0.375rem;
+  overflow-wrap: anywhere;
 }
 
 .preview-source-badge__indicator {
-  flex-shrink: 0;
   width: 0.5rem;
   height: 0.5rem;
+  margin-top: 0.25em;
   border-radius: 50%;
 }
 
