@@ -4,7 +4,8 @@
 // + H2 Gate 4 helper runtime failure-case public stdout guards
 // + H2 Gate 5 helper runtime normal-path public stream guard
 // + H2 Gate 6 helper runtime normal-path frame-count variation guards
-// + H2 Gate 7 helper runtime normal-path zero-frame public stream guard.
+// + H2 Gate 7 helper runtime normal-path zero-frame public stream guard
+// + H2 helper lifecycle handshake explicit-smoke guard (zero public stdout).
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -727,4 +728,133 @@ console.log(
   "Foundation boundary consolidation OK: default path stays out of helper supervision " +
     "and the explicit smoke path keeps public streams clean with helper output private. " +
     "Consolidates existing Gate 2 + Gate 5/6/7 evidence; asserts no new runtime guarantee.",
+);
+
+// --- H2 helper lifecycle handshake explicit-smoke guard ----------------------
+// The new explicit-smoke-only helper-lifecycle-handshake case runs the synthetic
+// helper through the existing bounded supervisor and observes the helper
+// lifecycle/ready boundary from the PRIVATELY captured helper stdout only. Unlike
+// the normal/success case it maps NO helper result to MotionFrame: it emits ZERO
+// public stdout lines (no MotionFrame, no fallback frame), exits cleanly (0), and
+// writes only safe parent [helper-runtime-smoke] diagnostics to public stderr while
+// helper stdout/stderr stay private to Native Core. This guard asserts that public
+// boundary. The case only runs through explicit --helper-runtime-smoke invocation;
+// the default-runtime isolation guard above already proves the default path never
+// enters helper supervision. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md.
+
+const assertLifecycleHandshakeGuard = () => {
+  const handshakeResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperPath,
+      "--frames",
+      "3",
+      "--helper-runtime-smoke-case",
+      "helper-lifecycle-handshake",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (handshakeResult.error) {
+    fail(
+      `could not run helper-lifecycle-handshake ${trackerPath}: ${handshakeResult.error.message}`,
+      handshakeResult,
+    );
+  }
+
+  // The clean handshake exits 0.
+  if (handshakeResult.status !== 0) {
+    fail(
+      "expected exit status 0 for helper-lifecycle-handshake case",
+      handshakeResult,
+    );
+  }
+
+  // Public stdout must be EMPTY: the handshake observes the lifecycle/ready boundary
+  // privately and maps no MotionFrame, so there are exactly zero public stdout lines.
+  const handshakeStdout = handshakeResult.stdout ?? "";
+  const handshakeStdoutLines = handshakeStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (handshakeStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for helper-lifecycle-handshake, got ${handshakeStdoutLines.length}`,
+      handshakeResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, or unsafe child
+  // markers may appear on public stdout (covers helper lifecycle markers, helper
+  // diagnostics, raw child stderr forms, child stdout JSON markers, policy/error
+  // text, unsafe child output, and smoke-only markers).
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (handshakeStdout.includes(marker)) {
+      fail(
+        `helper-lifecycle-handshake public stdout leaked marker ${JSON.stringify(marker)}`,
+        handshakeResult,
+      );
+    }
+  }
+
+  // Public stderr, if non-empty, must be only safe parent [helper-runtime-smoke]
+  // diagnostics; no raw child stderr or helper child output forwarded.
+  const handshakeStderr = handshakeResult.stderr ?? "";
+  const handshakeStderrLines = handshakeStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  handshakeStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `helper-lifecycle-handshake public stderr line without safe prefix: ${line}`,
+        handshakeResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output, or
+  // other forbidden child JSON / policy / error text. Same set the later gates
+  // build, minus the safe parent prefix itself so valid parent diagnostics remain
+  // allowed.
+  const handshakeForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of handshakeForbiddenStderrMarkers) {
+    if (handshakeStderr.includes(marker)) {
+      fail(
+        `helper-lifecycle-handshake public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        handshakeResult,
+      );
+    }
+  }
+
+  // Positive evidence: the parent reports it observed the lifecycle handshake.
+  if (!handshakeStderr.includes("helper lifecycle handshake observed")) {
+    fail(
+      "helper-lifecycle-handshake public stderr did not report lifecycle handshake observation",
+      handshakeResult,
+    );
+  }
+};
+
+assertLifecycleHandshakeGuard();
+
+console.log(
+  "Lifecycle-handshake guard OK: explicit helper-lifecycle-handshake case observes the " +
+    "helper ready/stopped boundary privately, emits zero public stdout lines, keeps public " +
+    "stderr to safe parent diagnostics only, and keeps helper stdout/stderr private.",
 );
