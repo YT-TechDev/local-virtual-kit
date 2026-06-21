@@ -12,9 +12,11 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the post Foundation Gate 1 boundary assertion owner decision:
-[`docs/TRACKING_HELPER_PROCESS_H2_POST_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_DECISION.md).
-This first foundation implementation slice is **explicit-smoke-only and Native Core bounded**
+The current active H2 boundary is the H2 Foundation Implementation Gate 2 decision:
+[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md).
+This document approves only the next gate boundary, not implementation; implementation remains
+unapproved until a later implementation PR is reviewed against that gate. The first foundation
+implementation slice was **explicit-smoke-only and Native Core bounded**
 (checker-only): it adds one named foundation-boundary consolidation assertion to
 `tools/check-helper-runtime-integration.mjs` that re-exercises, by reusing the existing Gate 2 and
 Gate 5/6/7 guard helpers, the default-runtime isolation fact and the explicit `--helper-runtime-smoke`
@@ -470,6 +472,17 @@ H2 implementation is approved by this index itself.
     approved. Recommends Option B — drafting the next narrow foundation implementation gate — while
     requiring a future owner-approved implementation gate and later implementation PR before any
     implementation proceeds.
+75. [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md)
+    — docs-only owner decision for H2 Foundation Implementation Gate 2: next narrow foundation
+    implementation gate proposal. Follows Option B from the post Foundation Gate 1 boundary
+    assertion decision and approves only the next gate boundary, not implementation; implementation
+    remains unapproved until a later implementation PR is reviewed against this gate. Preserves the
+    closed state of Gates 1 through 7, Foundation Gate 1 inventory/map, Foundation Implementation
+    Gate 1 boundary assertion closeout, and the post Foundation Gate 1 boundary assertion owner
+    decision while keeping production/default runtime wiring, production supervisor behavior,
+    diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
+    Protocol changes, Electron / Web Preview changes, dependencies, network behavior, camera
+    behavior, readiness claims, and implementation unapproved.
 
 Background:
 
@@ -841,12 +854,14 @@ These boundaries are preserved across all H2 docs:
   H2 Narrow Implementation Gates 1 through 7 are closed at the synthetic/smoke checker level
   and are not reopened. The Gate 7 closeout is:
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md).
-  The current active boundary is the first H2 foundation implementation gate decision:
-  [`docs/TRACKING_HELPER_PROCESS_H2_FIRST_FOUNDATION_IMPLEMENTATION_GATE_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FIRST_FOUNDATION_IMPLEMENTATION_GATE_DECISION.md).
-  H2 Foundation Gate 1 inventory/map is complete. The selected future implementation slice is
-  Native Core-only and explicit-smoke-only, limited to a foundation boundary assertion through an
-  explicit `--helper-runtime-smoke` foundation boundary mode. Implementation remains unstarted and
-  unapproved until a future implementation PR is reviewed and merged. Do not proceed to production H2
+  The current active boundary is the H2 Foundation Implementation Gate 2 decision:
+  [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md).
+  H2 Foundation Gate 1 inventory/map is complete, the first foundation implementation gate boundary
+  assertion closeout is closed, and the post Foundation Gate 1 owner decision is closed. Gate 2
+  approves only the next gate boundary, not implementation. Implementation remains unapproved until a
+  later implementation PR defines exact allowed files and excluded surfaces, preserves default runtime
+  behavior when `--helper-runtime-smoke` is omitted, preserves public/private stream boundaries, and
+  is reviewed against Gate 2. Do not proceed to production H2
   integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
   production supervisor behavior, production diagnostics-safety policy engine behavior, fallback
   MotionFrame behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol
