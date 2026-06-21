@@ -61,9 +61,12 @@ enum class HelperRuntimeSmokeCase {
   HelperLifecycleHandshakeMissingStopped,
   // Smoke-only failure guard for the lifecycle-handshake observation:
   // malformed-ready. The synthetic helper emits a "ready" line with an invalid
-  // schema version (schemaVersion:99 instead of 1) and otherwise completes
-  // cleanly (exits 0, no timeout, emits the "stopped" boundary). The parent
-  // observation must FAIL CLOSED -- detect the malformed ready line, emit
+  // schema version (schemaVersion:10 instead of 1) and otherwise completes
+  // cleanly (exits 0, no timeout, emits the "stopped" boundary). The value 10
+  // is chosen to directly exercise exact-boundary matching: a bare
+  // "schemaVersion":1 substring would incorrectly match "schemaVersion":10.
+  // The parent observation must FAIL CLOSED -- detect the malformed ready line,
+  // emit
   // NOTHING to public stdout (no MotionFrame, and deliberately no fallback
   // frame), keep helper stdout/stderr private to Native Core, write only a safe
   // "[helper-runtime-smoke] " parent diagnostic, and return non-zero. This is a

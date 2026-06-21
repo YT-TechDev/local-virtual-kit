@@ -1041,9 +1041,11 @@ assertLifecycleHandshakeFailureGuard({
 });
 
 // malformed-ready: the synthetic helper emits a "ready" line with an invalid
-// schema version (schemaVersion:99 instead of 1) and otherwise completes
-// cleanly (exits 0, no timeout, emits the "stopped" boundary). The parent
-// observation must fail closed: non-zero exit, empty public stdout (no
+// schema version (schemaVersion:10 instead of 1) and otherwise completes
+// cleanly (exits 0, no timeout, emits the "stopped" boundary). The value 10 is
+// chosen to directly test that a bare "schemaVersion":1 substring match would
+// incorrectly accept it, while the fixed exact-boundary check rejects it. The
+// parent observation must fail closed: non-zero exit, empty public stdout (no
 // MotionFrame, no fallback frame), and only a safe "[helper-runtime-smoke] "
 // failure diagnostic on public stderr. Helper stdout/stderr stay private to
 // Native Core. This is explicit-smoke-only and adds no default runtime behavior.

@@ -136,9 +136,12 @@ void printUsage(std::ostream &output) {
             "boundary is absent. It stays synthetic only and is not a "
             "MotionFrame.\n";
   output << "--emit-malformed-ready is a test-only mode that emits a \"ready\" "
-            "line with an invalid schema version (schemaVersion:99 instead of 1) "
+            "line with an invalid schema version (schemaVersion:10 instead of 1) "
             "in place of the normal ready line; the helper otherwise completes "
             "normally (emits result frames, the \"stopped\" line, and exits 0). "
+            "The value 10 is chosen to directly test that the lifecycle "
+            "observation does not accept schemaVersion via a bare substring "
+            "match of \"schemaVersion\":1 (which would match schemaVersion:10). "
             "It is smoke-local / test-only and models a malformed-ready failure "
             "vector so Native Core can confirm it fails closed when the ready "
             "line is present but carries an invalid schema version. It stays "
@@ -295,16 +298,18 @@ void writeReadyLine(std::ostream &output) {
          << "\"source\":\"synthetic-helper\"}\n";
 }
 
-// Emits a malformed "ready" line with an invalid schema version (99 instead of
-// 1). The line has the correct type and source so it is recognized as a ready
-// attempt, but its schema version is wrong, so the lifecycle observation must
-// detect the malformed content and fail closed. It is intentionally NOT a
-// MotionFrame and contains no raw data, paths, secrets, pixels, tensors, or
-// model contents. It is smoke-local / test-only.
+// Emits a malformed "ready" line with an invalid schema version (10 instead of
+// 1). The value 10 is chosen deliberately: it shares the digit "1" with the
+// valid version, so the lifecycle observation must NOT rely on a bare
+// "schemaVersion":1 substring match (which would also match "schemaVersion":10)
+// and must instead match the exact boundary "schemaVersion":1, or
+// "schemaVersion":1}. It is intentionally NOT a MotionFrame and contains no
+// raw data, paths, secrets, pixels, tensors, or model contents. Smoke-local /
+// test-only.
 void writeMalformedReadyLine(std::ostream &output) {
   output << "{"
          << "\"type\":\"ready\","
-         << "\"schemaVersion\":99,"
+         << "\"schemaVersion\":10,"
          << "\"source\":\"synthetic-helper\"}\n";
 }
 

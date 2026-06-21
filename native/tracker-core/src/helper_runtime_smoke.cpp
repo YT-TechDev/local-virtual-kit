@@ -283,7 +283,13 @@ int handleLifecycleHandshake(
   std::string line;
   while (std::getline(lines, line)) {
     if (containsToken(line, "\"type\":\"ready\"")) {
-      if (containsToken(line, "\"schemaVersion\":1") &&
+      // Accept schemaVersion exactly equal to 1: in compact JSON the value is
+      // followed by "," or "}". A bare "schemaVersion":1 substring would also
+      // match "schemaVersion":10, "schemaVersion":12, etc.
+      const bool hasExactSchema =
+          containsToken(line, "\"schemaVersion\":1,") ||
+          containsToken(line, "\"schemaVersion\":1}");
+      if (hasExactSchema &&
           containsToken(line, "\"source\":\"synthetic-helper\"")) {
         sawReady = true;
       } else {
@@ -291,7 +297,8 @@ int handleLifecycleHandshake(
       }
     } else if (
         containsToken(line, "\"type\":\"stopped\"") &&
-        containsToken(line, "\"schemaVersion\":1")) {
+        (containsToken(line, "\"schemaVersion\":1,") ||
+         containsToken(line, "\"schemaVersion\":1}"))) {
       sawStopped = true;
     }
   }
