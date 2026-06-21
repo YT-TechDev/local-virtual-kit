@@ -174,7 +174,7 @@ void printUsage(std::ostream &output) {
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
-  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, and helper-lifecycle-handshake-timeout. Defaults to normal.\n";
+  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, and helper-lifecycle-handshake-timeout. Defaults to normal.\n";
 }
 
 void handleStopSignal(int) {
