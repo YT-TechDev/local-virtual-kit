@@ -17,14 +17,19 @@ const nativePipelinePath = join(
 );
 
 const fail = (message) => {
-  console.error(`Electron helper spawn diagnostic smoke check failed: ${message}`);
+  console.error(
+    `Electron helper spawn diagnostic smoke check failed: ${message}`,
+  );
   process.exit(1);
 };
 
 const source = readFileSync(nativePipelinePath, "utf8");
 
 const extractFunctionBody = (functionName) => {
-  const signature = new RegExp(`function\\s+${functionName}\\s*\\([^)]*\\)\\s*:[^{]+\\{`, "u");
+  const signature = new RegExp(
+    `function\\s+${functionName}\\s*\\([^)]*\\)\\s*:[^{]+\\{`,
+    "u",
+  );
   const match = signature.exec(source);
   if (!match) {
     fail(`missing ${functionName}() helper`);
