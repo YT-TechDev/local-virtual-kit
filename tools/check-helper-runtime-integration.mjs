@@ -5,7 +5,9 @@
 // + H2 Gate 5 helper runtime normal-path public stream guard
 // + H2 Gate 6 helper runtime normal-path frame-count variation guards
 // + H2 Gate 7 helper runtime normal-path zero-frame public stream guard
-// + H2 helper lifecycle handshake explicit-smoke guard (zero public stdout).
+// + H2 helper lifecycle handshake explicit-smoke guard (zero public stdout)
+// + H2 helper lifecycle handshake failure guards (launch-failure, nonzero-exit,
+//   timeout: fail closed with zero public stdout, safe parent stderr only).
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -857,4 +859,161 @@ console.log(
   "Lifecycle-handshake guard OK: explicit helper-lifecycle-handshake case observes the " +
     "helper ready/stopped boundary privately, emits zero public stdout lines, keeps public " +
     "stderr to safe parent diagnostics only, and keeps helper stdout/stderr private.",
+);
+
+// --- H2 helper lifecycle handshake failure guards ----------------------------
+// The lifecycle-handshake observation must FAIL CLOSED when the helper never
+// reaches a clean handshake. Each failure vector below drives the same
+// handleLifecycleHandshake observation through an existing synthetic helper
+// failure mode (or, for launch-failure, a non-existent helper path) and asserts
+// the same public/private boundary as the success guard, except inverted: the run
+// exits NON-ZERO, public stdout is EMPTY (no MotionFrame, no fallback frame), and
+// public stderr carries only the expected safe parent [helper-runtime-smoke]
+// failure diagnostic -- never the success marker, helper lifecycle markers, raw
+// child stderr, child stdout JSON, unsafe child output, policy/error text, or
+// smoke-only markers. Helper stdout/stderr stay private to Native Core. These
+// cases are explicit-smoke-only and add no fallback MotionFrame emission and no
+// default runtime behavior. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md.
+
+const assertLifecycleHandshakeFailureGuard = ({
+  vectorLabel,
+  caseName,
+  helperArg,
+  expectedDiagnostic,
+}) => {
+  const failureResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperArg,
+      "--frames",
+      "3",
+      "--helper-runtime-smoke-case",
+      caseName,
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (failureResult.error) {
+    fail(
+      `could not run ${vectorLabel} ${trackerPath}: ${failureResult.error.message}`,
+      failureResult,
+    );
+  }
+
+  // Fail-closed: the lifecycle-handshake failure guard must exit non-zero.
+  if (failureResult.status === 0) {
+    fail(
+      `expected non-zero exit for ${vectorLabel} lifecycle-handshake failure guard`,
+      failureResult,
+    );
+  }
+
+  // Public stdout must be EMPTY on a lifecycle-handshake failure (no MotionFrame,
+  // no fallback frame): exactly zero public stdout lines.
+  const failureStdout = failureResult.stdout ?? "";
+  const failureStdoutLines = failureStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (failureStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for ${vectorLabel}, got ${failureStdoutLines.length}`,
+      failureResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, or unsafe child
+  // markers may appear on public stdout.
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (failureStdout.includes(marker)) {
+      fail(
+        `${vectorLabel} public stdout leaked marker ${JSON.stringify(marker)}`,
+        failureResult,
+      );
+    }
+  }
+
+  // Public stderr must be only safe parent [helper-runtime-smoke] diagnostics.
+  const failureStderr = failureResult.stderr ?? "";
+  const failureStderrLines = failureStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  failureStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `${vectorLabel} public stderr line without safe prefix: ${line}`,
+        failureResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output, or
+  // other forbidden child JSON / policy / error text.
+  const failureForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of failureForbiddenStderrMarkers) {
+    if (failureStderr.includes(marker)) {
+      fail(
+        `${vectorLabel} public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        failureResult,
+      );
+    }
+  }
+
+  // The failed guard must report the expected safe failure diagnostic and must NOT
+  // report the success marker (the handshake did not complete cleanly).
+  if (!failureStderr.includes(expectedDiagnostic)) {
+    fail(
+      `${vectorLabel} public stderr did not report expected diagnostic ${JSON.stringify(expectedDiagnostic)}`,
+      failureResult,
+    );
+  }
+  if (failureStderr.includes("helper lifecycle handshake observed")) {
+    fail(
+      `${vectorLabel} public stderr reported the success marker on a failure vector`,
+      failureResult,
+    );
+  }
+};
+
+// launch-failure reuses the existing helper-lifecycle-handshake case with a
+// non-existent helper path so the helper genuinely fails to launch.
+assertLifecycleHandshakeFailureGuard({
+  vectorLabel: "lifecycle-handshake launch-failure",
+  caseName: "helper-lifecycle-handshake",
+  helperArg: `${helperPath}.does-not-exist-lvk-handshake-launch-failure`,
+  expectedDiagnostic: "helper launch failed",
+});
+assertLifecycleHandshakeFailureGuard({
+  vectorLabel: "lifecycle-handshake nonzero-exit",
+  caseName: "helper-lifecycle-handshake-nonzero-exit",
+  helperArg: helperPath,
+  expectedDiagnostic: "helper exited non-zero",
+});
+assertLifecycleHandshakeFailureGuard({
+  vectorLabel: "lifecycle-handshake timeout",
+  caseName: "helper-lifecycle-handshake-timeout",
+  helperArg: helperPath,
+  expectedDiagnostic: "helper timed out",
+});
+
+console.log(
+  "Lifecycle-handshake failure guards OK: launch-failure, nonzero-exit, and timeout each " +
+    "fail closed with non-zero exit, zero public stdout lines, safe parent-prefixed stderr " +
+    "only, and helper stdout/stderr kept private to Native Core.",
 );

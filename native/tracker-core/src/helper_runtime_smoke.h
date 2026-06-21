@@ -27,6 +27,19 @@ enum class HelperRuntimeSmokeCase {
   // smoke-local lifecycle observation only, NOT a production handshake, control
   // channel, or supervisor.
   HelperLifecycleHandshake,
+  // Smoke-only failure guards for the lifecycle-handshake observation. Each reuses
+  // an existing synthetic helper failure mode so the SAME handleLifecycleHandshake
+  // observation fails closed before a clean handshake: it emits NOTHING to public
+  // stdout (no MotionFrame, and deliberately no fallback frame), keeps helper
+  // stdout/stderr private to Native Core, writes only a safe "[helper-runtime-smoke] "
+  // parent diagnostic, and returns non-zero. NonzeroExit runs the helper with
+  // --fail-after so it exits non-zero before "stopped"; Timeout paces the helper so
+  // the bounded smoke timeout fires before "stopped". (The launch-failure vector
+  // needs no new case: it reuses HelperLifecycleHandshake with a non-existent helper
+  // path.) These are smoke-local observations only, NOT production handshake,
+  // control channel, supervisor, or fallback behavior.
+  HelperLifecycleHandshakeNonzeroExit,
+  HelperLifecycleHandshakeTimeout,
 };
 
 struct HelperRuntimeSmokeOptions {

@@ -12,22 +12,30 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the H2 helper lifecycle handshake smoke closeout:
+The current active H2 boundary is the H2 helper lifecycle handshake failure guards closeout:
+[`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md).
+This is the next implementation PR after the helper lifecycle handshake success path (PR #227). It is
+**explicit-smoke-only and Native Core/checker bounded**: it adds fail-closed failure coverage for the
+lifecycle-handshake observation across three deterministic vectors — launch-failure (reuses the
+existing `helper-lifecycle-handshake` case with a non-existent helper path), and two new cases
+`helper-lifecycle-handshake-nonzero-exit` and `helper-lifecycle-handshake-timeout` that reuse existing
+synthetic helper failure modes (`--fail-after`, `--interval-ms`). Each vector routes through the
+**unchanged** `handleLifecycleHandshake` and fails closed: non-zero exit, **zero public stdout lines**
+(no MotionFrame, no fallback frame), public stderr limited to the expected safe parent
+`[helper-runtime-smoke] ` diagnostic, and helper stdout/stderr kept private to Native Core. A
+parametrized `assertLifecycleHandshakeFailureGuard()` was appended to
+`tools/check-helper-runtime-integration.mjs`. It changes no default runtime behavior, adds no fallback
+MotionFrame emission, does not change `synthetic_helper_main.cpp`, and makes **no new production
+runtime guarantee**. Gates 1 through 7, the foundation-boundary consolidation, and the PR #227
+handshake success guard remain closed and intact. Production and default runtime behavior remain
+**unapproved**. The missing-ready, missing-stopped, and malformed lifecycle failure vectors were
+deferred (they need new synthetic helper modes / handler-semantics changes). The recommended next
+direction after this closeout is to return to an owner decision — either draft the next narrow
+foundation implementation gate (optionally including the deferred vectors) or pause H2 for another LVK
+area — before any further implementation. The preceding H2 helper lifecycle handshake success closeout
+remains closed:
 [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md).
-This is the **first implementation PR** after the post Foundation Gate 1 boundary assertion owner
-decision (Option B) and the H2 Foundation Implementation Gate 2 decision, ending the gate-only phase.
-It is **explicit-smoke-only and Native Core/checker bounded**: it adds one new
-`helper-lifecycle-handshake` case to the explicit `--helper-runtime-smoke` /
-`--helper-runtime-smoke-case` path that launches the existing synthetic helper, observes the helper
-lifecycle/ready boundary from privately captured helper stdout, emits **zero public stdout lines** (no
-MotionFrame, no fallback frame), keeps helper stdout/stderr private to Native Core, writes only a safe
-parent `[helper-runtime-smoke] ` stderr diagnostic, and exits cleanly. A matching
-`assertLifecycleHandshakeGuard()` was appended to `tools/check-helper-runtime-integration.mjs`. It
-changes no default runtime behavior when `--helper-runtime-smoke` is omitted, adds no fallback
-MotionFrame emission, and makes **no new production runtime guarantee**. Production and default
-runtime behavior remain **unapproved**. The recommended next direction after this closeout is to
-return to an owner decision — either draft the next narrow foundation implementation gate or pause H2
-for another LVK area — before any further implementation. The preceding H2 Foundation Implementation
+The preceding H2 Foundation Implementation
 Gate 2 decision remains closed:
 [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md);
 it approved only the gate boundary, not implementation. The first foundation
@@ -515,6 +523,25 @@ H2 implementation is approved by this index itself.
     MotionFrame / Motion Protocol changes, Electron / Web Preview changes, dependencies, network
     behavior, camera behavior, readiness claims, and any production runtime behavior remain
     **unapproved**.
+77. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md)
+    — closeout for the next H2 implementation PR after PR #227: explicit-smoke-only, Native
+    Core/checker-bounded fail-closed failure guards for the `helper-lifecycle-handshake` observation
+    across three deterministic vectors. launch-failure reuses the existing `helper-lifecycle-handshake`
+    case with a non-existent helper path; two new cases `helper-lifecycle-handshake-nonzero-exit` and
+    `helper-lifecycle-handshake-timeout` reuse existing synthetic helper failure modes (`--fail-after`,
+    `--interval-ms`) and route through the **unchanged** `handleLifecycleHandshake`. Each vector fails
+    closed: non-zero exit, **zero public stdout lines** (no MotionFrame, no fallback frame), public
+    stderr limited to the expected safe parent `[helper-runtime-smoke] ` diagnostic, helper
+    stdout/stderr private to Native Core; asserted by a parametrized
+    `assertLifecycleHandshakeFailureGuard()` in `tools/check-helper-runtime-integration.mjs`. No
+    `synthetic_helper_main.cpp` change, no default runtime change, no fallback MotionFrame emission.
+    Gates 1 through 7, the foundation-boundary consolidation, and the PR #227 handshake success guard
+    remain closed and intact. missing-ready / missing-stopped / malformed vectors are deferred (need
+    new synthetic helper modes / handler-semantics changes). Records implementation state only;
+    production H2 integration, default helper runtime wiring, production supervisor behavior,
+    diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
+    Protocol changes, Electron / Web Preview changes, dependencies, network behavior, camera behavior,
+    readiness claims, and any production runtime behavior remain **unapproved**.
 
 Background:
 
@@ -770,6 +797,24 @@ Background:
   emission, MotionFrame / Motion Protocol change, Electron / Web Preview change, dependency, network
   behavior, camera behavior, or readiness claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md).
+- The H2 helper lifecycle handshake failure guards slice is implemented as the next **implementation**
+  PR after PR #227: fail-closed failure coverage for the lifecycle-handshake observation across three
+  deterministic vectors. launch-failure reuses the existing `helper-lifecycle-handshake` case with a
+  non-existent helper path; two new cases `helper-lifecycle-handshake-nonzero-exit` and
+  `helper-lifecycle-handshake-timeout` reuse existing synthetic helper failure modes (`--fail-after`,
+  `--interval-ms`) and route through the **unchanged** `handleLifecycleHandshake`. Each vector exits
+  non-zero with **zero public stdout lines** (no MotionFrame, no fallback frame), public stderr limited
+  to the expected safe parent `[helper-runtime-smoke] ` diagnostic, and helper stdout/stderr kept
+  private to Native Core; asserted by a parametrized `assertLifecycleHandshakeFailureGuard()` in
+  `tools/check-helper-runtime-integration.mjs`. Native Core/checker bounded and explicit-smoke-only; no
+  `synthetic_helper_main.cpp` change; Gates 1 through 7, the foundation-boundary consolidation, and the
+  handshake success guard remain closed and intact; the default runtime is unchanged when
+  `--helper-runtime-smoke` is omitted. The missing-ready / missing-stopped / malformed vectors are
+  deferred (need new synthetic helper modes / handler-semantics changes). No production H2 integration,
+  default helper runtime wiring, production supervisor behavior, diagnostics-safety policy engine
+  behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron / Web Preview
+  change, dependency, network behavior, camera behavior, or readiness claim is added. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
