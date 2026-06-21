@@ -144,7 +144,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
-            "[--helper-runtime-smoke PATH] [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic]\n";
+            "[--helper-runtime-smoke PATH] [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -173,7 +173,7 @@ void printUsage(std::ostream &output) {
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
-  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case; supported values are normal, launch-failure, nonzero-exit, timeout, and unsafe-diagnostic. Defaults to normal.\n";
+  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, and helper-lifecycle-handshake. Defaults to normal.\n";
 }
 
 void handleStopSignal(int) {
@@ -500,10 +500,14 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       } else if (smokeCase == "unsafe-diagnostic") {
         options.helperRuntimeSmokeCase =
             lvk::tracker::HelperRuntimeSmokeCase::UnsafeDiagnostic;
+      } else if (smokeCase == "helper-lifecycle-handshake") {
+        options.helperRuntimeSmokeCase =
+            lvk::tracker::HelperRuntimeSmokeCase::HelperLifecycleHandshake;
       } else {
         std::cerr << "Unsupported --helper-runtime-smoke-case: " << smokeCase
                   << ". Supported values are normal, launch-failure, "
-                  << "nonzero-exit, timeout, and unsafe-diagnostic.\n";
+                  << "nonzero-exit, timeout, unsafe-diagnostic, and "
+                  << "helper-lifecycle-handshake.\n";
         printUsage(std::cerr);
         return false;
       }

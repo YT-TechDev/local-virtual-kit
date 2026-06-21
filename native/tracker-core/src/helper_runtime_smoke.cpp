@@ -229,6 +229,66 @@ int handleUnsafeDiagnostic(
   return 1;
 }
 
+// Smoke-only lifecycle/ready boundary observation for the HelperLifecycleHandshake
+// case. Confirms, from the PRIVATELY captured helper stdout only, that the helper
+// announced its "ready" lifecycle boundary and reached its clean "stopped" boundary
+// before exiting 0. Emits NOTHING to public stdout (no MotionFrame, and deliberately
+// no fallback frame), keeps the helper's stdout/stderr private to Native Core (never
+// forwarded or echoed), writes only safe "[helper-runtime-smoke] " parent
+// diagnostics, and returns 0 on a clean handshake (non-zero otherwise). This is
+// smoke-local lifecycle observation only, NOT a production handshake, control
+// channel, or supervisor. Kept file-local on purpose to mirror the equivalent local
+// checks in the other H2 smokes (no new shared module).
+int handleLifecycleHandshake(
+    const HelperProcessRunResult& helperRun,
+    std::ostream& diagnosticsOutput) {
+  if (!helperRun.launched) {
+    writeDiagnostic(diagnosticsOutput, "helper launch failed");
+    return 1;
+  }
+  if (helperRun.timedOut) {
+    writeDiagnostic(diagnosticsOutput, "helper timed out");
+    return 1;
+  }
+  if (helperRun.exitCode != 0) {
+    writeDiagnostic(diagnosticsOutput, "helper exited non-zero");
+    return 1;
+  }
+
+  // Observe the lifecycle boundary from the private captured helper stdout. None of
+  // these lines are forwarded to public stdout.
+  bool sawReady = false;
+  bool sawStopped = false;
+  std::istringstream lines(helperRun.stdoutText);
+  std::string line;
+  while (std::getline(lines, line)) {
+    if (containsToken(line, "\"type\":\"ready\"") &&
+        containsToken(line, "\"schemaVersion\":1") &&
+        containsToken(line, "\"source\":\"synthetic-helper\"")) {
+      sawReady = true;
+    } else if (
+        containsToken(line, "\"type\":\"stopped\"") &&
+        containsToken(line, "\"schemaVersion\":1")) {
+      sawStopped = true;
+    }
+  }
+
+  if (!sawReady) {
+    writeDiagnostic(diagnosticsOutput, "helper ready boundary missing");
+    return 1;
+  }
+  if (!sawStopped) {
+    writeDiagnostic(diagnosticsOutput, "helper stopped boundary missing");
+    return 1;
+  }
+
+  writeDiagnostic(
+      diagnosticsOutput,
+      "helper lifecycle handshake observed; helper streams kept private to "
+      "Native Core");
+  return 0;
+}
+
 int smokeTimeoutMs(HelperRuntimeSmokeCase smokeCase) {
   return smokeCase == HelperRuntimeSmokeCase::Timeout
              ? kHelperRuntimeSmokeHangTimeoutMs
@@ -248,6 +308,10 @@ int runHelperRuntimeSmoke(
 
   if (options.smokeCase == HelperRuntimeSmokeCase::UnsafeDiagnostic) {
     return handleUnsafeDiagnostic(helperRun, diagnosticsOutput);
+  }
+
+  if (options.smokeCase == HelperRuntimeSmokeCase::HelperLifecycleHandshake) {
+    return handleLifecycleHandshake(helperRun, diagnosticsOutput);
   }
 
   if (handleExpectedFailure(

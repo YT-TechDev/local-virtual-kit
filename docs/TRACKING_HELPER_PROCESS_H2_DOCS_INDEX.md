@@ -12,10 +12,25 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the H2 Foundation Implementation Gate 2 decision:
-[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md).
-This document approves only the next gate boundary, not implementation; implementation remains
-unapproved until a later implementation PR is reviewed against that gate. The first foundation
+The current active H2 boundary is the H2 helper lifecycle handshake smoke closeout:
+[`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md).
+This is the **first implementation PR** after the post Foundation Gate 1 boundary assertion owner
+decision (Option B) and the H2 Foundation Implementation Gate 2 decision, ending the gate-only phase.
+It is **explicit-smoke-only and Native Core/checker bounded**: it adds one new
+`helper-lifecycle-handshake` case to the explicit `--helper-runtime-smoke` /
+`--helper-runtime-smoke-case` path that launches the existing synthetic helper, observes the helper
+lifecycle/ready boundary from privately captured helper stdout, emits **zero public stdout lines** (no
+MotionFrame, no fallback frame), keeps helper stdout/stderr private to Native Core, writes only a safe
+parent `[helper-runtime-smoke] ` stderr diagnostic, and exits cleanly. A matching
+`assertLifecycleHandshakeGuard()` was appended to `tools/check-helper-runtime-integration.mjs`. It
+changes no default runtime behavior when `--helper-runtime-smoke` is omitted, adds no fallback
+MotionFrame emission, and makes **no new production runtime guarantee**. Production and default
+runtime behavior remain **unapproved**. The recommended next direction after this closeout is to
+return to an owner decision — either draft the next narrow foundation implementation gate or pause H2
+for another LVK area — before any further implementation. The preceding H2 Foundation Implementation
+Gate 2 decision remains closed:
+[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md);
+it approved only the gate boundary, not implementation. The first foundation
 implementation slice was **explicit-smoke-only and Native Core bounded**
 (checker-only): it adds one named foundation-boundary consolidation assertion to
 `tools/check-helper-runtime-integration.mjs` that re-exercises, by reusing the existing Gate 2 and
@@ -483,6 +498,23 @@ H2 implementation is approved by this index itself.
     diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
     Protocol changes, Electron / Web Preview changes, dependencies, network behavior, camera
     behavior, readiness claims, and implementation unapproved.
+76. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md)
+    — closeout for the first H2 **implementation** PR after the post Foundation Gate 1 boundary
+    assertion decision (Option B) and the Foundation Implementation Gate 2 decision. Adds one new
+    explicit-smoke-only `helper-lifecycle-handshake` case to `runHelperRuntimeSmoke` (selected via
+    `--helper-runtime-smoke` + `--helper-runtime-smoke-case helper-lifecycle-handshake`) that launches
+    the existing synthetic helper through the existing bounded supervisor, observes the helper
+    lifecycle/ready (`ready` → `stopped`) boundary from privately captured helper stdout, emits **zero
+    public stdout lines** (no MotionFrame, no fallback frame), keeps helper stdout/stderr private to
+    Native Core, writes only a safe parent `[helper-runtime-smoke] ` stderr diagnostic, and exits
+    cleanly; plus a matching `assertLifecycleHandshakeGuard()` in
+    `tools/check-helper-runtime-integration.mjs`. Native Core/checker bounded and explicit-smoke-only;
+    Gates 1 through 7 and the foundation-boundary consolidation remain closed and intact. Records
+    implementation state only; production H2 integration, default helper runtime wiring, production
+    supervisor behavior, diagnostics-safety policy engine behavior, fallback MotionFrame emission,
+    MotionFrame / Motion Protocol changes, Electron / Web Preview changes, dependencies, network
+    behavior, camera behavior, readiness claims, and any production runtime behavior remain
+    **unapproved**.
 
 Background:
 
@@ -722,6 +754,22 @@ Background:
   production supervisor behavior, production diagnostics-safety policy engine, or readiness claim is
   added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_FAILURE_STDOUT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_FAILURE_STDOUT_GUARD_CLOSEOUT.md).
+- The H2 helper lifecycle handshake smoke slice is implemented as the first **implementation** PR
+  after the gate-only phase: a new explicit-smoke-only `helper-lifecycle-handshake` case in
+  `runHelperRuntimeSmoke` (selected via `--helper-runtime-smoke` +
+  `--helper-runtime-smoke-case helper-lifecycle-handshake`) launches the existing synthetic helper
+  through the existing bounded supervisor, observes the helper lifecycle/ready (`ready` → `stopped`)
+  boundary from privately captured helper stdout, emits **zero public stdout lines** (no MotionFrame,
+  no fallback frame), keeps helper stdout/stderr private to Native Core, writes only a safe parent
+  `[helper-runtime-smoke] ` stderr diagnostic, and exits cleanly; a matching
+  `assertLifecycleHandshakeGuard()` in `tools/check-helper-runtime-integration.mjs` asserts that
+  public boundary. Native Core/checker bounded and explicit-smoke-only; Gates 1 through 7 and the
+  foundation-boundary consolidation remain closed and intact; the default runtime is unchanged when
+  `--helper-runtime-smoke` is omitted. No production H2 integration, default helper runtime wiring,
+  production supervisor behavior, diagnostics-safety policy engine behavior, fallback MotionFrame
+  emission, MotionFrame / Motion Protocol change, Electron / Web Preview change, dependency, network
+  behavior, camera behavior, or readiness claim is added. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema

@@ -17,6 +17,16 @@ enum class HelperRuntimeSmokeCase {
   // unsafe child stderr private, and return non-zero. This is smoke-local
   // detection only, NOT a production diagnostics-safety policy engine.
   UnsafeDiagnostic,
+  // Smoke-only: observe the synthetic helper lifecycle/ready boundary. The parent
+  // launches the synthetic helper through the existing bounded supervisor and
+  // confirms, from the PRIVATELY captured helper stdout only, that the helper
+  // announced its "ready" lifecycle boundary and reached its clean "stopped"
+  // boundary before exiting 0. It emits NOTHING to public stdout (no MotionFrame,
+  // and deliberately no fallback frame), keeps helper stdout/stderr private to
+  // Native Core, and returns 0 on a clean handshake (non-zero otherwise). This is
+  // smoke-local lifecycle observation only, NOT a production handshake, control
+  // channel, or supervisor.
+  HelperLifecycleHandshake,
 };
 
 struct HelperRuntimeSmokeOptions {
