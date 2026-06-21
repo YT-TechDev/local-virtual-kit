@@ -13,15 +13,15 @@ This index is the single place to find the H2 helper-process design documents, t
 order, the current design state, and the one authoritative next step.
 
 The current active H2 implementation boundary is the owner decision approving H2 Narrow
-Implementation Gate 4: Helper runtime failure-case public stdout guard coverage:
-[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md).
+Implementation Gate 5: Helper runtime normal-path public stream guard coverage:
+[`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md).
 The owner has approved only a future narrow Native Core synthetic/smoke implementation PR to add
-CI-safe public stdout guard evidence for existing explicit helper runtime failure cases. H2 Narrow
-Implementation Gate 1, H2 Narrow Implementation Gate 2, and H2 Narrow Implementation Gate 3 are
-complete and closed; Gate 4 does not reopen them. Production H2 integration, default helper
-runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production supervisor behavior,
-fallback MotionFrame behavior and emission,
-production diagnostics-safety policy behavior, MotionFrame schema changes, Motion Protocol changes,
+CI-safe public stream guard evidence for the existing explicit helper runtime normal/success path. H2
+Narrow Implementation Gate 1, H2 Narrow Implementation Gate 2, H2 Narrow Implementation Gate 3, and
+H2 Narrow Implementation Gate 4 are complete and closed; Gate 5 does not reopen them. Production H2
+integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production
+supervisor behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
+behavior, MotionFrame schema changes, Motion Protocol changes,
 Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame
 processing, hidden network calls, new network behavior, camera access changes, helper-owned camera
 capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child control
@@ -322,6 +322,16 @@ H2 implementation is approved by this index itself.
     Native Core. Records implementation state only; no C++ runtime change, no new fallback MotionFrame
     emission, no default runtime wiring, production supervisor behavior, production diagnostics-safety
     policy engine, MotionFrame / Motion Protocol change, dependency, or readiness claim was added.
+61. [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md)
+    — owner decision approving H2 Narrow Implementation Gate 5: Helper runtime normal-path public
+    stream guard coverage; authorizes only a future narrow Native Core synthetic/smoke PR to add
+    CI-safe public stream guard evidence for the existing explicit `--helper-runtime-smoke`
+    normal/success path, while keeping production H2 integration, default helper runtime wiring,
+    production supervisor behavior, production diagnostics policy behavior, fallback MotionFrame
+    emission, MotionFrame / Motion Protocol changes, Electron / Web Preview changes, dependencies,
+    network behavior, camera access changes, frame / tensor IPC, real control-channel work, forced
+    termination, restart / backoff, backend / model / runtime selection, and readiness claims
+    unapproved.
 
 Background:
 
@@ -528,13 +538,13 @@ Background:
   engine, supervisor behavior, fallback MotionFrame emission, default runtime wiring, or readiness
   claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_UNSAFE_DIAGNOSTICS_PUBLIC_STDOUT_SMOKE_CLOSEOUT.md).
-- The active next owner-approved narrow implementation boundary is H2 Narrow Implementation Gate 4:
-  helper runtime failure-case public stdout guard coverage for existing explicit
-  `--helper-runtime-smoke` failure cases. It approves only a future Native Core synthetic/smoke PR and
-  does not approve production H2 integration, default helper runtime wiring, production supervisor
-  behavior, fallback MotionFrame emission, production diagnostics policy behavior, MotionFrame /
-  Motion Protocol changes, or readiness claims. See
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_4_DECISION.md).
+- The active next owner-approved narrow implementation boundary is H2 Narrow Implementation Gate 5:
+  helper runtime normal-path public stream guard coverage for the existing explicit
+  `--helper-runtime-smoke` normal/success path. It approves only a future Native Core
+  synthetic/smoke PR and does not approve production H2 integration, default helper runtime wiring,
+  production supervisor behavior, fallback MotionFrame emission, production diagnostics policy
+  behavior, MotionFrame / Motion Protocol changes, or readiness claims. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md).
 - The H2 Narrow Implementation Gate 4 slice is implemented at the synthetic/smoke (checker-only)
   level: `tools/check-helper-runtime-integration.mjs` now guards the existing explicit
   `--helper-runtime-smoke` failure cases (`launch-failure`, `nonzero-exit`, `timeout`), asserting each
@@ -674,10 +684,10 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
   The H2 implementation gate requirements document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
-  H2 Narrow Implementation Gate 1 and Gate 2 are complete and closed. The owner has now approved the
-  current next implementation slice:
-  **H2 Narrow Implementation Gate 3: Unsafe helper diagnostics fail-closed smoke coverage**. See
-  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_3_DECISION.md).
+  H2 Narrow Implementation Gate 1, Gate 2, Gate 3, and Gate 4 are complete and closed. The owner has
+  now approved the current next implementation slice:
+  **H2 Narrow Implementation Gate 5: Helper runtime normal-path public stream guard coverage**. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md).
   After this decision PR merges, the next implementation work should be a Claude Code implementation
   prompt for that narrow Native Core synthetic/smoke-only gate. Do not proceed to direct production
   H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
@@ -715,6 +725,9 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md)
   — fifth Option B planning document defining requirements for any future implementation gate while
   keeping implementation and production runtime behavior unapproved.
+- [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_5_DECISION.md)
+  — owner decision approving only H2 Narrow Implementation Gate 5: Helper runtime normal-path public
+  stream guard coverage for a future narrow implementation PR.
 - [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_1_DECISION.md)
   — owner decision approving only H2 Narrow Implementation Gate 1: Synthetic-only helper output
   safety hardening for a future narrow implementation PR.
