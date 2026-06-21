@@ -165,10 +165,14 @@ bool handleExpectedFailure(
 
 std::vector<std::string> buildHelperArguments(
     const HelperRuntimeSmokeOptions& options) {
-  if (options.smokeCase == HelperRuntimeSmokeCase::NonzeroExit) {
+  if (options.smokeCase == HelperRuntimeSmokeCase::NonzeroExit ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeNonzeroExit) {
     return {"--frames", std::to_string(options.frameCount), "--fail-after", "1"};
   }
-  if (options.smokeCase == HelperRuntimeSmokeCase::Timeout) {
+  if (options.smokeCase == HelperRuntimeSmokeCase::Timeout ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout) {
     return {"--frames", "5", "--interval-ms", "1000"};
   }
   if (options.smokeCase == HelperRuntimeSmokeCase::UnsafeDiagnostic) {
@@ -290,9 +294,11 @@ int handleLifecycleHandshake(
 }
 
 int smokeTimeoutMs(HelperRuntimeSmokeCase smokeCase) {
-  return smokeCase == HelperRuntimeSmokeCase::Timeout
-             ? kHelperRuntimeSmokeHangTimeoutMs
-             : kHelperRuntimeSmokeTimeoutMs;
+  const bool usesHangTimeout =
+      smokeCase == HelperRuntimeSmokeCase::Timeout ||
+      smokeCase == HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout;
+  return usesHangTimeout ? kHelperRuntimeSmokeHangTimeoutMs
+                         : kHelperRuntimeSmokeTimeoutMs;
 }
 
 }  // namespace
@@ -310,7 +316,11 @@ int runHelperRuntimeSmoke(
     return handleUnsafeDiagnostic(helperRun, diagnosticsOutput);
   }
 
-  if (options.smokeCase == HelperRuntimeSmokeCase::HelperLifecycleHandshake) {
+  if (options.smokeCase == HelperRuntimeSmokeCase::HelperLifecycleHandshake ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeNonzeroExit ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout) {
     return handleLifecycleHandshake(helperRun, diagnosticsOutput);
   }
 
