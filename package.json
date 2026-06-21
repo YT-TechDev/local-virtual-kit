@@ -10,7 +10,7 @@
     "dev:motion-bridge": "node tools/motion-ws-bridge.mjs",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm test:native-diagnostics-summarize && pnpm test:motion-validator-import && pnpm test:motion-ws-bridge && pnpm -r --if-present test",
+    "test": "pnpm test:native-diagnostics-summarize && pnpm test:motion-validator-import && pnpm test:motion-ws-bridge && pnpm test:electron-helper-spawn-diagnostic && pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -23,7 +23,8 @@
     "test:helper-result-mapping": "node tools/check-helper-result-mapping.mjs",
     "test:helper-process-supervision": "node tools/check-helper-process-supervision.mjs",
     "test:helper-runtime-integration": "node tools/check-helper-runtime-integration.mjs",
-    "test:helper-runtime-fallback": "node tools/check-helper-runtime-fallback.mjs"
+    "test:helper-runtime-fallback": "node tools/check-helper-runtime-fallback.mjs",
+    "test:electron-helper-spawn-diagnostic": "node tools/check-electron-helper-spawn-diagnostic.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"
