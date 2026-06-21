@@ -12,22 +12,20 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the Gate 7 closeout:
-[`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md).
-The post-Gate-6 owner decision selected Option B: approve drafting a future narrow implementation
-gate document for review. H2 Narrow Implementation Gates 1 through 6 remain closed and are not
-reopened. Gate 7 is now implemented at the synthetic/smoke checker level only for helper runtime
-normal-path zero-frame public stream guard coverage on the explicit
-`lvk-tracker-core --helper-runtime-smoke <helper> --frames 0` path; it does not approve production
-runtime behavior. H2 foundation implementation planning remains a future owner decision after Gate 7
-and is not approved by this PR. Production H2 integration, default helper runtime wiring, default
-`lvk-tracker-core` H2 runtime wiring, production supervisor behavior, fallback MotionFrame behavior
-and emission, production diagnostics-safety policy behavior, MotionFrame schema changes, Motion
-Protocol changes, Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload,
-external frame processing, hidden network calls, new network behavior, camera access changes,
-helper-owned camera capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real
-parent-to-child control channel, production forced termination, restart / backoff, backend / model /
-runtime selection, readiness claims, H2 foundation implementation planning approval, and H2
+The current active H2 boundary is the foundation implementation planning decision:
+[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_PLANNING_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_PLANNING_DECISION.md).
+H2 Narrow Implementation Gates 1 through 7 are closed at the synthetic/smoke checker level and are
+not reopened. Gate 7 remains implemented only for helper runtime normal-path zero-frame public stream
+guard coverage on the explicit `lvk-tracker-core --helper-runtime-smoke <helper> --frames 0` path; it
+does not approve production runtime behavior. The next active boundary is H2 foundation
+implementation planning, not direct implementation and not production H2 integration. Production H2
+integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring, production
+supervisor behavior, fallback MotionFrame behavior and emission, production diagnostics-safety policy
+behavior, MotionFrame schema changes, Motion Protocol changes, Electron / Web Preview changes,
+dependencies, telemetry, analytics, cloud upload, external frame processing, hidden network calls,
+new network behavior, camera access changes, helper-owned camera capture, raw frame / pixel / tensor
+IPC, high-rate raw frame transport, real parent-to-child control channel, production forced
+termination, restart / backoff, backend / model / runtime selection, readiness claims, and H2
 foundation implementation remain unapproved.
 Gate 7 added no production runtime behavior and no readiness claim.
 The earlier H2 point-in-time next-step notes have been reconciled. For historical design phase status,
@@ -399,6 +397,14 @@ H2 implementation is approved by this index itself.
     engine behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron /
     Web Preview change, dependency, network behavior, readiness claim, H2 foundation implementation
     planning approval, or H2 foundation implementation added.
+69. [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_PLANNING_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_PLANNING_DECISION.md)
+    — docs-only owner decision approving H2 foundation implementation planning after Gate 7, not
+    implementation; records that Gates 1 through 7 remain closed at the synthetic/smoke checker level
+    and that the next active boundary is drafting the first foundation implementation gate, with
+    production H2 integration, default runtime wiring, production supervisor behavior,
+    diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
+    Protocol changes, Electron / Web Preview changes, dependencies, network behavior, readiness
+    claims, and foundation implementation still unapproved.
 
 Background:
 
@@ -668,7 +674,9 @@ These boundaries are preserved across all H2 docs:
 
 ## What Remains Unapproved
 
-- H2 implementation.
+- Direct H2 implementation.
+- H2 foundation implementation before a separate owner-approved implementation gate is reviewed and
+  merged.
 - Production H2 integration.
 - Production-runtime / runtime-integration implementation beyond source-grounded docs-only planning.
 - Default `lvk-tracker-core` runtime wiring.
@@ -767,13 +775,13 @@ These boundaries are preserved across all H2 docs:
   [`docs/TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md`](TRACKING_HELPER_PROCESS_H2_DIAGNOSTICS_STDOUT_STDERR_SAFETY_PLANNING.md).
   The H2 implementation gate requirements document has now been added:
   [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md).
-  H2 Narrow Implementation Gate 6 is closed at the synthetic/smoke checker level. H2 Narrow
-  Implementation Gates 1 through 6 remain closed and are not reopened. The Gate 6 closeout is:
-  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_NORMAL_FRAME_COUNT_GUARD_CLOSEOUT.md).
-  The next active boundary is the post-Gate-6 owner decision boundary:
-  [`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_6_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_6_OWNER_DECISION.md).
-  Gate 6 remains bounded to helper runtime normal-path frame-count variation public stream guard
-  coverage, not production runtime behavior. Do not proceed to direct production
+  H2 Narrow Implementation Gates 1 through 7 are closed at the synthetic/smoke checker level and
+  are not reopened. The Gate 7 closeout is:
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md).
+  The next active boundary is H2 foundation implementation planning:
+  [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_PLANNING_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_PLANNING_DECISION.md).
+  This is planning for the first foundation implementation gate, not direct implementation. Do not
+  proceed to direct production
   H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
   production supervisor behavior, production diagnostics-safety policy behavior, fallback MotionFrame
   behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol changes,
