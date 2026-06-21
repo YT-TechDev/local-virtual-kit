@@ -229,6 +229,9 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
       {!isObsMode && (
         <aside
           className="preview-source-badge"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           aria-label="Preview source status"
         >
           <span className="preview-source-badge__label">
