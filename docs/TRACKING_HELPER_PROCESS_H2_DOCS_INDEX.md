@@ -12,16 +12,27 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the first H2 foundation implementation gate decision:
-[`docs/TRACKING_HELPER_PROCESS_H2_FIRST_FOUNDATION_IMPLEMENTATION_GATE_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FIRST_FOUNDATION_IMPLEMENTATION_GATE_DECISION.md).
+The current active H2 boundary is the H2 Foundation Gate 1 boundary assertion closeout:
+[`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md).
+This first foundation implementation slice is **explicit-smoke-only and Native Core bounded**
+(checker-only): it adds one named foundation-boundary consolidation assertion to
+`tools/check-helper-runtime-integration.mjs` that re-exercises, by reusing the existing Gate 2 and
+Gate 5/6/7 guard helpers, the default-runtime isolation fact and the explicit `--helper-runtime-smoke`
+normal-path public stream cleanliness fact. It is an honest consolidation of existing checker
+evidence and asserts **no new production runtime guarantee**; it changes no C++ source, no
+`main.cpp`, no default runtime behavior, and adds no new smoke case. Production and default runtime
+behavior remain **unapproved**.
 H2 Narrow Implementation Gates 1 through 7 are closed at the synthetic/smoke checker level and are
 not reopened. Gate 7 is implemented only for helper runtime normal-path zero-frame public stream
 guard coverage on the explicit `lvk-tracker-core --helper-runtime-smoke <helper> --frames 0` path;
 it does not approve production runtime behavior. Foundation Gate 1 produced a docs-only
-source-grounded inventory and runtime boundary map and is complete. The first foundation
-implementation gate decision selects a future Native Core-only, explicit-smoke-only foundation
-boundary assertion slice, but implementation remains unstarted and unapproved until a future
-implementation PR is reviewed and merged. Production H2 integration, default helper runtime wiring,
+source-grounded inventory and runtime boundary map and is complete, and the first foundation
+implementation gate decision authorized this explicit-smoke-only foundation boundary assertion
+slice, now closed out above. Any further foundation implementation beyond this consolidation
+remains unapproved until a future owner-approved implementation gate is reviewed and merged. The
+recommended next owner decision after this closeout is to either approve a separate owner-reviewed
+implementation gate for the next foundation slice or pause H2 and move to another LVK area;
+production runtime work stays unapproved meanwhile. Production H2 integration, default helper runtime wiring,
 default `lvk-tracker-core` H2 runtime wiring, production supervisor behavior, fallback MotionFrame
 behavior and emission, production diagnostics-safety policy behavior, MotionFrame schema changes,
 Motion Protocol changes, Electron / Web Preview changes, dependencies, telemetry, analytics, cloud
@@ -435,6 +446,21 @@ H2 implementation is approved by this index itself.
     behavior, diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame /
     Motion Protocol changes, Electron / Web Preview changes, dependencies, network behavior,
     readiness claims, and foundation implementation in this PR remain unapproved.
+73. [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_BOUNDARY_ASSERTION_CLOSEOUT.md)
+    — closeout for the first H2 foundation implementation slice (H2 Foundation Implementation Gate 1:
+    explicit-smoke-only foundation boundary assertion). Checker-only: adds one named
+    foundation-boundary consolidation assertion to `tools/check-helper-runtime-integration.mjs` that
+    re-exercises, by reusing the existing Gate 2 default-runtime isolation guard and the Gate 5/6/7
+    normal-path public stream guard, the default-runtime isolation fact and the explicit
+    `--helper-runtime-smoke` normal-path public stream cleanliness fact. The previously inline Gate 2
+    block was extracted into a reusable `assertDefaultRuntimeIsolationGuard()` with unchanged
+    behavior. Honest consolidation of existing checker evidence; asserts no new production runtime
+    guarantee, adds no new smoke case, no C++ change, no `main.cpp` change, and no default runtime
+    behavior change. Gates 1 through 7 remain closed and intact. Records implementation state only;
+    production H2 integration, default helper runtime wiring, production supervisor behavior,
+    diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
+    Protocol changes, Electron / Web Preview changes, dependencies, network behavior, camera access
+    changes, and readiness claims remain unapproved.
 
 Background:
 
