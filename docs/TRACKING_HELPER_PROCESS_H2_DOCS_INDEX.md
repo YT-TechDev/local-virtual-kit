@@ -806,22 +806,25 @@ These boundaries are preserved across all H2 docs:
   H2 Narrow Implementation Gates 1 through 7 are closed at the synthetic/smoke checker level
   and are not reopened. The Gate 7 closeout is:
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_ZERO_FRAME_GUARD_CLOSEOUT.md).
-  The current active boundary is H2 Foundation Gate 1:
-  [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_GATE_1_DECISION.md).
-  Foundation Gate 1 is docs-only and source-grounded; it requires a future inventory and runtime
-  boundary map to recommend the smallest possible future implementation slice, but implementation
-  remains unapproved. Do not proceed to direct production
-  H2 integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
-  production supervisor behavior, production diagnostics-safety policy behavior, fallback MotionFrame
-  behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol changes,
-  Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external frame
-  processing, hidden network calls, new network behavior, camera access changes, helper-owned camera
-  capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real parent-to-child
-  control channel, production forced termination, restart / backoff, backend / model / runtime
-  selection, local/manual validation claims, webcam / Electron / OBS readiness claims, or production
-  readiness claims without separate explicit approval.
-- No production H2 integration, no default `lvk-tracker-core` runtime wiring, and no real frame
-  access until separately scoped and approved. All safety boundaries remain preserved.
+  The current active boundary is the first H2 foundation implementation gate decision:
+  [`docs/TRACKING_HELPER_PROCESS_H2_FIRST_FOUNDATION_IMPLEMENTATION_GATE_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FIRST_FOUNDATION_IMPLEMENTATION_GATE_DECISION.md).
+  H2 Foundation Gate 1 inventory/map is complete. The selected future implementation slice is
+  Native Core-only and explicit-smoke-only, limited to a foundation boundary assertion through an
+  explicit `--helper-runtime-smoke` foundation boundary mode. Implementation remains unstarted and
+  unapproved until a future implementation PR is reviewed and merged. Do not proceed to production H2
+  integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
+  production supervisor behavior, production diagnostics-safety policy engine behavior, fallback
+  MotionFrame behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol
+  changes, Electron / Web Preview changes, dependencies, telemetry, analytics, cloud upload, external
+  frame processing, hidden network calls, new network behavior, camera access changes, helper-owned
+  camera capture, raw frame / pixel / tensor IPC, high-rate raw frame transport, real
+  parent-to-child control channel, production forced termination, restart / backoff, backend / model /
+  runtime selection, local/manual validation claims, webcam / Electron / OBS readiness claims,
+  production readiness claims, or foundation implementation beyond the future owner-approved
+  implementation PR.
+- No production H2 integration, no default `lvk-tracker-core` runtime wiring, no foundation
+  implementation beyond the future owner-approved implementation PR, and no real frame access until
+  separately scoped and approved. All safety boundaries remain preserved.
 
 ## Cross-References
 
