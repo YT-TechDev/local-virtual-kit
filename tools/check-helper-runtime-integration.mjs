@@ -7,7 +7,8 @@
 // + H2 Gate 7 helper runtime normal-path zero-frame public stream guard
 // + H2 helper lifecycle handshake explicit-smoke guard (zero public stdout)
 // + H2 helper lifecycle handshake failure guards (launch-failure, nonzero-exit,
-//   timeout: fail closed with zero public stdout, safe parent stderr only).
+//   timeout, missing-ready: fail closed with zero public stdout, safe parent
+//   stderr only).
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -1012,8 +1013,21 @@ assertLifecycleHandshakeFailureGuard({
   expectedDiagnostic: "helper timed out",
 });
 
+// missing-ready: the synthetic helper completes cleanly (exits 0, no timeout)
+// but never emits the "ready" lifecycle boundary. The parent observation must
+// fail closed: non-zero exit, empty public stdout (no MotionFrame, no fallback
+// frame), and only a safe "[helper-runtime-smoke] " failure diagnostic on public
+// stderr. Helper stdout/stderr stay private to Native Core. This is
+// explicit-smoke-only and adds no default runtime behavior.
+assertLifecycleHandshakeFailureGuard({
+  vectorLabel: "lifecycle-handshake missing-ready",
+  caseName: "helper-lifecycle-handshake-missing-ready",
+  helperArg: helperPath,
+  expectedDiagnostic: "helper ready boundary missing",
+});
+
 console.log(
-  "Lifecycle-handshake failure guards OK: launch-failure, nonzero-exit, and timeout each " +
-    "fail closed with non-zero exit, zero public stdout lines, safe parent-prefixed stderr " +
-    "only, and helper stdout/stderr kept private to Native Core.",
+  "Lifecycle-handshake failure guards OK: launch-failure, nonzero-exit, timeout, and " +
+    "missing-ready each fail closed with non-zero exit, zero public stdout lines, safe " +
+    "parent-prefixed stderr only, and helper stdout/stderr kept private to Native Core.",
 );

@@ -181,6 +181,10 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-unsafe-diagnostic"};
   }
+  if (options.smokeCase ==
+      HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingReady) {
+    return {"--frames", std::to_string(options.frameCount), "--skip-ready"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 
@@ -320,7 +324,9 @@ int runHelperRuntimeSmoke(
       options.smokeCase ==
           HelperRuntimeSmokeCase::HelperLifecycleHandshakeNonzeroExit ||
       options.smokeCase ==
-          HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout) {
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingReady) {
     return handleLifecycleHandshake(helperRun, diagnosticsOutput);
   }
 

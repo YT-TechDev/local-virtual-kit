@@ -47,6 +47,7 @@ struct HelperOptions {
   bool emitGracefulShutdown = false;
   bool emitTimeoutForcedShutdown = false;
   bool emitUnsafeDiagnostic = false;
+  bool skipReady = false;
 };
 
 bool parseIntInRange(
@@ -118,6 +119,12 @@ void printUsage(std::ostream &output) {
             "fail closed. The line is a benign synthetic marker only: it carries "
             "no raw data, paths, secrets, pixels, tensors, or model contents. The "
             "helper otherwise completes normally and is not a MotionFrame.\n";
+  output << "--skip-ready is a test-only mode that skips emitting the \"ready\" "
+            "lifecycle boundary line; the helper otherwise completes normally "
+            "(emits result frames, the \"stopped\" line, and exits 0). It is "
+            "smoke-local / test-only and models a missing-ready failure vector "
+            "so Native Core can confirm it fails closed when the ready boundary "
+            "is absent. It stays synthetic only and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -217,6 +224,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--emit-unsafe-diagnostic") {
       options.emitUnsafeDiagnostic = true;
+      continue;
+    }
+
+    if (argument == "--skip-ready") {
+      options.skipReady = true;
       continue;
     }
 
@@ -382,7 +394,15 @@ int main(int argc, char *argv[]) {
         std::chrono::milliseconds(options.delayReadyMs));
   }
 
-  writeReadyLine(std::cout);
+  // Test-only: skip the "ready" lifecycle boundary so Native Core can confirm it
+  // fails closed when the ready boundary is absent. The helper otherwise
+  // completes normally (emits result frames, the "stopped" line, and exits 0).
+  if (!options.skipReady) {
+    writeReadyLine(std::cout);
+  } else {
+    std::cerr << "[helper] startup: skipping ready line "
+                 "(reason=synthetic-skip-ready)\n";
+  }
 
   // Test-only: emit one synthetic helper-style line with an unknown type after
   // ready. The helper otherwise continues normally, modeling an unknown message
