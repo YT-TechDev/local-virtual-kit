@@ -20,9 +20,7 @@ const appRendererPath = join(
 );
 
 const fail = (message) => {
-  console.error(
-    `Electron lifecycle controls smoke check failed: ${message}`,
-  );
+  console.error(`Electron lifecycle controls smoke check failed: ${message}`);
   process.exit(1);
 };
 
