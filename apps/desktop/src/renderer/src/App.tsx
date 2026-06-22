@@ -773,15 +773,23 @@ function App(): React.JSX.Element {
             ) : null}
 
             {nativeRuntimeDiagnostics ? (
-              <div className="diagnostics-copy-row">
-                <button type="button" onClick={copyNativeRuntimeDiagnostics}>
-                  Copy diagnostics
-                </button>
-                {currentCopyDiagnosticsMessage ? (
-                  <span className="diagnostics-copy-feedback" role="status">
-                    {currentCopyDiagnosticsMessage}
-                  </span>
-                ) : null}
+              <div className="diagnostics-copy-section">
+                <div className="diagnostics-copy-row">
+                  <button type="button" onClick={copyNativeRuntimeDiagnostics}>
+                    Copy diagnostics
+                  </button>
+                  {currentCopyDiagnosticsMessage ? (
+                    <span className="diagnostics-copy-feedback" role="status">
+                      {currentCopyDiagnosticsMessage}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="diagnostics-preview" aria-labelledby="diagnostics-preview-label">
+                  <strong id="diagnostics-preview-label" className="status-detail-label">
+                    Diagnostics preview
+                  </strong>
+                  <pre>{nativeRuntimeDiagnostics}</pre>
+                </div>
               </div>
             ) : null}
 

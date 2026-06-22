@@ -245,12 +245,40 @@ dd {
   margin-top: 20px;
 }
 
+.diagnostics-copy-section {
+  margin-top: 14px;
+}
+
 .diagnostics-copy-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;
+}
+
+.diagnostics-preview {
+  margin-top: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.diagnostics-preview pre {
+  margin: 0;
+  color: #dbeafe;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Consolas,
+    Liberation Mono,
+    monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .diagnostics-copy-feedback {

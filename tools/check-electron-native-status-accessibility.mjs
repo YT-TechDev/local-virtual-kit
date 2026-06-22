@@ -80,6 +80,12 @@ requireMatch(
   /navigator\.clipboard\.writeText\(nativeRuntimeDiagnostics\)/u,
   "native runtime diagnostics copy must use the local browser clipboard API",
 );
+
+requireMatch(
+  source,
+  /<strong\s+id=['"]diagnostics-preview-label['"]\s+className=['"]status-detail-label['"]>\s*Diagnostics preview\s*<\/strong>[\s\S]*?<pre>\s*\{nativeRuntimeDiagnostics\}\s*<\/pre>/u,
+  "native runtime diagnostics preview must keep a visible label and show the exact copied diagnostics text",
+);
 requireMatch(
   source,
   /const\s+currentCopyDiagnosticsMessage\s*=\s*copyDiagnosticsMessage\?\.diagnostics\s*===\s*nativeRuntimeDiagnostics\s*\?\s*copyDiagnosticsMessage\.message\s*:\s*null/u,
@@ -91,7 +97,7 @@ console.log(
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
     "aria-labelledby linkage; pipelineError keeps alert semantics; " +
-    "copy diagnostics keeps a visible local clipboard control; " +
+    "copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets copy " +
     "feedback when diagnostics change.",
