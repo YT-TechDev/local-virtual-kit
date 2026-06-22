@@ -109,7 +109,8 @@ Manual Electron native runtime diagnostics UI checks:
 - After a manual refresh, verify refresh feedback appears.
 - After diagnostics change, verify prior refresh feedback clears or becomes stale-hidden.
 - Keep validation local-only: do not send diagnostics over the network or add network-dependent evidence.
-- Do not claim camera, hardware, or OBS behavior unless that behavior was actually exercised in the Electron runtime.
+- For renderer/settings-only validation of runtime settings failures, trigger settings load/save failure handling and verify a visible `Settings error` label appears, the settings/configuration error styling is visually distinct from native pipeline/runtime diagnostics, the message is announced with alert semantics, and optional detail text appears only when it differs from the summary.
+- Treat runtime settings error validation as local renderer/settings evidence only; do not claim native pipeline, camera, hardware, or OBS behavior unless that behavior was actually exercised in the Electron runtime.
 
 ---
 
