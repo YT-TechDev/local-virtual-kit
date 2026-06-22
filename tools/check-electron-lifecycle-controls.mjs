@@ -140,6 +140,48 @@ requireMatch(
   "stopFeedback must record nativeTrackerStatus from the stopped pipeline status",
 );
 
+requireMatch(
+  source,
+  /const\s+\[startFeedback,\s*setStartFeedback\]\s*=\s*useState<StartFeedback\s*\|\s*null>\(null\)/u,
+  "startFeedback state must be declared as useState<StartFeedback | null>(null)",
+);
+
+requireMatch(
+  source,
+  /const\s+currentStartFeedback\s*=\s*\n?\s*startFeedback\s*!==\s*null\s*&&\s*\n?\s*startFeedback\.nativeTrackerStatus\s*===\s*runtimeStatus\?\.nativeTrackerStatus\s*\n?\s*\?\s*startFeedback\.message\s*\n?\s*:\s*null/u,
+  "currentStartFeedback must null-check startFeedback and compare nativeTrackerStatus to runtimeStatus?.nativeTrackerStatus",
+);
+
+requireMatch(
+  source,
+  /\{!pipelineActionPending\s*&&\s*currentStartFeedback\s*\?\s*\(\s*<p\s+className=['"]runtime-message compact['"]\s+role=['"]status['"]>\s*\{currentStartFeedback\}/u,
+  'start feedback must render with className="runtime-message compact" and role="status" only when no action is pending',
+);
+
+requireMatch(
+  source,
+  /setStartFeedback\(\{\s*\n?\s*message:\s*['"]Native runtime started\.['"]/u,
+  'startNativePipeline must set startFeedback with "Native runtime started." on success',
+);
+
+requireMatch(
+  source,
+  /setStartFeedback\(\{\s*\n?\s*message:[\s\S]*?nativeTrackerStatus:\s*startedStatus\.nativeTrackerStatus/u,
+  "startFeedback in startNativePipeline must record nativeTrackerStatus from the started pipeline status",
+);
+
+requireMatch(
+  source,
+  /setStartFeedback\(\{\s*\n?\s*message:[\s\S]*?nativeTrackerStatus:\s*status\.nativeTrackerStatus/u,
+  "startFeedback in startNativePipelineAndOpenPreview must record nativeTrackerStatus from the started pipeline status",
+);
+
+requireMatch(
+  source,
+  /const\s+stopNativePipeline\s*=\s*async[\s\S]*?setStartFeedback\(null\)/u,
+  "stopNativePipeline must clear startFeedback",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -150,5 +192,8 @@ console.log(
     "pending message keeps role=status semantics; button row keeps aria-label; " +
     "stopFeedback state declared; currentStopFeedback staleness-guards on nativeTrackerStatus; " +
     "stop feedback renders with role=status only when no action is pending; " +
-    "start actions clear stopFeedback; stopNativePipeline sets stopFeedback with nativeTrackerStatus on success.",
+    "start actions clear stopFeedback; stopNativePipeline sets stopFeedback with nativeTrackerStatus on success; " +
+    "startFeedback state declared; currentStartFeedback staleness-guards on nativeTrackerStatus; " +
+    "start feedback renders with role=status only when no action is pending; " +
+    "stopNativePipeline clears startFeedback; startNativePipeline and startNativePipelineAndOpenPreview set startFeedback with nativeTrackerStatus on success.",
 );

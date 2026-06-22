@@ -32,6 +32,10 @@ type StopFeedback = {
   message: string
   nativeTrackerStatus: NativeTrackerStatus
 }
+type StartFeedback = {
+  message: string
+  nativeTrackerStatus: NativeTrackerStatus
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -229,6 +233,7 @@ function App(): React.JSX.Element {
     null
   )
   const [stopFeedback, setStopFeedback] = useState<StopFeedback | null>(null)
+  const [startFeedback, setStartFeedback] = useState<StartFeedback | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
   const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
@@ -376,16 +381,19 @@ function App(): React.JSX.Element {
     setPipelineActionPending('start')
 
     try {
-      setRuntimeStatus(
-        await desktopApi.startNativePipeline({
-          cameraSource: selectedCameraSource,
-          faceDetector: selectedFaceDetector,
-          cameraIndex: coerceCameraIndex(selectedCameraIndex),
-          cameraFps: coerceCameraFps(selectedCameraFps),
-          cameraWidth: coerceCameraWidth(selectedCameraWidth),
-          cameraHeight: coerceCameraHeight(selectedCameraHeight)
-        })
-      )
+      const startedStatus = await desktopApi.startNativePipeline({
+        cameraSource: selectedCameraSource,
+        faceDetector: selectedFaceDetector,
+        cameraIndex: coerceCameraIndex(selectedCameraIndex),
+        cameraFps: coerceCameraFps(selectedCameraFps),
+        cameraWidth: coerceCameraWidth(selectedCameraWidth),
+        cameraHeight: coerceCameraHeight(selectedCameraHeight)
+      })
+      setRuntimeStatus(startedStatus)
+      setStartFeedback({
+        message: 'Native runtime started.',
+        nativeTrackerStatus: startedStatus.nativeTrackerStatus
+      })
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to start native pipeline.')
     } finally {
@@ -413,6 +421,10 @@ function App(): React.JSX.Element {
         cameraHeight: coerceCameraHeight(selectedCameraHeight)
       })
       setRuntimeStatus(status)
+      setStartFeedback({
+        message: 'Native runtime started.',
+        nativeTrackerStatus: status.nativeTrackerStatus
+      })
 
       if (!isNativePipelineRunning(status)) {
         return
@@ -529,6 +541,7 @@ function App(): React.JSX.Element {
       return
     }
 
+    setStartFeedback(null)
     setStopFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('stop')
@@ -588,6 +601,11 @@ function App(): React.JSX.Element {
   const currentStopFeedback =
     stopFeedback !== null && stopFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
       ? stopFeedback.message
+      : null
+  const currentStartFeedback =
+    startFeedback !== null &&
+    startFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
+      ? startFeedback.message
       : null
 
   return (
@@ -877,6 +895,12 @@ function App(): React.JSX.Element {
             {!pipelineActionPending && currentStopFeedback ? (
               <p className="runtime-message compact" role="status">
                 {currentStopFeedback}
+              </p>
+            ) : null}
+
+            {!pipelineActionPending && currentStartFeedback ? (
+              <p className="runtime-message compact" role="status">
+                {currentStartFeedback}
               </p>
             ) : null}
 
