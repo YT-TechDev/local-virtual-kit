@@ -352,6 +352,18 @@ dd {
   background: rgba(146, 64, 14, 0.26);
 }
 
+.settings-save-feedback {
+  width: fit-content;
+  margin: 14px 0 0;
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.2);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .settings-error-message .settings-error-detail {
   display: block;
   margin-top: 4px;

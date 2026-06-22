@@ -24,6 +24,10 @@ type SettingsErrorMessage = {
   detail: string
   summary: string
 }
+type SettingsSaveFeedback = {
+  message: string
+  settingsKey: string
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -115,6 +119,9 @@ const normalizeRuntimeSettings = (settings: DesktopRuntimeSettings): DesktopRunt
   cameraWidth: coerceCameraWidth(settings.cameraWidth),
   cameraHeight: coerceCameraHeight(settings.cameraHeight)
 })
+
+const getRuntimeSettingsKey = (settings: DesktopRuntimeSettings): string =>
+  JSON.stringify(normalizeRuntimeSettings(settings))
 
 const faceDetectorLabels: Record<NativePipelineFaceDetector, string> = {
   noop: 'Noop face detector',
@@ -214,6 +221,9 @@ function App(): React.JSX.Element {
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [settingsError, setSettingsError] = useState<SettingsErrorMessage | null>(null)
+  const [settingsSaveFeedback, setSettingsSaveFeedback] = useState<SettingsSaveFeedback | null>(
+    null
+  )
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
   const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
@@ -282,6 +292,7 @@ function App(): React.JSX.Element {
         setSelectedCameraWidth(settings.cameraWidth)
         setSelectedCameraHeight(settings.cameraHeight)
         setSettingsError(null)
+        setSettingsSaveFeedback(null)
       } catch (error) {
         if (isSettingsLoadActive) {
           setSettingsError({
@@ -415,6 +426,8 @@ function App(): React.JSX.Element {
       return
     }
 
+    setSettingsSaveFeedback(null)
+
     try {
       const savedSettings = normalizeRuntimeSettings(await desktopApi.saveRuntimeSettings(settings))
 
@@ -425,7 +438,12 @@ function App(): React.JSX.Element {
       setSelectedCameraWidth(savedSettings.cameraWidth)
       setSelectedCameraHeight(savedSettings.cameraHeight)
       setSettingsError(null)
+      setSettingsSaveFeedback({
+        message: 'Settings saved.',
+        settingsKey: getRuntimeSettingsKey(savedSettings)
+      })
     } catch (error) {
+      setSettingsSaveFeedback(null)
       setSettingsError({
         detail: error instanceof Error ? error.message : 'Failed to save runtime settings.',
         summary: 'Failed to save runtime settings.'
@@ -548,6 +566,11 @@ function App(): React.JSX.Element {
   const currentCopyDiagnosticsMessage =
     copyDiagnosticsMessage?.diagnostics === nativeRuntimeDiagnostics
       ? copyDiagnosticsMessage.message
+      : null
+  const currentRuntimeSettingsKey = getRuntimeSettingsKey(getSelectedRuntimeSettings())
+  const currentSettingsSaveFeedback =
+    settingsSaveFeedback?.settingsKey === currentRuntimeSettingsKey
+      ? settingsSaveFeedback.message
       : null
 
   return (
@@ -801,6 +824,12 @@ function App(): React.JSX.Element {
                 <option value="opencv">OpenCV face detection</option>
               </select>
             </label>
+
+            {currentSettingsSaveFeedback ? (
+              <p className="settings-save-feedback" role="status">
+                {currentSettingsSaveFeedback}
+              </p>
+            ) : null}
 
             <div className="button-row" aria-label="Development native pipeline controls">
               <button
