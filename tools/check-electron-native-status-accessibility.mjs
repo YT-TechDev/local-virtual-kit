@@ -70,7 +70,6 @@ requireMatch(
   'pipelineError must keep role="alert" semantics',
 );
 
-
 requireMatch(
   source,
   /type\s+SettingsErrorMessage\s*=\s*\{[\s\S]*?detail:\s*string[\s\S]*?summary:\s*string[\s\S]*?\}/u,
