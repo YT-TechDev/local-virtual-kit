@@ -99,10 +99,15 @@ Manual Electron native runtime diagnostics UI checks:
 
 - When diagnostic status text exists, verify the `Latest status` label is visible.
 - When diagnostic error text exists, verify the `Latest error` label is visible.
-- When diagnostic text exists, verify the local-only `Copy diagnostics` button is visible.
+- When diagnostic text exists, verify the local-only `Copy diagnostics` button and `Diagnostics preview` label are visible.
+- Verify `Diagnostics preview` shows the exact local diagnostic text that `Copy diagnostics` copies.
 - Verify `Copy diagnostics` copies only the local diagnostic text and does not send diagnostics over the network.
 - After copying, verify copy feedback appears.
 - After diagnostics change, verify prior copy feedback clears or becomes stale-hidden.
+- When diagnostics controls are visible, verify `Refresh status` is visible and reuses the local runtime status refresh path without starting or stopping native processes.
+- After a manual refresh, verify refresh feedback appears.
+- After diagnostics change, verify prior refresh feedback clears or becomes stale-hidden.
+- Keep validation local-only: do not send diagnostics over the network or add network-dependent evidence.
 - Do not claim camera, hardware, or OBS behavior unless that behavior was actually exercised in the Electron runtime.
 
 ---
