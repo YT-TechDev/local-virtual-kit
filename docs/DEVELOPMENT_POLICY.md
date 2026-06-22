@@ -95,6 +95,16 @@ pnpm test:motion-ws-bridge
 
 Use targeted smoke checks when they match the change. If a script does not exist, say so clearly.
 
+Manual Electron native runtime diagnostics UI checks:
+
+- When diagnostic status text exists, verify the `Latest status` label is visible.
+- When diagnostic error text exists, verify the `Latest error` label is visible.
+- When diagnostic text exists, verify the local-only `Copy diagnostics` button is visible.
+- Verify `Copy diagnostics` copies only the local diagnostic text and does not send diagnostics over the network.
+- After copying, verify copy feedback appears.
+- After diagnostics change, verify prior copy feedback clears or becomes stale-hidden.
+- Do not claim camera, hardware, or OBS behavior unless that behavior was actually exercised in the Electron runtime.
+
 ---
 
 ## 5. Documentation Policy
