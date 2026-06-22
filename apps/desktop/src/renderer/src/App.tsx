@@ -11,6 +11,10 @@ import type {
 type RuntimeStatus = LvkRuntimeStatus
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
+type RuntimeStatusRefreshMessage = {
+  message: string
+  tone: 'success' | 'danger'
+}
 type CopyDiagnosticsMessage = {
   diagnostics: string
   message: string
@@ -205,22 +209,28 @@ function App(): React.JSX.Element {
   const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
+  const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
+  const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
+    useState<RuntimeStatusRefreshMessage | null>(null)
   const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] =
     useState<CopyDiagnosticsMessage | null>(null)
 
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
 
-  const loadRuntimeStatus = useCallback(async (): Promise<void> => {
+  const loadRuntimeStatus = useCallback(async (): Promise<boolean> => {
     if (!desktopApi) {
-      return
+      return false
     }
 
     if (isRuntimeStatusRequestInFlightRef.current) {
-      return
+      return false
     }
 
     isRuntimeStatusRequestInFlightRef.current = true
+    if (isMountedRef.current) {
+      setIsRuntimeStatusRefreshPending(true)
+    }
 
     try {
       const status = await desktopApi.getRuntimeStatus()
@@ -229,12 +239,17 @@ function App(): React.JSX.Element {
         setRuntimeStatus(status)
         setLoadError(null)
       }
+      return true
     } catch (error) {
       if (isMountedRef.current) {
         setLoadError(error instanceof Error ? error.message : 'Failed to load runtime status.')
       }
+      return false
     } finally {
       isRuntimeStatusRequestInFlightRef.current = false
+      if (isMountedRef.current) {
+        setIsRuntimeStatusRefreshPending(false)
+      }
     }
   }, [desktopApi])
 
@@ -298,7 +313,15 @@ function App(): React.JSX.Element {
   }, [desktopApi, loadRuntimeStatus])
 
   const refreshRuntimeStatus = async (): Promise<void> => {
-    await loadRuntimeStatus()
+    setRuntimeStatusRefreshMessage(null)
+
+    const didRefreshRuntimeStatus = await loadRuntimeStatus()
+
+    setRuntimeStatusRefreshMessage(
+      didRefreshRuntimeStatus
+        ? { message: 'Status refreshed.', tone: 'success' }
+        : { message: 'Failed to refresh status.', tone: 'danger' }
+    )
   }
 
   const openPreviewUrl = async (url: string): Promise<void> => {
@@ -761,9 +784,6 @@ function App(): React.JSX.Element {
               <button type="button" onClick={stopNativePipeline} disabled={!canStopNativePipeline}>
                 Stop native pipeline
               </button>
-              <button type="button" onClick={refreshRuntimeStatus}>
-                Refresh status
-              </button>
             </div>
 
             {pipelineActionPending ? (
@@ -775,6 +795,21 @@ function App(): React.JSX.Element {
             {nativeRuntimeDiagnostics ? (
               <div className="diagnostics-copy-section">
                 <div className="diagnostics-copy-row">
+                  <button
+                    type="button"
+                    onClick={refreshRuntimeStatus}
+                    disabled={isRuntimeStatusRefreshPending}
+                  >
+                    Refresh status
+                  </button>
+                  {runtimeStatusRefreshMessage ? (
+                    <span
+                      className={`status-refresh-feedback status-refresh-feedback--${runtimeStatusRefreshMessage.tone}`}
+                      role="status"
+                    >
+                      {runtimeStatusRefreshMessage.message}
+                    </span>
+                  ) : null}
                   <button type="button" onClick={copyNativeRuntimeDiagnostics}>
                     Copy diagnostics
                   </button>

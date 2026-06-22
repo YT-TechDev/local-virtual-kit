@@ -281,10 +281,19 @@ dd {
   overflow-wrap: anywhere;
 }
 
-.diagnostics-copy-feedback {
+.diagnostics-copy-feedback,
+.status-refresh-feedback {
   color: var(--ev-c-text-2);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+.status-refresh-feedback--success {
+  color: #bbf7d0;
+}
+
+.status-refresh-feedback--danger {
+  color: #fecaca;
 }
 
 .runtime-message {
