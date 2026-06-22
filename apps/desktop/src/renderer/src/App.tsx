@@ -135,6 +135,20 @@ const pipelineActionPendingMessages: Record<Exclude<PipelineActionPending, null>
 const isNativePipelineRunning = (status: RuntimeStatus): boolean =>
   status.nativeTrackerStatus === 'running' && status.motionBridgeStatus === 'running'
 
+const buildNativeRuntimeDiagnostics = (
+  status: RuntimeStatus,
+  pipelineError: string | null
+): string =>
+  [
+    `Native tracker status: ${statusLabels[status.nativeTrackerStatus]}`,
+    `Motion bridge status: ${bridgeLabels[status.motionBridgeStatus]}`,
+    status.lastMessage ? `Latest status: ${status.lastMessage}` : null,
+    status.lastError ? `Latest error: ${status.lastError}` : null,
+    pipelineError ? `Pipeline error: ${pipelineError}` : null
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n')
+
 const getStatusTone = (status: NativeTrackerStatus | MotionBridgeStatus): StatusTone => {
   if (status === 'running') {
     return 'success'
@@ -187,6 +201,7 @@ function App(): React.JSX.Element {
   const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
+  const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] = useState<string | null>(null)
 
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
@@ -418,6 +433,20 @@ function App(): React.JSX.Element {
     void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraHeight })
   }
 
+  const copyNativeRuntimeDiagnostics = async (): Promise<void> => {
+    if (!nativeRuntimeDiagnostics || !navigator.clipboard) {
+      setCopyDiagnosticsMessage('Failed to copy diagnostics.')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(nativeRuntimeDiagnostics)
+      setCopyDiagnosticsMessage('Copied diagnostics.')
+    } catch {
+      setCopyDiagnosticsMessage('Failed to copy diagnostics.')
+    }
+  }
+
   const stopNativePipeline = async (): Promise<void> => {
     if (!desktopApi || pipelineActionPending) {
       return
@@ -454,6 +483,9 @@ function App(): React.JSX.Element {
   const activeCameraFps = runtimeStatus?.pipelineCameraFps ?? DEFAULT_CAMERA_FPS
   const activeCameraWidth = runtimeStatus?.pipelineCameraWidth ?? DEFAULT_CAMERA_WIDTH
   const activeCameraHeight = runtimeStatus?.pipelineCameraHeight ?? DEFAULT_CAMERA_HEIGHT
+  const nativeRuntimeDiagnostics = runtimeStatus
+    ? buildNativeRuntimeDiagnostics(runtimeStatus, pipelineError)
+    : ''
 
   return (
     <main className="desktop-shell">
@@ -720,6 +752,19 @@ function App(): React.JSX.Element {
               <p className="runtime-message compact" role="status">
                 {pipelineActionPendingMessages[pipelineActionPending]}
               </p>
+            ) : null}
+
+            {nativeRuntimeDiagnostics ? (
+              <div className="diagnostics-copy-row">
+                <button type="button" onClick={copyNativeRuntimeDiagnostics}>
+                  Copy diagnostics
+                </button>
+                {copyDiagnosticsMessage ? (
+                  <span className="diagnostics-copy-feedback" role="status">
+                    {copyDiagnosticsMessage}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
 
             {runtimeStatus.lastError ? (
