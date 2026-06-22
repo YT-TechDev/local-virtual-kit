@@ -105,6 +105,7 @@ Manual Electron native runtime diagnostics UI checks:
 - After copying, verify copy feedback appears.
 - After diagnostics change, verify prior copy feedback clears or becomes stale-hidden.
 - When diagnostics controls are visible, verify `Refresh status` is visible and reuses the local runtime status refresh path without starting or stopping native processes.
+- After a successful local runtime status refresh, verify the renderer-local `Last refreshed` timestamp appears as manual validation evidence only, not as cloud or network evidence.
 - After a manual refresh, verify refresh feedback appears.
 - After diagnostics change, verify prior refresh feedback clears or becomes stale-hidden.
 - Keep validation local-only: do not send diagnostics over the network or add network-dependent evidence.
