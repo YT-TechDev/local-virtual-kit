@@ -58,10 +58,21 @@ requireMatch(
   /pipelineError\s*\?\s*\(\s*<p\s+className=['"]error-message compact['"]\s+role=['"]alert['"]>\s*\{pipelineError\}/u,
   'pipelineError must keep role="alert" semantics',
 );
+requireMatch(
+  source,
+  /<button\s+type=['"]button['"]\s+onClick=\{copyNativeRuntimeDiagnostics\}>\s*Copy diagnostics\s*<\/button>/u,
+  "native runtime diagnostics must keep the visible Copy diagnostics button",
+);
+requireMatch(
+  source,
+  /navigator\.clipboard\.writeText\(nativeRuntimeDiagnostics\)/u,
+  "native runtime diagnostics copy must use the local browser clipboard API",
+);
 
 console.log(
   "Electron native status accessibility smoke OK: lastError keeps a visible " +
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
-    "aria-labelledby linkage; pipelineError keeps alert semantics.",
+    "aria-labelledby linkage; pipelineError keeps alert semantics; " +
+    "copy diagnostics keeps a visible local clipboard control.",
 );

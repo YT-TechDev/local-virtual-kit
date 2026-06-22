@@ -245,6 +245,20 @@ dd {
   margin-top: 20px;
 }
 
+.diagnostics-copy-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.diagnostics-copy-feedback {
+  color: var(--ev-c-text-2);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .runtime-message {
   margin-top: 14px;
   border: 1px solid rgba(125, 211, 252, 0.2);
