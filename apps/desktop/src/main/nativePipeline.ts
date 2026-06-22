@@ -446,7 +446,7 @@ export class NativePipelineManager {
         this.status = {
           ...this.status,
           motionBridgeStatus: 'error',
-          lastError: `Motion bridge failed: ${message}`
+          lastError: `Motion bridge reported a server error: check bridge stderr output or run tools/motion-ws-bridge.mjs manually.`
         }
 
         void this.terminateProcess(this.trackerProcess)

@@ -93,8 +93,26 @@ requireMatch(
   "bridge exit diagnostic must include actionable guidance about bridge stderr or the paired native tracker",
 );
 
+// --- Motion bridge stderr server-error diagnostic ---
+
+if (!/kind === 'bridge' && message\.includes\('server error'\)/u.test(source)) {
+  fail("bridge stderr server-error detection not found in nativePipeline.ts");
+}
+
+requireMatch(
+  source,
+  /Motion bridge reported a server error/u,
+  "bridge stderr server-error diagnostic must use 'Motion bridge reported a server error' wording",
+);
+requireMatch(
+  source,
+  /bridge\s+stderr|motion-ws-bridge/iu,
+  "bridge stderr server-error diagnostic must include actionable guidance (bridge stderr or motion-ws-bridge)",
+);
+
 console.log(
   "Electron helper lifecycle exit diagnostic smoke OK: tracker and bridge " +
     "unexpected-exit diagnostics each include failure description, exit code, " +
-    "signal, and actionable guidance.",
+    "signal, and actionable guidance. Bridge stderr server-error diagnostic " +
+    "includes actionable guidance.",
 );
