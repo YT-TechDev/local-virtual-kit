@@ -72,6 +72,52 @@ requireMatch(
 
 requireMatch(
   source,
+  /type\s+SettingsSaveFeedback\s*=\s*\{[\s\S]*?message:\s*string[\s\S]*?settingsKey:\s*string[\s\S]*?\}/u,
+  "SettingsSaveFeedback must keep message and settingsKey fields",
+);
+requireMatch(
+  source,
+  /const\s+getRuntimeSettingsKey\s*=\s*\(settings:\s*DesktopRuntimeSettings\):\s*string\s*=>\s*\n\s*JSON\.stringify\(normalizeRuntimeSettings\(settings\)\)/u,
+  "getRuntimeSettingsKey must derive a stable key from JSON.stringify(normalizeRuntimeSettings(settings))",
+);
+requireMatch(
+  source,
+  /const\s+\[settingsSaveFeedback,\s*setSettingsSaveFeedback\]\s*=\s*useState<SettingsSaveFeedback\s*\|\s*null>\(\s*\n\s*null\s*\n\s*\)/u,
+  "settingsSaveFeedback state must keep the SettingsSaveFeedback | null type",
+);
+requireMatch(
+  source,
+  /const\s+saveRuntimeSettings\s*=\s*async\s*\(settings:\s*DesktopRuntimeSettings\):\s*Promise<void>\s*=>\s*\{[\s\S]*?if\s*\(!desktopApi\)\s*\{[\s\S]*?return[\s\S]*?\}[\s\S]*?setSettingsSaveFeedback\(null\)[\s\S]*?try\s*\{/u,
+  "runtime settings save start must clear settingsSaveFeedback before saving",
+);
+requireMatch(
+  source,
+  /setSettingsSaveFeedback\(\{[\s\S]*?message:\s*['"]Settings saved\.['"][\s\S]*?settingsKey:\s*getRuntimeSettingsKey\(savedSettings\)[\s\S]*?\}\)/u,
+  "successful runtime settings saves must show Settings saved. and store getRuntimeSettingsKey(savedSettings)",
+);
+requireMatch(
+  source,
+  /\}\s*catch\s*\(error\)\s*\{\s*\n\s*setSettingsSaveFeedback\(null\)[\s\S]*?setSettingsError\(\{[\s\S]*?summary:\s*['"]Failed to save runtime settings\.['"]/u,
+  "runtime settings save failures must clear settingsSaveFeedback and preserve settingsError behavior",
+);
+requireMatch(
+  source,
+  /const\s+currentSettingsSaveFeedback\s*=\s*\n\s*settingsSaveFeedback\?\.settingsKey\s*===\s*currentRuntimeSettingsKey\s*\n\s*\?\s*settingsSaveFeedback\.message\s*\n\s*:\s*null/u,
+  "currentSettingsSaveFeedback must render only when the saved settings key matches the current runtime settings key",
+);
+requireMatch(
+  source,
+  /currentSettingsSaveFeedback\s*\?\s*\(\s*\n\s*<p\s+className=['"]settings-save-feedback['"]\s+role=['"]status['"]>\s*\n\s*\{currentSettingsSaveFeedback\}/u,
+  'runtime settings save success feedback must render with className="settings-save-feedback" and role="status"',
+);
+requireMatch(
+  styles,
+  /\.settings-save-feedback\s*\{/u,
+  "settings save feedback styles must keep the .settings-save-feedback hook",
+);
+
+requireMatch(
+  source,
   /type\s+SettingsErrorMessage\s*=\s*\{[\s\S]*?detail:\s*string[\s\S]*?summary:\s*string[\s\S]*?\}/u,
   "SettingsErrorMessage must keep structured summary and detail fields",
 );
@@ -180,7 +226,7 @@ console.log(
   "Electron native status accessibility smoke OK: lastError keeps a visible " +
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
-    "aria-labelledby linkage; pipelineError keeps alert semantics; settingsError keeps structured summary/detail data, load/save summaries, a visible Settings error label, alert semantics, aria-labelledby linkage, and settings-specific CSS hooks; " +
+    "aria-labelledby linkage; pipelineError keeps alert semantics; settingsError keeps structured summary/detail data, load/save summaries, a visible Settings error label, alert semantics, aria-labelledby linkage, and settings-specific CSS hooks; settings save feedback keeps stable normalized settings keys, success status semantics, stale-hide behavior, failure clearing, and CSS hooks; " +
     "refresh status keeps a visible in-flight-disabled local status control; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
