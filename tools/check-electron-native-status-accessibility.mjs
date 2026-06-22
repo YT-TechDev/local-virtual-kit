@@ -72,6 +72,16 @@ requireMatch(
 
 requireMatch(
   source,
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?>\s*Refresh status\s*<\/button>/u,
+  "native runtime diagnostics must keep a visible Refresh status button that is disabled while a status request is in flight",
+);
+requireMatch(
+  source,
+  /const\s+refreshRuntimeStatus\s*=\s*async\s*\(\):\s*Promise<void>\s*=>\s*\{[\s\S]*?await\s+loadRuntimeStatus\(\)/u,
+  "Refresh status must reuse the existing local runtime status request path",
+);
+requireMatch(
+  source,
   /<button\s+type=['"]button['"]\s+onClick=\{copyNativeRuntimeDiagnostics\}>\s*Copy diagnostics\s*<\/button>/u,
   "native runtime diagnostics must keep the visible Copy diagnostics button",
 );
@@ -97,7 +107,7 @@ console.log(
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
     "aria-labelledby linkage; pipelineError keeps alert semantics; " +
-    "copy diagnostics keeps a visible local clipboard control and exact local preview; " +
+    "refresh status keeps a visible in-flight-disabled local status control; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets copy " +
     "feedback when diagnostics change.",
