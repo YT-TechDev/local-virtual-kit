@@ -28,6 +28,10 @@ type SettingsSaveFeedback = {
   message: string
   settingsKey: string
 }
+type StopFeedback = {
+  message: string
+  nativeTrackerStatus: NativeTrackerStatus
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -224,6 +228,7 @@ function App(): React.JSX.Element {
   const [settingsSaveFeedback, setSettingsSaveFeedback] = useState<SettingsSaveFeedback | null>(
     null
   )
+  const [stopFeedback, setStopFeedback] = useState<StopFeedback | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
   const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
@@ -366,6 +371,7 @@ function App(): React.JSX.Element {
       return
     }
 
+    setStopFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('start')
 
@@ -392,6 +398,7 @@ function App(): React.JSX.Element {
       return
     }
 
+    setStopFeedback(null)
     setOpenError(null)
     setPipelineError(null)
     setPipelineActionPending('start-and-open')
@@ -522,11 +529,17 @@ function App(): React.JSX.Element {
       return
     }
 
+    setStopFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('stop')
 
     try {
-      setRuntimeStatus(await desktopApi.stopNativePipeline())
+      const stoppedStatus = await desktopApi.stopNativePipeline()
+      setRuntimeStatus(stoppedStatus)
+      setStopFeedback({
+        message: 'Native runtime stopped.',
+        nativeTrackerStatus: stoppedStatus.nativeTrackerStatus
+      })
     } catch (error) {
       setPipelineError(error instanceof Error ? error.message : 'Failed to stop native pipeline.')
     } finally {
@@ -571,6 +584,10 @@ function App(): React.JSX.Element {
   const currentSettingsSaveFeedback =
     settingsSaveFeedback?.settingsKey === currentRuntimeSettingsKey
       ? settingsSaveFeedback.message
+      : null
+  const currentStopFeedback =
+    stopFeedback !== null && stopFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
+      ? stopFeedback.message
       : null
 
   return (
@@ -854,6 +871,12 @@ function App(): React.JSX.Element {
             {pipelineActionPending ? (
               <p className="runtime-message compact" role="status">
                 {pipelineActionPendingMessages[pipelineActionPending]}
+              </p>
+            ) : null}
+
+            {!pipelineActionPending && currentStopFeedback ? (
+              <p className="runtime-message compact" role="status">
+                {currentStopFeedback}
               </p>
             ) : null}
 
