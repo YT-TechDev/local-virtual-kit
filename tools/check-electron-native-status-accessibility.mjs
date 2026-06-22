@@ -58,6 +58,18 @@ requireMatch(
   /pipelineError\s*\?\s*\(\s*<p\s+className=['"]error-message compact['"]\s+role=['"]alert['"]>\s*\{pipelineError\}/u,
   'pipelineError must keep role="alert" semantics',
 );
+
+requireMatch(
+  source,
+  /const\s+buildNativeRuntimeDiagnostics\s*=\s*\([\s\S]*?`Native tracker status:\s*\$\{statusLabels\[status\.nativeTrackerStatus\]\}`[\s\S]*?`Motion bridge status:\s*\$\{bridgeLabels\[status\.motionBridgeStatus\]\}`[\s\S]*?status\.lastMessage\s*\?\s*`Latest status:\s*\$\{status\.lastMessage\}`\s*:\s*null[\s\S]*?status\.lastError\s*\?\s*`Latest error:\s*\$\{status\.lastError\}`\s*:\s*null[\s\S]*?pipelineError\s*\?\s*`Pipeline error:\s*\$\{pipelineError\}`\s*:\s*null[\s\S]*?\]\s*\.filter\(\(line\):\s*line\s+is\s+string\s*=>\s*Boolean\(line\)\)\s*\.join\(['"]\\n['"]\)/u,
+  "buildNativeRuntimeDiagnostics must keep expected local-only fields, filter optional lines, and join with newline separators",
+);
+requireMatch(
+  source,
+  /const\s+nativeRuntimeDiagnostics\s*=\s*runtimeStatus\s*\?\s*buildNativeRuntimeDiagnostics\(runtimeStatus,\s*pipelineError\)\s*:\s*['"]['"]/u,
+  "nativeRuntimeDiagnostics must be built from current runtime status and pipeline error",
+);
+
 requireMatch(
   source,
   /<button\s+type=['"]button['"]\s+onClick=\{copyNativeRuntimeDiagnostics\}>\s*Copy diagnostics\s*<\/button>/u,
@@ -74,5 +86,7 @@ console.log(
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
     "aria-labelledby linkage; pipelineError keeps alert semantics; " +
-    "copy diagnostics keeps a visible local clipboard control.",
+    "copy diagnostics keeps a visible local clipboard control; " +
+    "diagnostics content keeps expected fields, filters optional lines, " +
+    "joins with newlines, and writes nativeRuntimeDiagnostics.",
 );
