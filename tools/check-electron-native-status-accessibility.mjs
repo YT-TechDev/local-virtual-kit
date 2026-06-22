@@ -61,12 +61,12 @@ requireMatch(
 requireMatch(
   source,
   /<button\s+type=['"]button['"]\s+onClick=\{copyNativeRuntimeDiagnostics\}>\s*Copy diagnostics\s*<\/button>/u,
-  'native runtime diagnostics must keep the visible Copy diagnostics button',
+  "native runtime diagnostics must keep the visible Copy diagnostics button",
 );
 requireMatch(
   source,
   /navigator\.clipboard\.writeText\(nativeRuntimeDiagnostics\)/u,
-  'native runtime diagnostics copy must use the local browser clipboard API',
+  "native runtime diagnostics copy must use the local browser clipboard API",
 );
 
 console.log(
