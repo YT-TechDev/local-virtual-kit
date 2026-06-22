@@ -4,9 +4,10 @@
 // Protects the source-level diagnostics used when Electron cannot spawn the
 // native tracker helper. Dependency-free: Node built-ins only.
 import { readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const nativePipelinePath = join(
   repoRoot,
   "apps",
