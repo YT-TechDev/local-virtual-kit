@@ -111,6 +111,8 @@ Manual Electron native runtime diagnostics UI checks:
 - Keep validation local-only: do not send diagnostics over the network or add network-dependent evidence.
 - For renderer/settings-only validation of runtime settings failures, trigger settings load/save failure handling and verify a visible `Settings error` label appears, the settings/configuration error styling is visually distinct from native pipeline/runtime diagnostics, the message is announced with alert semantics, and optional detail text appears only when it differs from the summary.
 - Treat runtime settings error validation as local renderer/settings evidence only; do not claim native pipeline, camera, hardware, or OBS behavior unless that behavior was actually exercised in the Electron runtime.
+- For Electron native runtime lifecycle controls, manually verify local-only lifecycle expectations without duplicating checker-level implementation details: start controls are disabled while the native runtime is busy or a lifecycle action is pending; the stop control is enabled only when the native tracker or motion bridge is starting/running and no action is pending; starting or stopping clears stale pipeline errors before showing pending lifecycle status feedback; and the pending lifecycle message is visible and announced with status semantics.
+- Treat native runtime lifecycle controls validation as local Electron runtime evidence only. These checks do not imply camera, hardware, OBS Browser Source, Native Core tracking, or frame-processing behavior unless those paths were actually exercised.
 
 ---
 
