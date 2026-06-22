@@ -458,7 +458,7 @@ export class NativePipelineManager {
       if (kind === 'tracker' && this.trackerProcess === childProcess) {
         this.trackerProcess = null
         if (!this.isStopping) {
-          const trackerExitMessage = `Native tracker exited unexpectedly with code ${code ?? 'null'} and signal ${signal ?? 'none'}.`
+          const trackerExitMessage = `Native tracker stopped unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'none'}): check stderr output or rebuild and retry.`
           this.status = {
             ...this.status,
             nativeTrackerStatus: code === 0 ? 'exited' : 'error',
