@@ -480,7 +480,7 @@ export class NativePipelineManager {
             lastError:
               code === 0 || bridgeWasStopping
                 ? this.status.lastError
-                : `Motion bridge exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}.`
+                : `Motion bridge exited unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'none'}). Check bridge stderr and the paired native tracker.`
           }
 
           if (code !== 0 && !bridgeWasStopping && this.trackerProcess) {
