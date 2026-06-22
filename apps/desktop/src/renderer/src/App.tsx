@@ -20,6 +20,10 @@ type CopyDiagnosticsMessage = {
   diagnostics: string
   message: string
 }
+type SettingsErrorMessage = {
+  detail: string
+  summary: string
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -209,7 +213,7 @@ function App(): React.JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
-  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsError, setSettingsError] = useState<SettingsErrorMessage | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
   const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
@@ -280,9 +284,10 @@ function App(): React.JSX.Element {
         setSettingsError(null)
       } catch (error) {
         if (isSettingsLoadActive) {
-          setSettingsError(
-            error instanceof Error ? error.message : 'Failed to load runtime settings.'
-          )
+          setSettingsError({
+            detail: error instanceof Error ? error.message : 'Failed to load runtime settings.',
+            summary: 'Failed to load runtime settings.'
+          })
         }
       }
     }
@@ -421,7 +426,10 @@ function App(): React.JSX.Element {
       setSelectedCameraHeight(savedSettings.cameraHeight)
       setSettingsError(null)
     } catch (error) {
-      setSettingsError(error instanceof Error ? error.message : 'Failed to save runtime settings.')
+      setSettingsError({
+        detail: error instanceof Error ? error.message : 'Failed to save runtime settings.',
+        summary: 'Failed to save runtime settings.'
+      })
     }
   }
 
@@ -551,7 +559,21 @@ function App(): React.JSX.Element {
       </section>
 
       {loadError ? <p className="error-message">{loadError}</p> : null}
-      {settingsError ? <p className="error-message">{settingsError}</p> : null}
+      {settingsError ? (
+        <p
+          className="error-message settings-error-message"
+          role="alert"
+          aria-labelledby="runtime-settings-error-label"
+        >
+          <strong id="runtime-settings-error-label" className="status-detail-label">
+            Settings error
+          </strong>
+          <span>{settingsError.summary}</span>
+          {settingsError.detail === settingsError.summary ? null : (
+            <span className="settings-error-detail">{settingsError.detail}</span>
+          )}
+        </p>
+      ) : null}
 
       {!desktopApi ? (
         <section className="card fallback-card" aria-labelledby="desktop-api-unavailable-heading">

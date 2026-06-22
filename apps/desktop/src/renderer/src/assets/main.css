@@ -346,6 +346,19 @@ dd {
   margin-bottom: 0;
 }
 
+.settings-error-message {
+  border-color: rgba(251, 191, 36, 0.36);
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.26);
+}
+
+.settings-error-message .settings-error-detail {
+  display: block;
+  margin-top: 4px;
+  color: #fed7aa;
+  overflow-wrap: anywhere;
+}
+
 .status-detail-label {
   display: block;
   margin-bottom: 3px;
