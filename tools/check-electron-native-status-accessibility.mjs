@@ -80,6 +80,11 @@ requireMatch(
   /navigator\.clipboard\.writeText\(nativeRuntimeDiagnostics\)/u,
   "native runtime diagnostics copy must use the local browser clipboard API",
 );
+requireMatch(
+  source,
+  /const\s+currentCopyDiagnosticsMessage\s*=\s*copyDiagnosticsMessage\?\.diagnostics\s*===\s*nativeRuntimeDiagnostics\s*\?\s*copyDiagnosticsMessage\.message\s*:\s*null/u,
+  "copy diagnostics feedback must clear when nativeRuntimeDiagnostics changes",
+);
 
 console.log(
   "Electron native status accessibility smoke OK: lastError keeps a visible " +
@@ -88,5 +93,6 @@ console.log(
     "aria-labelledby linkage; pipelineError keeps alert semantics; " +
     "copy diagnostics keeps a visible local clipboard control; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
-    "joins with newlines, and writes nativeRuntimeDiagnostics.",
+    "joins with newlines, writes nativeRuntimeDiagnostics, and resets copy " +
+    "feedback when diagnostics change.",
 );
