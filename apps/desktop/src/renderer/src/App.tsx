@@ -11,6 +11,10 @@ import type {
 type RuntimeStatus = LvkRuntimeStatus
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
+type CopyDiagnosticsMessage = {
+  diagnostics: string
+  message: string
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -201,7 +205,8 @@ function App(): React.JSX.Element {
   const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
-  const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] = useState<string | null>(null)
+  const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] =
+    useState<CopyDiagnosticsMessage | null>(null)
 
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
@@ -435,15 +440,24 @@ function App(): React.JSX.Element {
 
   const copyNativeRuntimeDiagnostics = async (): Promise<void> => {
     if (!nativeRuntimeDiagnostics || !navigator.clipboard) {
-      setCopyDiagnosticsMessage('Failed to copy diagnostics.')
+      setCopyDiagnosticsMessage({
+        diagnostics: nativeRuntimeDiagnostics,
+        message: 'Failed to copy diagnostics.'
+      })
       return
     }
 
     try {
       await navigator.clipboard.writeText(nativeRuntimeDiagnostics)
-      setCopyDiagnosticsMessage('Copied diagnostics.')
+      setCopyDiagnosticsMessage({
+        diagnostics: nativeRuntimeDiagnostics,
+        message: 'Copied diagnostics.'
+      })
     } catch {
-      setCopyDiagnosticsMessage('Failed to copy diagnostics.')
+      setCopyDiagnosticsMessage({
+        diagnostics: nativeRuntimeDiagnostics,
+        message: 'Failed to copy diagnostics.'
+      })
     }
   }
 
@@ -486,6 +500,10 @@ function App(): React.JSX.Element {
   const nativeRuntimeDiagnostics = runtimeStatus
     ? buildNativeRuntimeDiagnostics(runtimeStatus, pipelineError)
     : ''
+  const currentCopyDiagnosticsMessage =
+    copyDiagnosticsMessage?.diagnostics === nativeRuntimeDiagnostics
+      ? copyDiagnosticsMessage.message
+      : null
 
   return (
     <main className="desktop-shell">
@@ -759,9 +777,9 @@ function App(): React.JSX.Element {
                 <button type="button" onClick={copyNativeRuntimeDiagnostics}>
                   Copy diagnostics
                 </button>
-                {copyDiagnosticsMessage ? (
+                {currentCopyDiagnosticsMessage ? (
                   <span className="diagnostics-copy-feedback" role="status">
-                    {copyDiagnosticsMessage}
+                    {currentCopyDiagnosticsMessage}
                   </span>
                 ) : null}
               </div>
