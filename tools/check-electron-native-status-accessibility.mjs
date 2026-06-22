@@ -46,17 +46,17 @@ requireMatch(
 requireMatch(
   source,
   /runtimeStatus\.lastError\s*\?\s*\(\s*<p\s+className=['"]error-message compact['"]\s+role=['"]alert['"]\s+aria-labelledby=['"]latest-error-label['"][\s\S]*?\{runtimeStatus\.lastError\}/u,
-  "runtimeStatus.lastError must keep role=\"alert\" and aria-labelledby=\"latest-error-label\" linkage",
+  'runtimeStatus.lastError must keep role="alert" and aria-labelledby="latest-error-label" linkage',
 );
 requireMatch(
   source,
   /runtimeStatus\.lastMessage\s*\?\s*\(\s*<p\s+className=['"]runtime-message['"]\s+role=['"]status['"]\s+aria-labelledby=['"]latest-status-label['"][\s\S]*?\{runtimeStatus\.lastMessage\}/u,
-  "runtimeStatus.lastMessage must keep role=\"status\" and aria-labelledby=\"latest-status-label\" linkage",
+  'runtimeStatus.lastMessage must keep role="status" and aria-labelledby="latest-status-label" linkage',
 );
 requireMatch(
   source,
   /pipelineError\s*\?\s*\(\s*<p\s+className=['"]error-message compact['"]\s+role=['"]alert['"]>\s*\{pipelineError\}/u,
-  "pipelineError must keep role=\"alert\" semantics",
+  'pipelineError must keep role="alert" semantics',
 );
 
 console.log(
