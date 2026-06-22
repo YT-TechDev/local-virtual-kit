@@ -145,6 +145,23 @@ function describeTrackerSpawnError(error: Error): string {
   return `Native tracker failed to start: ${error.message}`
 }
 
+function describeBridgeProcessError(error: Error): string {
+  const errno = error as NodeJS.ErrnoException
+  if (errno.code === 'ENOENT') {
+    return (
+      `Motion bridge failed to start (ENOENT): check that Node.js is accessible and the bridge script exists. ` +
+      `Detail: ${error.message}`
+    )
+  }
+  if (errno.code === 'EACCES') {
+    return (
+      `Motion bridge failed to start (EACCES): check Node.js executable permissions. ` +
+      `Detail: ${error.message}`
+    )
+  }
+  return `Motion bridge failed to start: check bridge stderr or run tools/motion-ws-bridge.mjs manually. Detail: ${error.message}`
+}
+
 function truncateStatusMessage(message: string): string {
   const normalized = message.trim().replace(/\s+/g, ' ')
   if (normalized.length <= MAX_STATUS_MESSAGE_LENGTH) {
@@ -449,7 +466,7 @@ export class NativePipelineManager {
         this.status = {
           ...this.status,
           motionBridgeStatus: 'error',
-          lastError: `Motion bridge failed: ${truncateStatusMessage(error.message)}`
+          lastError: truncateStatusMessage(describeBridgeProcessError(error))
         }
       }
     })
