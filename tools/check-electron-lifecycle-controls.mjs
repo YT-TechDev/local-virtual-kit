@@ -82,8 +82,8 @@ requireMatch(
 
 requireMatch(
   source,
-  /const\s+stopNativePipeline\s*=\s*async[\s\S]*?setPipelineError\(null\)\s*\n\s*setPipelineActionPending\('stop'\)/u,
-  "stopNativePipeline must clear pipelineError before setting pipelineActionPending",
+  /const\s+stopNativePipeline\s*=\s*async[\s\S]*?setStopFeedback\(null\)\s*\n\s*setPipelineError\(null\)\s*\n\s*setPipelineActionPending\('stop'\)/u,
+  "stopNativePipeline must clear stopFeedback and pipelineError before setting pipelineActionPending",
 );
 
 requireMatch(
@@ -98,6 +98,48 @@ requireMatch(
   'native pipeline button row must keep aria-label="Development native pipeline controls"',
 );
 
+requireMatch(
+  source,
+  /const\s+\[stopFeedback,\s*setStopFeedback\]\s*=\s*useState<StopFeedback\s*\|\s*null>\(null\)/u,
+  "stopFeedback state must be declared as useState<StopFeedback | null>(null)",
+);
+
+requireMatch(
+  source,
+  /const\s+currentStopFeedback\s*=\s*\n?\s*stopFeedback\s*!==\s*null\s*&&\s*\n?\s*stopFeedback\.nativeTrackerStatus\s*===\s*runtimeStatus\?\.nativeTrackerStatus\s*\n?\s*\?\s*stopFeedback\.message\s*\n?\s*:\s*null/u,
+  "currentStopFeedback must null-check stopFeedback and compare nativeTrackerStatus to runtimeStatus?.nativeTrackerStatus",
+);
+
+requireMatch(
+  source,
+  /\{!pipelineActionPending\s*&&\s*currentStopFeedback\s*\?\s*\(\s*<p\s+className=['"]runtime-message compact['"]\s+role=['"]status['"]>\s*\{currentStopFeedback\}/u,
+  'stop feedback must render with className="runtime-message compact" and role="status" only when no action is pending',
+);
+
+requireMatch(
+  source,
+  /const\s+startNativePipeline\s*=\s*async[\s\S]*?setStopFeedback\(null\)/u,
+  "startNativePipeline must clear stopFeedback",
+);
+
+requireMatch(
+  source,
+  /const\s+startNativePipelineAndOpenPreview\s*=\s*async[\s\S]*?setStopFeedback\(null\)/u,
+  "startNativePipelineAndOpenPreview must clear stopFeedback",
+);
+
+requireMatch(
+  source,
+  /setStopFeedback\(\{\s*\n?\s*message:\s*['"]Native runtime stopped\.['"]/u,
+  'stopNativePipeline must set stopFeedback with "Native runtime stopped." on success',
+);
+
+requireMatch(
+  source,
+  /setStopFeedback\(\{\s*\n?\s*message:[\s\S]*?nativeTrackerStatus:\s*stoppedStatus\.nativeTrackerStatus/u,
+  "stopFeedback must record nativeTrackerStatus from the stopped pipeline status",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -105,5 +147,8 @@ console.log(
     "canStopNativePipeline requires !isPipelineActionPending and active tracker or bridge; " +
     "start buttons bind disabled={!canStartNativePipeline}; stop button binds disabled={!canStopNativePipeline}; " +
     "startNativePipeline and stopNativePipeline clear pipelineError before setting pipelineActionPending; " +
-    "pending message keeps role=status semantics; button row keeps aria-label.",
+    "pending message keeps role=status semantics; button row keeps aria-label; " +
+    "stopFeedback state declared; currentStopFeedback staleness-guards on nativeTrackerStatus; " +
+    "stop feedback renders with role=status only when no action is pending; " +
+    "start actions clear stopFeedback; stopNativePipeline sets stopFeedback with nativeTrackerStatus on success.",
 );
