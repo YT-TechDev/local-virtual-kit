@@ -12,6 +12,7 @@ type RuntimeStatus = LvkRuntimeStatus
 type StatusTone = 'neutral' | 'warning' | 'success' | 'danger'
 type PipelineActionPending = null | 'start' | 'start-and-open' | 'stop'
 type RuntimeStatusRefreshMessage = {
+  diagnostics: string
   message: string
   tone: 'success' | 'danger'
 }
@@ -218,13 +219,13 @@ function App(): React.JSX.Element {
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
 
-  const loadRuntimeStatus = useCallback(async (): Promise<boolean> => {
+  const loadRuntimeStatus = useCallback(async (): Promise<RuntimeStatus | null> => {
     if (!desktopApi) {
-      return false
+      return null
     }
 
     if (isRuntimeStatusRequestInFlightRef.current) {
-      return false
+      return null
     }
 
     isRuntimeStatusRequestInFlightRef.current = true
@@ -239,12 +240,12 @@ function App(): React.JSX.Element {
         setRuntimeStatus(status)
         setLoadError(null)
       }
-      return true
+      return status
     } catch (error) {
       if (isMountedRef.current) {
         setLoadError(error instanceof Error ? error.message : 'Failed to load runtime status.')
       }
-      return false
+      return null
     } finally {
       isRuntimeStatusRequestInFlightRef.current = false
       if (isMountedRef.current) {
@@ -315,13 +316,17 @@ function App(): React.JSX.Element {
   const refreshRuntimeStatus = async (): Promise<void> => {
     setRuntimeStatusRefreshMessage(null)
 
-    const didRefreshRuntimeStatus = await loadRuntimeStatus()
+    const refreshedRuntimeStatus = await loadRuntimeStatus()
+    const didRefreshRuntimeStatus = refreshedRuntimeStatus !== null
+    const refreshedRuntimeDiagnostics = refreshedRuntimeStatus
+      ? buildNativeRuntimeDiagnostics(refreshedRuntimeStatus, pipelineError)
+      : nativeRuntimeDiagnostics
 
-    setRuntimeStatusRefreshMessage(
-      didRefreshRuntimeStatus
-        ? { message: 'Status refreshed.', tone: 'success' }
-        : { message: 'Failed to refresh status.', tone: 'danger' }
-    )
+    setRuntimeStatusRefreshMessage({
+      diagnostics: refreshedRuntimeDiagnostics,
+      message: didRefreshRuntimeStatus ? 'Status refreshed.' : 'Failed to refresh status.',
+      tone: didRefreshRuntimeStatus ? 'success' : 'danger'
+    })
   }
 
   const openPreviewUrl = async (url: string): Promise<void> => {
@@ -523,6 +528,10 @@ function App(): React.JSX.Element {
   const nativeRuntimeDiagnostics = runtimeStatus
     ? buildNativeRuntimeDiagnostics(runtimeStatus, pipelineError)
     : ''
+  const currentRuntimeStatusRefreshMessage =
+    runtimeStatusRefreshMessage?.diagnostics === nativeRuntimeDiagnostics
+      ? runtimeStatusRefreshMessage
+      : null
   const currentCopyDiagnosticsMessage =
     copyDiagnosticsMessage?.diagnostics === nativeRuntimeDiagnostics
       ? copyDiagnosticsMessage.message
@@ -802,12 +811,12 @@ function App(): React.JSX.Element {
                   >
                     Refresh status
                   </button>
-                  {runtimeStatusRefreshMessage ? (
+                  {currentRuntimeStatusRefreshMessage ? (
                     <span
-                      className={`status-refresh-feedback status-refresh-feedback--${runtimeStatusRefreshMessage.tone}`}
+                      className={`status-refresh-feedback status-refresh-feedback--${currentRuntimeStatusRefreshMessage.tone}`}
                       role="status"
                     >
-                      {runtimeStatusRefreshMessage.message}
+                      {currentRuntimeStatusRefreshMessage.message}
                     </span>
                   ) : null}
                   <button type="button" onClick={copyNativeRuntimeDiagnostics}>

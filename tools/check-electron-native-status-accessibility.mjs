@@ -96,6 +96,23 @@ requireMatch(
   /<strong\s+id=['"]diagnostics-preview-label['"]\s+className=['"]status-detail-label['"]>\s*Diagnostics preview\s*<\/strong>[\s\S]*?<pre>\s*\{nativeRuntimeDiagnostics\}\s*<\/pre>/u,
   "native runtime diagnostics preview must keep a visible label and show the exact copied diagnostics text",
 );
+
+requireMatch(
+  source,
+  /type\s+RuntimeStatusRefreshMessage\s*=\s*\{[\s\S]*?diagnostics:\s*string[\s\S]*?message:\s*string[\s\S]*?tone:\s*['"]success['"]\s*\|\s*['"]danger['"][\s\S]*?\}/u,
+  "runtime status refresh feedback must keep the diagnostics text it corresponds to",
+);
+requireMatch(
+  source,
+  /const\s+currentRuntimeStatusRefreshMessage\s*=\s*runtimeStatusRefreshMessage\?\.diagnostics\s*===\s*nativeRuntimeDiagnostics\s*\?\s*runtimeStatusRefreshMessage\s*:\s*null/u,
+  "runtime status refresh feedback must clear when nativeRuntimeDiagnostics changes",
+);
+requireMatch(
+  source,
+  /className=\{`status-refresh-feedback status-refresh-feedback--\$\{currentRuntimeStatusRefreshMessage\.tone\}`\}[\s\S]*?\{currentRuntimeStatusRefreshMessage\.message\}/u,
+  "runtime status refresh feedback must render only the current diagnostics-scoped message",
+);
+
 requireMatch(
   source,
   /const\s+currentCopyDiagnosticsMessage\s*=\s*copyDiagnosticsMessage\?\.diagnostics\s*===\s*nativeRuntimeDiagnostics\s*\?\s*copyDiagnosticsMessage\.message\s*:\s*null/u,
@@ -109,6 +126,6 @@ console.log(
     "aria-labelledby linkage; pipelineError keeps alert semantics; " +
     "refresh status keeps a visible in-flight-disabled local status control; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
-    "joins with newlines, writes nativeRuntimeDiagnostics, and resets copy " +
+    "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
     "feedback when diagnostics change.",
 );
