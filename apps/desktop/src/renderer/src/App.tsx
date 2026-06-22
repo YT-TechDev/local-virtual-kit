@@ -734,7 +734,11 @@ function App(): React.JSX.Element {
                 {runtimeStatus.lastError}
               </p>
             ) : null}
-            {pipelineError ? <p className="error-message compact">{pipelineError}</p> : null}
+            {pipelineError ? (
+              <p className="error-message compact" role="alert">
+                {pipelineError}
+              </p>
+            ) : null}
             {runtimeStatus.lastMessage ? (
               <p className="runtime-message" role="status" aria-labelledby="latest-status-label">
                 <strong id="latest-status-label" className="status-detail-label">
