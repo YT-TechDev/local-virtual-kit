@@ -187,6 +187,7 @@ function StatusPill({
 function App(): React.JSX.Element {
   const desktopApi = window.lvk
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
+  const [lastRuntimeStatusRefreshAt, setLastRuntimeStatusRefreshAt] = useState<Date | null>(null)
   const [selectedCameraSource, setSelectedCameraSource] = useState<NativePipelineCameraSource>(
     DEFAULT_RUNTIME_SETTINGS.cameraSource
   )
@@ -238,6 +239,7 @@ function App(): React.JSX.Element {
 
       if (isMountedRef.current) {
         setRuntimeStatus(status)
+        setLastRuntimeStatusRefreshAt(new Date())
         setLoadError(null)
       }
       return status
@@ -528,6 +530,9 @@ function App(): React.JSX.Element {
   const nativeRuntimeDiagnostics = runtimeStatus
     ? buildNativeRuntimeDiagnostics(runtimeStatus, pipelineError)
     : ''
+  const lastRuntimeStatusRefreshLabel = lastRuntimeStatusRefreshAt
+    ? lastRuntimeStatusRefreshAt.toLocaleTimeString()
+    : null
   const currentRuntimeStatusRefreshMessage =
     runtimeStatusRefreshMessage?.diagnostics === nativeRuntimeDiagnostics
       ? runtimeStatusRefreshMessage
@@ -828,6 +833,14 @@ function App(): React.JSX.Element {
                     </span>
                   ) : null}
                 </div>
+                {lastRuntimeStatusRefreshLabel ? (
+                  <p className="runtime-refresh-timestamp">
+                    <strong className="status-detail-label">Last refreshed</strong>
+                    <time dateTime={lastRuntimeStatusRefreshAt?.toISOString()}>
+                      {lastRuntimeStatusRefreshLabel}
+                    </time>
+                  </p>
+                ) : null}
                 <div className="diagnostics-preview" aria-labelledby="diagnostics-preview-label">
                   <strong id="diagnostics-preview-label" className="status-detail-label">
                     Diagnostics preview

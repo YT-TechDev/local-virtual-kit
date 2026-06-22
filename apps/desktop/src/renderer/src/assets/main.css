@@ -282,7 +282,8 @@ dd {
 }
 
 .diagnostics-copy-feedback,
-.status-refresh-feedback {
+.status-refresh-feedback,
+.runtime-refresh-timestamp {
   color: var(--ev-c-text-2);
   font-size: 0.9rem;
   font-weight: 700;
@@ -294,6 +295,15 @@ dd {
 
 .status-refresh-feedback--danger {
   color: #fecaca;
+}
+
+.runtime-refresh-timestamp {
+  margin: 10px 0 0;
+}
+
+.runtime-refresh-timestamp .status-detail-label {
+  display: inline;
+  margin: 0 6px 0 0;
 }
 
 .runtime-message {
