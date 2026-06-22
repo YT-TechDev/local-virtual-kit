@@ -132,16 +132,14 @@ function describeTrackerSpawnError(error: Error): string {
   const errno = error as NodeJS.ErrnoException
   if (errno.code === 'ENOENT') {
     return (
-      `Native tracker binary not accessible (ENOENT): the file may have been deleted, ` +
-      `built for a different platform, or depend on a missing shared library. ` +
-      `Rebuild with: cmake -S native/tracker-core -B native/tracker-core/build && ` +
-      `cmake --build native/tracker-core/build. Detail: ${error.message}`
+      `Missing/inaccessible helper binary (ENOENT): rebuild the native tracker helper ` +
+      `and verify the built binary exists. Detail: ${error.message}`
     )
   }
   if (errno.code === 'EACCES') {
     return (
-      `Native tracker binary not executable (EACCES): check file permissions on the ` +
-      `built binary. Detail: ${error.message}`
+      `Permission denied on helper binary (EACCES): check executable permissions on ` +
+      `the built binary. Detail: ${error.message}`
     )
   }
   return `Native tracker failed to start: ${error.message}`
