@@ -96,6 +96,16 @@ requireMatch(
   /<strong\s+id=['"]diagnostics-preview-label['"]\s+className=['"]status-detail-label['"]>\s*Diagnostics preview\s*<\/strong>[\s\S]*?<pre>\s*\{nativeRuntimeDiagnostics\}\s*<\/pre>/u,
   "native runtime diagnostics preview must keep a visible label and show the exact copied diagnostics text",
 );
+requireMatch(
+  source,
+  /const\s+lastRuntimeStatusRefreshLabel\s*=\s*lastRuntimeStatusRefreshAt[\s\S]*?lastRuntimeStatusRefreshAt\.toLocaleTimeString\(\)[\s\S]*?:\s*null/u,
+  "last refreshed label must be derived locally in the renderer with toLocaleTimeString",
+);
+requireMatch(
+  source,
+  /<strong\s+className=['"]status-detail-label['"]>\s*Last refreshed\s*<\/strong>[\s\S]*?<time\s+dateTime=\{lastRuntimeStatusRefreshAt\?\.toISOString\(\)\}>[\s\S]*?\{lastRuntimeStatusRefreshLabel\}[\s\S]*?<\/time>/u,
+  "native runtime diagnostics must show a compact Last refreshed timestamp when a local status refresh succeeds",
+);
 
 requireMatch(
   source,
@@ -127,5 +137,5 @@ console.log(
     "refresh status keeps a visible in-flight-disabled local status control; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
-    "feedback when diagnostics change.",
+    "feedback when diagnostics change; last refreshed uses a local renderer timestamp.",
 );
