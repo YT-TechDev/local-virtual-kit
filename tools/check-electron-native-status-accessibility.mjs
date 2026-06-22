@@ -17,6 +17,16 @@ const appRendererPath = join(
   "src",
   "App.tsx",
 );
+const appStylesPath = join(
+  repoRoot,
+  "apps",
+  "desktop",
+  "src",
+  "renderer",
+  "src",
+  "assets",
+  "main.css",
+);
 
 const fail = (message) => {
   console.error(
@@ -26,6 +36,7 @@ const fail = (message) => {
 };
 
 const source = readFileSync(appRendererPath, "utf8");
+const styles = readFileSync(appStylesPath, "utf8");
 
 const requireMatch = (text, pattern, message) => {
   if (!pattern.test(text)) {
@@ -57,6 +68,43 @@ requireMatch(
   source,
   /pipelineError\s*\?\s*\(\s*<p\s+className=['"]error-message compact['"]\s+role=['"]alert['"]>\s*\{pipelineError\}/u,
   'pipelineError must keep role="alert" semantics',
+);
+
+
+requireMatch(
+  source,
+  /type\s+SettingsErrorMessage\s*=\s*\{[\s\S]*?detail:\s*string[\s\S]*?summary:\s*string[\s\S]*?\}/u,
+  "SettingsErrorMessage must keep structured summary and detail fields",
+);
+requireMatch(
+  source,
+  /const\s+\[settingsError,\s*setSettingsError\]\s*=\s*useState<SettingsErrorMessage\s*\|\s*null>\(null\)/u,
+  "settingsError state must keep the SettingsErrorMessage | null type",
+);
+requireMatch(
+  source,
+  /setSettingsError\(\{[\s\S]*?detail:\s*error\s+instanceof\s+Error\s*\?\s*error\.message\s*:\s*['"]Failed to load runtime settings\.['"][\s\S]*?summary:\s*['"]Failed to load runtime settings\.['"][\s\S]*?\}\)/u,
+  "runtime settings load failures must keep the expected settingsError summary",
+);
+requireMatch(
+  source,
+  /setSettingsError\(\{[\s\S]*?detail:\s*error\s+instanceof\s+Error\s*\?\s*error\.message\s*:\s*['"]Failed to save runtime settings\.['"][\s\S]*?summary:\s*['"]Failed to save runtime settings\.['"][\s\S]*?\}\)/u,
+  "runtime settings save failures must keep the expected settingsError summary",
+);
+requireMatch(
+  source,
+  /settingsError\s*\?\s*\(\s*<p\s+className=['"]error-message settings-error-message['"]\s+role=['"]alert['"]\s+aria-labelledby=['"]runtime-settings-error-label['"][\s\S]*?<strong\s+id=['"]runtime-settings-error-label['"]\s+className=['"]status-detail-label['"]>\s*Settings error\s*<\/strong>[\s\S]*?<span>\{settingsError\.summary\}<\/span>[\s\S]*?<span\s+className=['"]settings-error-detail['"]>\{settingsError\.detail\}<\/span>/u,
+  'settingsError must keep className="error-message settings-error-message", role="alert", aria-labelledby linkage, visible Settings error label, summary text, and optional detail styling hook',
+);
+requireMatch(
+  styles,
+  /\.settings-error-message\s*\{/u,
+  "settings error styles must keep the .settings-error-message hook",
+);
+requireMatch(
+  styles,
+  /\.settings-error-message\s+\.settings-error-detail\s*\{/u,
+  "settings error detail styles must keep the .settings-error-detail hook",
 );
 
 requireMatch(
@@ -133,7 +181,7 @@ console.log(
   "Electron native status accessibility smoke OK: lastError keeps a visible " +
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
-    "aria-labelledby linkage; pipelineError keeps alert semantics; " +
+    "aria-labelledby linkage; pipelineError keeps alert semantics; settingsError keeps structured summary/detail data, load/save summaries, a visible Settings error label, alert semantics, aria-labelledby linkage, and settings-specific CSS hooks; " +
     "refresh status keeps a visible in-flight-disabled local status control; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
