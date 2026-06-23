@@ -5,6 +5,7 @@ import { DummyAvatar } from "./DummyAvatar";
 import {
   NATIVE_FRAME_STALE_TIMEOUT_MS,
   NATIVE_MOTION_WS_URL,
+  RECONNECT_DELAY_MS,
   useNativeMotionFrame,
   type NativeMotionConnectionStatus,
 } from "../hooks/useNativeMotionFrame";
@@ -53,6 +54,7 @@ const createInitialTrackingFallbackState = (): TrackingFallbackState => {
 const PREVIEW_LOCAL_PRIVACY_NOTE =
   "Local preview only · No camera frames leave this device.";
 const NATIVE_FRAME_STALE_TIMEOUT_SECONDS = NATIVE_FRAME_STALE_TIMEOUT_MS / 1000;
+const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
 
 function getAvatarPreviewLabel(source: PreviewSource) {
   return source === "native"
@@ -118,7 +120,7 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
     case "connecting":
       return "Opening the localhost MotionFrame bridge connection; the fallback avatar stays visible while waiting.";
     case "reconnecting":
-      return "The localhost bridge connection closed or is unavailable; retrying without changing transport behavior.";
+      return `The localhost bridge connection closed or is unavailable; retrying in about ${RECONNECT_DELAY_SECONDS.toFixed(1)}s without changing transport behavior.`;
     case "fallback":
       return `The bridge is still connected, but valid native MotionFrames have paused for about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s; showing the fallback avatar until frames resume.`;
     case "disabled":
