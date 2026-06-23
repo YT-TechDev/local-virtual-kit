@@ -265,7 +265,7 @@ const runSmokeCheck = async () => {
     sourceBadgeCssRuleBody,
     sourceBadgeCssSelector,
     "max-width",
-    "min(100%, 28rem)",
+    "min(28rem, calc(100vw - 2rem))",
   );
 
   const helperCssSelector = ".preview-source-badge__helper";
