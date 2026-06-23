@@ -230,6 +230,48 @@ requireMatch(
   "openPreviewUrl must clear previewOpenFeedback before setting it",
 );
 
+requireMatch(
+  source,
+  /const\s+\[isPreviewOpenPending,\s*setIsPreviewOpenPending\]\s*=\s*useState\(false\)/u,
+  "isPreviewOpenPending state must be declared as useState(false)",
+);
+
+requireMatch(
+  source,
+  /const\s+openPreviewUrl\s*=\s*async[\s\S]*?setIsPreviewOpenPending\(true\)\s*\n\s*\n?\s*try/u,
+  "openPreviewUrl must set isPreviewOpenPending(true) before the try block",
+);
+
+requireMatch(
+  source,
+  /const\s+openPreviewUrl\s*=\s*async[\s\S]*?finally\s*\{[\s\S]*?setIsPreviewOpenPending\(false\)/u,
+  "openPreviewUrl must clear isPreviewOpenPending(false) in finally",
+);
+
+requireMatch(
+  source,
+  /\{isPreviewOpenPending\s*\?\s*\(\s*<p\s+className=['"]runtime-message compact['"]\s+role=['"]status['"]>\s*Opening native preview\.\.\./u,
+  'preview open pending message must render with className="runtime-message compact" and role="status" while isPreviewOpenPending is true',
+);
+
+requireMatch(
+  source,
+  /<button[\s\S]*?onClick=\{.*?openPreviewUrl\(runtimeStatus\.previewDummyUrl\).*?\}[\s\S]*?disabled=\{isPreviewOpenPending\}/u,
+  "Dummy source Open button must bind disabled={isPreviewOpenPending}",
+);
+
+requireMatch(
+  source,
+  /<button[\s\S]*?onClick=\{.*?openPreviewUrl\(runtimeStatus\.previewNativeUrl\).*?\}[\s\S]*?disabled=\{isPreviewOpenPending\}/u,
+  "Native source Open button must bind disabled={isPreviewOpenPending}",
+);
+
+requireMatch(
+  source,
+  /<button[\s\S]*?onClick=\{.*?openPreviewUrl\(runtimeStatus\.previewObsNativeUrl\).*?\}[\s\S]*?disabled=\{isPreviewOpenPending\}/u,
+  "OBS native source Open button must bind disabled={isPreviewOpenPending}",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -248,5 +290,8 @@ console.log(
     "preview open feedback renders with role=status; preview open actions set previewOpenFeedback with nativeTrackerStatus on success; " +
     "startNativePipeline clears previewOpenFeedback before starting; " +
     "startNativePipelineAndOpenPreview and stopNativePipeline clear previewOpenFeedback; " +
-    "openPreviewUrl clears previewOpenFeedback before setting it.",
+    "openPreviewUrl clears previewOpenFeedback before setting it; " +
+    "isPreviewOpenPending state declared; openPreviewUrl sets isPreviewOpenPending before openExternalUrl and clears in finally; " +
+    "preview open pending message renders with role=status while pending; " +
+    "all three preview open buttons bind disabled={isPreviewOpenPending}.",
 );
