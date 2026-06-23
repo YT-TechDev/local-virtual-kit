@@ -733,7 +733,18 @@ function App(): React.JSX.Element {
                 Opening native preview...
               </p>
             ) : null}
-            {openError ? <p className="error-message compact">{openError}</p> : null}
+            {openError ? (
+              <p
+                className="error-message compact"
+                role="alert"
+                aria-labelledby="preview-open-error-label"
+              >
+                <strong id="preview-open-error-label" className="status-detail-label">
+                  Preview open error
+                </strong>
+                {openError}
+              </p>
+            ) : null}
             {currentPreviewOpenFeedback ? (
               <p className="runtime-message compact" role="status">
                 {currentPreviewOpenFeedback}

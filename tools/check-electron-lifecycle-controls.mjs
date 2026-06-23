@@ -272,6 +272,18 @@ requireMatch(
   "OBS native source Open button must bind disabled={isPreviewOpenPending}",
 );
 
+requireMatch(
+  source,
+  /\{openError\s*\?\s*\(\s*<p[\s\S]*?role=['"]alert['"][\s\S]*?aria-labelledby=['"]preview-open-error-label['"]/u,
+  'openError block must have role="alert" and aria-labelledby="preview-open-error-label"',
+);
+
+requireMatch(
+  source,
+  /<strong\s+id=['"]preview-open-error-label['"]\s+className=['"]status-detail-label['"]\s*>\s*Preview open error/u,
+  'openError block must include a visible "Preview open error" label with id="preview-open-error-label" and className="status-detail-label"',
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -293,5 +305,6 @@ console.log(
     "openPreviewUrl clears previewOpenFeedback before setting it; " +
     "isPreviewOpenPending state declared; openPreviewUrl sets isPreviewOpenPending before openExternalUrl and clears in finally; " +
     "preview open pending message renders with role=status while pending; " +
-    "all three preview open buttons bind disabled={isPreviewOpenPending}.",
+    "all three preview open buttons bind disabled={isPreviewOpenPending}; " +
+    "openError block has role=alert, aria-labelledby=preview-open-error-label, and visible Preview open error label.",
 );
