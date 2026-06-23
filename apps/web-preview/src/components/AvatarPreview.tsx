@@ -55,6 +55,8 @@ const PREVIEW_LOCAL_PRIVACY_NOTE =
   "Local preview only · No camera frames leave this device.";
 const NATIVE_FRAME_STALE_TIMEOUT_SECONDS = NATIVE_FRAME_STALE_TIMEOUT_MS / 1000;
 const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
+const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
+const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 
 function getAvatarPreviewLabel(source: PreviewSource) {
   return source === "native"
@@ -230,6 +232,25 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
   const badgeIndicatorVariant = getBadgeIndicatorVariant(source, nativeStatus);
   const shellClassName = `preview-shell preview-shell--${mode}`;
   const panelClassName = `preview-panel preview-panel--${mode}`;
+  const [endpointCopyFeedback, setEndpointCopyFeedback] = useState<
+    string | null
+  >(null);
+
+  const handleCopyEndpoint = () => {
+    if (navigator.clipboard === undefined) {
+      setEndpointCopyFeedback(ENDPOINT_COPY_FAILURE_TEXT);
+      return;
+    }
+
+    navigator.clipboard
+      .writeText(NATIVE_MOTION_WS_URL)
+      .then(() => {
+        setEndpointCopyFeedback(ENDPOINT_COPY_SUCCESS_TEXT);
+      })
+      .catch(() => {
+        setEndpointCopyFeedback(ENDPOINT_COPY_FAILURE_TEXT);
+      });
+  };
 
   return (
     <main className={shellClassName}>
@@ -256,8 +277,22 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
             </span>
           )}
           {sourceBadgeContent.endpointNote !== null && (
-            <span className="preview-source-badge__endpoint">
-              {sourceBadgeContent.endpointNote}
+            <span className="preview-source-badge__endpoint-row">
+              <span className="preview-source-badge__endpoint">
+                {sourceBadgeContent.endpointNote}
+              </span>
+              <button
+                className="preview-source-badge__copy-button"
+                type="button"
+                onClick={handleCopyEndpoint}
+              >
+                Copy endpoint
+              </button>
+              {endpointCopyFeedback !== null && (
+                <span className="preview-source-badge__copy-feedback">
+                  {endpointCopyFeedback}
+                </span>
+              )}
             </span>
           )}
           <span className="preview-source-badge__note">
