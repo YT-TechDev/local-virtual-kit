@@ -20,6 +20,8 @@ const NATIVE_MOTION_FRAME_HOOK_PATH = fileURLToPath(
 const NATIVE_MOTION_ENDPOINT = "ws://127.0.0.1:45731/motion";
 const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
 const RECONNECT_DELAY_MS = 1000;
+const PREVIEW_LOCAL_PRIVACY_NOTE =
+  "Local preview only · No camera frames leave this device.";
 
 const fail = (message) => {
   throw new Error(
@@ -235,6 +237,14 @@ const runSmokeCheck = async () => {
     fail("native source badge endpoint note must be visible in badge markup");
   }
 
+  if (!source.includes(PREVIEW_LOCAL_PRIVACY_NOTE)) {
+    fail("AvatarPreview.tsx must render the local privacy note text");
+  }
+
+  if (!source.includes('className="preview-source-badge__note"')) {
+    fail("local privacy note must use preview-source-badge__note markup");
+  }
+
   const endpointCssSelector = ".preview-source-badge__endpoint";
   const endpointCssRuleBody = getCssRuleBody(appCssSource, endpointCssSelector);
 
@@ -259,6 +269,29 @@ const runSmokeCheck = async () => {
     endpointCssSelector,
     "overflow-wrap",
     "anywhere",
+  );
+
+  const privacyNoteCssSelector = ".preview-source-badge__note";
+  const privacyNoteCssRuleBody = getCssRuleBody(
+    appCssSource,
+    privacyNoteCssSelector,
+  );
+
+  if (privacyNoteCssRuleBody === null) {
+    fail("preview-source-badge__note must have dedicated CSS styling");
+  }
+
+  assertCssDeclaration(
+    privacyNoteCssRuleBody,
+    privacyNoteCssSelector,
+    "color",
+    "#94a3b8",
+  );
+  assertCssDeclaration(
+    privacyNoteCssRuleBody,
+    privacyNoteCssSelector,
+    "font-size",
+    "0.6875rem",
   );
 
   const indicatorCssSelector = ".preview-source-badge__indicator";
