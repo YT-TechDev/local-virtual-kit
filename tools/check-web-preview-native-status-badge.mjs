@@ -24,6 +24,7 @@ const PREVIEW_LOCAL_PRIVACY_NOTE =
   "Local preview only · No camera frames leave this device.";
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
+const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
 
 const fail = (message) => {
   throw new Error(
@@ -286,6 +287,23 @@ const runSmokeCheck = async () => {
   ) {
     fail(
       "native endpoint copy action must keep local success/failure feedback text",
+    );
+  }
+
+  if (
+    !source.includes(
+      `const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = ${ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS};`,
+    ) ||
+    !source.includes("useEffect(() =>") ||
+    !source.includes("if (endpointCopyFeedback === null)") ||
+    !source.includes("window.setTimeout") ||
+    !source.includes("setEndpointCopyFeedback(null)") ||
+    !source.includes("ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS") ||
+    !source.includes("window.clearTimeout(clearFeedbackTimer)") ||
+    !source.includes("}, [endpointCopyFeedback]);")
+  ) {
+    fail(
+      "native endpoint copy feedback must auto-clear after a short delay with timer cleanup",
     );
   }
 
