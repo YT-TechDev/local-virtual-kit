@@ -136,6 +136,26 @@ const runSmokeCheck = async () => {
 
   if (
     !source.includes(
+      "the fallback avatar appears after about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s if frames do not arrive",
+    )
+  ) {
+    fail(
+      "native connected_waiting_for_frame helper text must mention the first-frame wait timeout",
+    );
+  }
+
+  if (
+    !source.includes(
+      "NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s if frames do not arrive",
+    )
+  ) {
+    fail(
+      "native connected_waiting_for_frame helper text must use the stale-frame timeout seconds value",
+    );
+  }
+
+  if (
+    !source.includes(
       "valid native MotionFrames have paused for about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s",
     )
   ) {
