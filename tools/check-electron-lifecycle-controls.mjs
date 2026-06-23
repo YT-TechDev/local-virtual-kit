@@ -130,6 +130,12 @@ requireMatch(
 
 requireMatch(
   source,
+  /const\s+startNativePipeline\s*=\s*async[\s\S]*?setPreviewOpenFeedback\(null\)/u,
+  "startNativePipeline must clear previewOpenFeedback before starting",
+);
+
+requireMatch(
+  source,
   /setStopFeedback\(\{\s*\n?\s*message:\s*['"]Native runtime stopped\.['"]/u,
   'stopNativePipeline must set stopFeedback with "Native runtime stopped." on success',
 );
@@ -218,6 +224,12 @@ requireMatch(
   "stopNativePipeline must clear previewOpenFeedback",
 );
 
+requireMatch(
+  source,
+  /const\s+openPreviewUrl\s*=\s*async[\s\S]*?setPreviewOpenFeedback\(null\)/u,
+  "openPreviewUrl must clear previewOpenFeedback before setting it",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -234,5 +246,7 @@ console.log(
     "stopNativePipeline clears startFeedback; startNativePipeline and startNativePipelineAndOpenPreview set startFeedback with nativeTrackerStatus on success; " +
     "previewOpenFeedback state declared; currentPreviewOpenFeedback staleness-guards on nativeTrackerStatus; " +
     "preview open feedback renders with role=status; preview open actions set previewOpenFeedback with nativeTrackerStatus on success; " +
-    "startNativePipelineAndOpenPreview and stopNativePipeline clear previewOpenFeedback.",
+    "startNativePipeline clears previewOpenFeedback before starting; " +
+    "startNativePipelineAndOpenPreview and stopNativePipeline clear previewOpenFeedback; " +
+    "openPreviewUrl clears previewOpenFeedback before setting it.",
 );
