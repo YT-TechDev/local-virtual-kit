@@ -245,6 +245,32 @@ const runSmokeCheck = async () => {
     fail("local privacy note must use preview-source-badge__note markup");
   }
 
+  const helperCssSelector = ".preview-source-badge__helper";
+  const helperCssRuleBody = getCssRuleBody(appCssSource, helperCssSelector);
+
+  if (helperCssRuleBody === null) {
+    fail("preview-source-badge__helper must have dedicated CSS styling");
+  }
+
+  assertCssDeclaration(
+    helperCssRuleBody,
+    helperCssSelector,
+    "font-size",
+    "0.75rem",
+  );
+  assertCssDeclaration(
+    helperCssRuleBody,
+    helperCssSelector,
+    "line-height",
+    "1.4",
+  );
+  assertCssDeclaration(
+    helperCssRuleBody,
+    helperCssSelector,
+    "overflow-wrap",
+    "anywhere",
+  );
+
   const endpointCssSelector = ".preview-source-badge__endpoint";
   const endpointCssRuleBody = getCssRuleBody(appCssSource, endpointCssSelector);
 
