@@ -310,6 +310,12 @@ const runSmokeCheck = async () => {
   assertCssDeclaration(
     endpointCssRuleBody,
     endpointCssSelector,
+    "font-family",
+    'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace',
+  );
+  assertCssDeclaration(
+    endpointCssRuleBody,
+    endpointCssSelector,
     "font-size",
     "0.6875rem",
   );
