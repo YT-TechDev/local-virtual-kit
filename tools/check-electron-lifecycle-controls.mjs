@@ -182,6 +182,42 @@ requireMatch(
   "stopNativePipeline must clear startFeedback",
 );
 
+requireMatch(
+  source,
+  /const\s+\[previewOpenFeedback,\s*setPreviewOpenFeedback\]\s*=\s*useState<PreviewOpenFeedback\s*\|\s*null>\(null\)/u,
+  "previewOpenFeedback state must be declared as useState<PreviewOpenFeedback | null>(null)",
+);
+
+requireMatch(
+  source,
+  /const\s+currentPreviewOpenFeedback\s*=\s*\n?\s*previewOpenFeedback\s*!==\s*null\s*&&\s*\n?\s*previewOpenFeedback\.nativeTrackerStatus\s*===\s*runtimeStatus\?\.nativeTrackerStatus\s*\n?\s*\?\s*previewOpenFeedback\.message\s*\n?\s*:\s*null/u,
+  "currentPreviewOpenFeedback must null-check previewOpenFeedback and compare nativeTrackerStatus to runtimeStatus?.nativeTrackerStatus",
+);
+
+requireMatch(
+  source,
+  /\{currentPreviewOpenFeedback\s*\?\s*\(\s*<p\s+className=['"]runtime-message compact['"]\s+role=['"]status['"]>\s*\{currentPreviewOpenFeedback\}/u,
+  'preview open feedback must render with className="runtime-message compact" and role="status"',
+);
+
+requireMatch(
+  source,
+  /setPreviewOpenFeedback\(\{\s*\n?\s*message:\s*['"]Native preview opened\.['"]/u,
+  'preview open action must set previewOpenFeedback with "Native preview opened." on success',
+);
+
+requireMatch(
+  source,
+  /const\s+startNativePipelineAndOpenPreview\s*=\s*async[\s\S]*?setPreviewOpenFeedback\(null\)/u,
+  "startNativePipelineAndOpenPreview must clear previewOpenFeedback",
+);
+
+requireMatch(
+  source,
+  /const\s+stopNativePipeline\s*=\s*async[\s\S]*?setPreviewOpenFeedback\(null\)/u,
+  "stopNativePipeline must clear previewOpenFeedback",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -195,5 +231,8 @@ console.log(
     "start actions clear stopFeedback; stopNativePipeline sets stopFeedback with nativeTrackerStatus on success; " +
     "startFeedback state declared; currentStartFeedback staleness-guards on nativeTrackerStatus; " +
     "start feedback renders with role=status only when no action is pending; " +
-    "stopNativePipeline clears startFeedback; startNativePipeline and startNativePipelineAndOpenPreview set startFeedback with nativeTrackerStatus on success.",
+    "stopNativePipeline clears startFeedback; startNativePipeline and startNativePipelineAndOpenPreview set startFeedback with nativeTrackerStatus on success; " +
+    "previewOpenFeedback state declared; currentPreviewOpenFeedback staleness-guards on nativeTrackerStatus; " +
+    "preview open feedback renders with role=status; preview open actions set previewOpenFeedback with nativeTrackerStatus on success; " +
+    "startNativePipelineAndOpenPreview and stopNativePipeline clear previewOpenFeedback.",
 );

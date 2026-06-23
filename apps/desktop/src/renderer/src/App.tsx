@@ -36,6 +36,10 @@ type StartFeedback = {
   message: string
   nativeTrackerStatus: NativeTrackerStatus
 }
+type PreviewOpenFeedback = {
+  message: string
+  nativeTrackerStatus: NativeTrackerStatus
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -234,6 +238,7 @@ function App(): React.JSX.Element {
   )
   const [stopFeedback, setStopFeedback] = useState<StopFeedback | null>(null)
   const [startFeedback, setStartFeedback] = useState<StartFeedback | null>(null)
+  const [previewOpenFeedback, setPreviewOpenFeedback] = useState<PreviewOpenFeedback | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
   const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
@@ -363,9 +368,14 @@ function App(): React.JSX.Element {
     }
 
     setOpenError(null)
+    setPreviewOpenFeedback(null)
 
     try {
       await desktopApi.openExternalUrl(url)
+      setPreviewOpenFeedback({
+        message: 'Native preview opened.',
+        nativeTrackerStatus: runtimeStatus?.nativeTrackerStatus ?? 'not_started'
+      })
     } catch (error) {
       setOpenError(error instanceof Error ? error.message : 'Failed to open preview URL.')
     }
@@ -377,6 +387,7 @@ function App(): React.JSX.Element {
     }
 
     setStopFeedback(null)
+    setPreviewOpenFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('start')
 
@@ -408,6 +419,7 @@ function App(): React.JSX.Element {
 
     setStopFeedback(null)
     setOpenError(null)
+    setPreviewOpenFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('start-and-open')
 
@@ -431,6 +443,10 @@ function App(): React.JSX.Element {
       }
 
       await desktopApi.openExternalUrl(status.previewNativeUrl)
+      setPreviewOpenFeedback({
+        message: 'Native preview opened.',
+        nativeTrackerStatus: status.nativeTrackerStatus
+      })
     } catch (error) {
       setPipelineError(
         error instanceof Error ? error.message : 'Failed to start native pipeline and open preview.'
@@ -542,6 +558,7 @@ function App(): React.JSX.Element {
     }
 
     setStartFeedback(null)
+    setPreviewOpenFeedback(null)
     setStopFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('stop')
@@ -606,6 +623,11 @@ function App(): React.JSX.Element {
     startFeedback !== null &&
     startFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
       ? startFeedback.message
+      : null
+  const currentPreviewOpenFeedback =
+    previewOpenFeedback !== null &&
+    previewOpenFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
+      ? previewOpenFeedback.message
       : null
 
   return (
@@ -697,6 +719,11 @@ function App(): React.JSX.Element {
             </div>
 
             {openError ? <p className="error-message compact">{openError}</p> : null}
+            {currentPreviewOpenFeedback ? (
+              <p className="runtime-message compact" role="status">
+                {currentPreviewOpenFeedback}
+              </p>
+            ) : null}
           </section>
 
           <section className="card" aria-labelledby="runtime-heading">
