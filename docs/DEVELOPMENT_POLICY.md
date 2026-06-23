@@ -115,7 +115,8 @@ Manual Electron native runtime diagnostics UI checks:
 - For successful Electron native runtime lifecycle actions, verify renderer-local status feedback such as `Native runtime started.` after start and `Native runtime stopped.` after stop; this success feedback should not appear while a lifecycle action is pending, and stale feedback should disappear when the relevant native tracker status changes.
 - For Electron native preview open requests, verify renderer-local pending feedback such as `Opening native preview...` is visible and announced with status semantics while an open request is pending, and preview open controls are disabled during that pending state to avoid duplicate open attempts.
 - For successful Electron native preview opens, verify renderer-local status feedback such as `Native preview opened.` remains the expected success state, is visible, and is announced with status semantics; stale preview-open feedback should disappear when the relevant native tracker status changes or another lifecycle action starts.
-- Treat native runtime lifecycle controls, preview-open pending feedback, and preview-open success feedback validation as local Electron UI evidence only. These checks do not imply camera, hardware, OBS Browser Source, Native Core tracking, or frame-processing behavior unless those paths were actually exercised.
+- For Electron native preview open failures, verify the visible `Preview open error` label appears and the error is exposed with alert semantics.
+- Treat native runtime lifecycle controls, preview-open pending feedback, preview-open success feedback, and preview-open error feedback validation as local Electron UI evidence only. These checks do not imply camera, hardware, OBS Browser Source, Native Core tracking, or frame-processing behavior unless those paths were actually exercised.
 
 ---
 
