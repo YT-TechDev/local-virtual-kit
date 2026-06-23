@@ -990,7 +990,11 @@ function App(): React.JSX.Element {
                       {currentRuntimeStatusRefreshMessage.message}
                     </span>
                   ) : null}
-                  <button type="button" onClick={copyNativeRuntimeDiagnostics}>
+                  <button
+                    type="button"
+                    onClick={copyNativeRuntimeDiagnostics}
+                    disabled={isRuntimeStatusRefreshPending}
+                  >
                     Copy diagnostics
                   </button>
                   {currentCopyDiagnosticsMessage ? (
