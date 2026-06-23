@@ -284,6 +284,18 @@ requireMatch(
   'openError block must include a visible "Preview open error" label with id="preview-open-error-label" and className="status-detail-label"',
 );
 
+requireMatch(
+  source,
+  /const\s+openPreviewUrl\s*=\s*async[\s\S]*?setOpenError\(null\)/u,
+  "openPreviewUrl must clear openError before starting a new attempt so stale errors do not persist on retry",
+);
+
+requireMatch(
+  source,
+  /const\s+startNativePipelineAndOpenPreview\s*=\s*async[\s\S]*?setOpenError\(null\)/u,
+  "startNativePipelineAndOpenPreview must clear openError before starting so stale preview open errors do not persist",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -306,5 +318,7 @@ console.log(
     "isPreviewOpenPending state declared; openPreviewUrl sets isPreviewOpenPending before openExternalUrl and clears in finally; " +
     "preview open pending message renders with role=status while pending; " +
     "all three preview open buttons bind disabled={isPreviewOpenPending}; " +
-    "openError block has role=alert, aria-labelledby=preview-open-error-label, and visible Preview open error label.",
+    "openError block has role=alert, aria-labelledby=preview-open-error-label, and visible Preview open error label; " +
+    "openPreviewUrl clears openError before each attempt so stale errors do not persist on retry or after success; " +
+    "startNativePipelineAndOpenPreview clears openError before starting.",
 );
