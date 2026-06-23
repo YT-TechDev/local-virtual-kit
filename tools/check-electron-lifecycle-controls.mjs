@@ -356,6 +356,12 @@ requireMatch(
   "Copy diagnostics button must bind disabled={isRuntimeStatusRefreshPending}",
 );
 
+requireMatch(
+  source,
+  /const\s+copyNativeRuntimeDiagnostics\s*=\s*async[\s\S]*?if\s*\(\s*isRuntimeStatusRefreshPending\s*\)\s*\{\s*\n\s*return\s*\n\s*\}/u,
+  "copyNativeRuntimeDiagnostics must return early when isRuntimeStatusRefreshPending is true",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -388,5 +394,6 @@ console.log(
     "Refresh status button binds disabled={isRuntimeStatusRefreshPending}; " +
     "runtime status refresh pending message renders with role=status while pending; " +
     "refreshRuntimeStatus returns early when isRuntimeStatusRefreshPending is already true; " +
-    "Copy diagnostics button binds disabled={isRuntimeStatusRefreshPending}.",
+    "Copy diagnostics button binds disabled={isRuntimeStatusRefreshPending}; " +
+    "copyNativeRuntimeDiagnostics returns early when isRuntimeStatusRefreshPending is true.",
 );

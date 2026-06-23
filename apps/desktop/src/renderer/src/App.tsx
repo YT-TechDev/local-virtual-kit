@@ -544,6 +544,10 @@ function App(): React.JSX.Element {
   }
 
   const copyNativeRuntimeDiagnostics = async (): Promise<void> => {
+    if (isRuntimeStatusRefreshPending) {
+      return
+    }
+
     if (!nativeRuntimeDiagnostics || !navigator.clipboard) {
       setCopyDiagnosticsMessage({
         diagnostics: nativeRuntimeDiagnostics,
