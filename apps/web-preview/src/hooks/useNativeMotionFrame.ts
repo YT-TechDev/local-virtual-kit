@@ -4,7 +4,7 @@ import type { MotionFrame } from "@lvk/motion-protocol";
 
 export const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 const RECONNECT_DELAY_MS = 1000;
-const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
+export const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
 
 export type NativeMotionConnectionStatus =
   | "disabled"

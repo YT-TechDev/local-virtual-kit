@@ -18,6 +18,7 @@ const NATIVE_MOTION_FRAME_HOOK_PATH = fileURLToPath(
 );
 
 const NATIVE_MOTION_ENDPOINT = "ws://127.0.0.1:45731/motion";
+const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
 
 const fail = (message) => {
   throw new Error(
@@ -69,6 +70,25 @@ const runSmokeCheck = async () => {
     );
   }
 
+  if (
+    !nativeMotionFrameHookSource.includes(
+      `export const NATIVE_FRAME_STALE_TIMEOUT_MS = ${NATIVE_FRAME_STALE_TIMEOUT_MS};`,
+    )
+  ) {
+    fail(
+      "useNativeMotionFrame.ts must export NATIVE_FRAME_STALE_TIMEOUT_MS as the stale-frame source of truth",
+    );
+  }
+
+  if (
+    !source.includes("NATIVE_FRAME_STALE_TIMEOUT_MS,") ||
+    !source.includes("NATIVE_FRAME_STALE_TIMEOUT_MS / 1000")
+  ) {
+    fail(
+      "AvatarPreview.tsx must reuse NATIVE_FRAME_STALE_TIMEOUT_MS from useNativeMotionFrame.ts",
+    );
+  }
+
   const badgeTagMatch = source.match(
     /<aside\b(?=[\s\S]*?className=["']preview-source-badge["'])[\s\S]*?>/,
   );
@@ -92,6 +112,14 @@ const runSmokeCheck = async () => {
     )
   ) {
     fail("native source badge must include a local MotionFrame endpoint note");
+  }
+
+  if (
+    !source.includes(
+      "valid native MotionFrames have paused for about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s",
+    )
+  ) {
+    fail("native fallback helper text must mention the stale-frame timeout");
   }
 
   if (!source.includes("endpointNote: null")) {
