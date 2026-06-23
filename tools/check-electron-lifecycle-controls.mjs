@@ -344,6 +344,12 @@ requireMatch(
   'runtime status refresh pending message must render with className="status-refresh-feedback" and role="status" while isRuntimeStatusRefreshPending is true',
 );
 
+requireMatch(
+  source,
+  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?if\s*\(\s*isRuntimeStatusRefreshPending\s*\)\s*\{\s*\n\s*return\s*\n\s*\}/u,
+  "refreshRuntimeStatus must return early when isRuntimeStatusRefreshPending is already true",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -374,5 +380,6 @@ console.log(
     "isRuntimeStatusRefreshPending state declared; refreshRuntimeStatus clears runtimeStatusRefreshMessage before setting pending; " +
     "refreshRuntimeStatus sets isRuntimeStatusRefreshPending(true) before try and clears in finally; " +
     "Refresh status button binds disabled={isRuntimeStatusRefreshPending}; " +
-    "runtime status refresh pending message renders with role=status while pending.",
+    "runtime status refresh pending message renders with role=status while pending; " +
+    "refreshRuntimeStatus returns early when isRuntimeStatusRefreshPending is already true.",
 );

@@ -348,6 +348,10 @@ function App(): React.JSX.Element {
   }, [desktopApi, loadRuntimeStatus])
 
   const refreshRuntimeStatus = async (): Promise<void> => {
+    if (isRuntimeStatusRefreshPending) {
+      return
+    }
+
     setRuntimeStatusRefreshMessage(null)
     setIsRuntimeStatusRefreshPending(true)
 
