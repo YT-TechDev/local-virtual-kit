@@ -22,6 +22,8 @@ const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
 const RECONNECT_DELAY_MS = 1000;
 const PREVIEW_LOCAL_PRIVACY_NOTE =
   "Local preview only · No camera frames leave this device.";
+const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
+const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 
 const fail = (message) => {
   throw new Error(
@@ -237,6 +239,64 @@ const runSmokeCheck = async () => {
     fail("native source badge endpoint note must be visible in badge markup");
   }
 
+  const endpointCopyGuardIndex = source.indexOf(
+    "{sourceBadgeContent.endpointNote !== null && (",
+  );
+  const endpointCopyButtonIndex = source.indexOf(
+    'className="preview-source-badge__copy-button"',
+  );
+  const endpointCopyFeedbackIndex = source.indexOf(
+    'className="preview-source-badge__copy-feedback"',
+  );
+
+  if (
+    endpointCopyGuardIndex === -1 ||
+    endpointCopyButtonIndex === -1 ||
+    endpointCopyFeedbackIndex === -1 ||
+    endpointCopyButtonIndex < endpointCopyGuardIndex ||
+    endpointCopyFeedbackIndex < endpointCopyButtonIndex ||
+    !source.includes('type="button"') ||
+    !source.includes("onClick={handleCopyEndpoint}") ||
+    !source.includes("Copy endpoint")
+  ) {
+    fail(
+      "native endpoint badge must render a local Copy endpoint button and feedback inside the endpoint-only guard",
+    );
+  }
+
+  if (!source.includes("navigator.clipboard")) {
+    fail("native endpoint copy action must use the browser Clipboard API");
+  }
+
+  if (!source.includes(".writeText(NATIVE_MOTION_WS_URL)")) {
+    fail("native endpoint copy action must copy NATIVE_MOTION_WS_URL");
+  }
+
+  if (source.includes(`writeText("${NATIVE_MOTION_ENDPOINT}")`)) {
+    fail("native endpoint copy action must not duplicate the endpoint literal");
+  }
+
+  if (
+    !source.includes(
+      `const ENDPOINT_COPY_SUCCESS_TEXT = "${ENDPOINT_COPY_SUCCESS_TEXT}"`,
+    ) ||
+    !source.includes(
+      `const ENDPOINT_COPY_FAILURE_TEXT = "${ENDPOINT_COPY_FAILURE_TEXT}"`,
+    )
+  ) {
+    fail(
+      "native endpoint copy action must keep local success/failure feedback text",
+    );
+  }
+
+  const demoBadgeContentMatch = source.match(
+    /return \{\s*label: ["']Source: Local demo MotionFrame["'],[\s\S]*?endpointNote: null,\s*\};/,
+  );
+
+  if (demoBadgeContentMatch === null) {
+    fail("demo source badge must not render an endpoint note or copy action");
+  }
+
   if (!source.includes(PREVIEW_LOCAL_PRIVACY_NOTE)) {
     fail("AvatarPreview.tsx must render the local privacy note text");
   }
@@ -294,6 +354,29 @@ const runSmokeCheck = async () => {
     "anywhere",
   );
 
+  const endpointRowCssSelector = ".preview-source-badge__endpoint-row";
+  const endpointRowCssRuleBody = getCssRuleBody(
+    appCssSource,
+    endpointRowCssSelector,
+  );
+
+  if (endpointRowCssRuleBody === null) {
+    fail("preview-source-badge__endpoint-row must have dedicated CSS styling");
+  }
+
+  assertCssDeclaration(
+    endpointRowCssRuleBody,
+    endpointRowCssSelector,
+    "display",
+    "flex",
+  );
+  assertCssDeclaration(
+    endpointRowCssRuleBody,
+    endpointRowCssSelector,
+    "flex-wrap",
+    "wrap",
+  );
+
   const endpointCssSelector = ".preview-source-badge__endpoint";
   const endpointCssRuleBody = getCssRuleBody(appCssSource, endpointCssSelector);
 
@@ -324,6 +407,40 @@ const runSmokeCheck = async () => {
     endpointCssSelector,
     "overflow-wrap",
     "anywhere",
+  );
+
+  const copyButtonCssSelector = ".preview-source-badge__copy-button";
+  const copyButtonCssRuleBody = getCssRuleBody(
+    appCssSource,
+    copyButtonCssSelector,
+  );
+
+  if (copyButtonCssRuleBody === null) {
+    fail("preview-source-badge__copy-button must have dedicated CSS styling");
+  }
+
+  assertCssDeclaration(
+    copyButtonCssRuleBody,
+    copyButtonCssSelector,
+    "font-size",
+    "0.6875rem",
+  );
+
+  const copyFeedbackCssSelector = ".preview-source-badge__copy-feedback";
+  const copyFeedbackCssRuleBody = getCssRuleBody(
+    appCssSource,
+    copyFeedbackCssSelector,
+  );
+
+  if (copyFeedbackCssRuleBody === null) {
+    fail("preview-source-badge__copy-feedback must have dedicated CSS styling");
+  }
+
+  assertCssDeclaration(
+    copyFeedbackCssRuleBody,
+    copyFeedbackCssSelector,
+    "font-size",
+    "0.6875rem",
   );
 
   const privacyNoteCssSelector = ".preview-source-badge__note";
