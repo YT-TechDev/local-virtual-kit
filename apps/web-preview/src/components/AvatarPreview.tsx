@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import {
+  NATIVE_FRAME_STALE_TIMEOUT_MS,
   NATIVE_MOTION_WS_URL,
   useNativeMotionFrame,
   type NativeMotionConnectionStatus,
@@ -51,6 +52,7 @@ const createInitialTrackingFallbackState = (): TrackingFallbackState => {
 // camera frames. Purely presentational; it asserts no protocol or runtime change.
 const PREVIEW_LOCAL_PRIVACY_NOTE =
   "Local preview only · No camera frames leave this device.";
+const NATIVE_FRAME_STALE_TIMEOUT_SECONDS = NATIVE_FRAME_STALE_TIMEOUT_MS / 1000;
 
 function getAvatarPreviewLabel(source: PreviewSource) {
   return source === "native"
@@ -118,7 +120,7 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
     case "reconnecting":
       return "The localhost bridge connection closed or is unavailable; retrying without changing transport behavior.";
     case "fallback":
-      return "The bridge is still connected, but valid native MotionFrames have paused; showing the fallback avatar until frames resume.";
+      return `The bridge is still connected, but valid native MotionFrames have paused for about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s; showing the fallback avatar until frames resume.`;
     case "disabled":
       return "Native MotionFrame input is disabled for the current preview source.";
   }
