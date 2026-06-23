@@ -62,6 +62,31 @@ const getNamedImportsFromModule = (source, modulePath) => {
   return namedImports;
 };
 
+const getCssRuleBody = (source, selector) => {
+  const selectorPattern = escapeRegExp(selector);
+  const rulePattern = new RegExp(`${selectorPattern}\\s*\\{([\\s\\S]*?)\\}`);
+  const ruleMatch = source.match(rulePattern);
+
+  return ruleMatch?.[1] ?? null;
+};
+
+const assertCssDeclaration = (
+  ruleBody,
+  selector,
+  propertyName,
+  expectedValue,
+) => {
+  const propertyPattern = escapeRegExp(propertyName);
+  const expectedValuePattern = escapeRegExp(expectedValue);
+  const declarationPattern = new RegExp(
+    `(?:^|;)\\s*${propertyPattern}\\s*:\\s*${expectedValuePattern}\\s*(?:;|$)`,
+  );
+
+  if (!declarationPattern.test(ruleBody)) {
+    fail(`${selector} must include ${propertyName}: ${expectedValue}`);
+  }
+};
+
 const assertNamedImportsFromModule = (source, modulePath, requiredImports) => {
   const namedImports = getNamedImportsFromModule(source, modulePath);
 
@@ -210,9 +235,31 @@ const runSmokeCheck = async () => {
     fail("native source badge endpoint note must be visible in badge markup");
   }
 
-  if (!/\.preview-source-badge__endpoint\s*\{[\s\S]*?\}/.test(appCssSource)) {
+  const endpointCssSelector = ".preview-source-badge__endpoint";
+  const endpointCssRuleBody = getCssRuleBody(appCssSource, endpointCssSelector);
+
+  if (endpointCssRuleBody === null) {
     fail("preview-source-badge__endpoint must have dedicated CSS styling");
   }
+
+  assertCssDeclaration(
+    endpointCssRuleBody,
+    endpointCssSelector,
+    "color",
+    "#bae6fd",
+  );
+  assertCssDeclaration(
+    endpointCssRuleBody,
+    endpointCssSelector,
+    "font-size",
+    "0.6875rem",
+  );
+  assertCssDeclaration(
+    endpointCssRuleBody,
+    endpointCssSelector,
+    "overflow-wrap",
+    "anywhere",
+  );
 
   if (!nativeMotionFrameHookSource.includes(NATIVE_MOTION_ENDPOINT)) {
     fail(`native endpoint must remain ${NATIVE_MOTION_ENDPOINT}`);
