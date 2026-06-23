@@ -240,6 +240,7 @@ function App(): React.JSX.Element {
   const [startFeedback, setStartFeedback] = useState<StartFeedback | null>(null)
   const [previewOpenFeedback, setPreviewOpenFeedback] = useState<PreviewOpenFeedback | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
+  const [isPreviewOpenPending, setIsPreviewOpenPending] = useState(false)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
   const [runtimeStatusRefreshMessage, setRuntimeStatusRefreshMessage] =
     useState<RuntimeStatusRefreshMessage | null>(null)
@@ -363,12 +364,13 @@ function App(): React.JSX.Element {
   }
 
   const openPreviewUrl = async (url: string): Promise<void> => {
-    if (!desktopApi) {
+    if (!desktopApi || isPreviewOpenPending) {
       return
     }
 
     setOpenError(null)
     setPreviewOpenFeedback(null)
+    setIsPreviewOpenPending(true)
 
     try {
       await desktopApi.openExternalUrl(url)
@@ -378,6 +380,8 @@ function App(): React.JSX.Element {
       })
     } catch (error) {
       setOpenError(error instanceof Error ? error.message : 'Failed to open preview URL.')
+    } finally {
+      setIsPreviewOpenPending(false)
     }
   }
 
@@ -686,7 +690,11 @@ function App(): React.JSX.Element {
                   <span className="url-label">Dummy source</span>
                   <code>{runtimeStatus.previewDummyUrl}</code>
                 </div>
-                <button type="button" onClick={() => openPreviewUrl(runtimeStatus.previewDummyUrl)}>
+                <button
+                  type="button"
+                  onClick={() => openPreviewUrl(runtimeStatus.previewDummyUrl)}
+                  disabled={isPreviewOpenPending}
+                >
                   Open
                 </button>
               </div>
@@ -699,6 +707,7 @@ function App(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => openPreviewUrl(runtimeStatus.previewNativeUrl)}
+                  disabled={isPreviewOpenPending}
                 >
                   Open
                 </button>
@@ -712,12 +721,18 @@ function App(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => openPreviewUrl(runtimeStatus.previewObsNativeUrl)}
+                  disabled={isPreviewOpenPending}
                 >
                   Open
                 </button>
               </div>
             </div>
 
+            {isPreviewOpenPending ? (
+              <p className="runtime-message compact" role="status">
+                Opening native preview...
+              </p>
+            ) : null}
             {openError ? <p className="error-message compact">{openError}</p> : null}
             {currentPreviewOpenFeedback ? (
               <p className="runtime-message compact" role="status">
