@@ -7,6 +7,15 @@ const AVATAR_PREVIEW_URL = new URL(
   import.meta.url,
 );
 const AVATAR_PREVIEW_PATH = fileURLToPath(AVATAR_PREVIEW_URL);
+const NATIVE_MOTION_FRAME_HOOK_URL = new URL(
+  "../apps/web-preview/src/hooks/useNativeMotionFrame.ts",
+  import.meta.url,
+);
+const NATIVE_MOTION_FRAME_HOOK_PATH = fileURLToPath(
+  NATIVE_MOTION_FRAME_HOOK_URL,
+);
+
+const NATIVE_MOTION_ENDPOINT = "ws://127.0.0.1:45731/motion";
 
 const fail = (message) => {
   throw new Error(
@@ -28,10 +37,31 @@ const hasJsxAttribute = (source, attributeName, expectedValue) => {
 };
 
 const runSmokeCheck = async () => {
-  const source = await readFile(AVATAR_PREVIEW_PATH, "utf8");
+  const [source, nativeMotionFrameHookSource] = await Promise.all([
+    readFile(AVATAR_PREVIEW_PATH, "utf8"),
+    readFile(NATIVE_MOTION_FRAME_HOOK_PATH, "utf8"),
+  ]);
 
   if (!source.includes('className="preview-source-badge"')) {
     fail("AvatarPreview.tsx must render the preview-source-badge class");
+  }
+
+  if (
+    !nativeMotionFrameHookSource.includes(
+      `export const NATIVE_MOTION_WS_URL = "${NATIVE_MOTION_ENDPOINT}"`,
+    )
+  ) {
+    fail("useNativeMotionFrame.ts must export the native MotionFrame endpoint");
+  }
+
+  if (
+    !source.includes(
+      "NATIVE_MOTION_WS_URL,\n  useNativeMotionFrame,\n  type NativeMotionConnectionStatus,",
+    )
+  ) {
+    fail(
+      "AvatarPreview.tsx must reuse NATIVE_MOTION_WS_URL from useNativeMotionFrame.ts",
+    );
   }
 
   const badgeTagMatch = source.match(
@@ -49,6 +79,33 @@ const runSmokeCheck = async () => {
     fail(
       "preview-source-badge must stay behind the existing !isObsMode && (...) guard",
     );
+  }
+
+  if (
+    !source.includes(
+      "endpointNote: `Local MotionFrame endpoint: ${NATIVE_MOTION_WS_URL}`",
+    )
+  ) {
+    fail("native source badge must include a local MotionFrame endpoint note");
+  }
+
+  if (!source.includes("endpointNote: null")) {
+    fail("demo source badge must not render a native endpoint note");
+  }
+
+  if (!source.includes('className="preview-source-badge__endpoint"')) {
+    fail("native source badge endpoint note must be visible in badge markup");
+  }
+
+  if (!nativeMotionFrameHookSource.includes(NATIVE_MOTION_ENDPOINT)) {
+    fail(`native endpoint must remain ${NATIVE_MOTION_ENDPOINT}`);
+  }
+
+  if (
+    !source.includes("getNativeStatusText(nativeStatus)") ||
+    !source.includes("helper: getNativeStatusHelper(nativeStatus)")
+  ) {
+    fail("native source badge must keep existing status text/helper semantics");
   }
 
   const badgeTag = badgeTagMatch[0];

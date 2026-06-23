@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import {
+  NATIVE_MOTION_WS_URL,
   useNativeMotionFrame,
   type NativeMotionConnectionStatus,
 } from "../hooks/useNativeMotionFrame";
@@ -131,6 +132,7 @@ function getSourceBadgeContent(
     return {
       label: `Source: Native localhost · ${getNativeStatusText(nativeStatus)}`,
       helper: getNativeStatusHelper(nativeStatus),
+      endpointNote: `Local MotionFrame endpoint: ${NATIVE_MOTION_WS_URL}`,
     };
   }
 
@@ -138,6 +140,7 @@ function getSourceBadgeContent(
     label: "Source: Local demo MotionFrame",
     helper:
       "No native runtime connected — showing a built-in local demo MotionFrame so the preview stays useful offline.",
+    endpointNote: null,
   };
 }
 
@@ -246,6 +249,11 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           {sourceBadgeContent.helper !== null && (
             <span className="preview-source-badge__helper">
               {sourceBadgeContent.helper}
+            </span>
+          )}
+          {sourceBadgeContent.endpointNote !== null && (
+            <span className="preview-source-badge__endpoint">
+              {sourceBadgeContent.endpointNote}
             </span>
           )}
           <span className="preview-source-badge__note">
