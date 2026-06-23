@@ -105,6 +105,12 @@
   color: #cbd5e1;
 }
 
+.preview-source-badge__endpoint {
+  color: #bae6fd;
+  font-size: 0.6875rem;
+  overflow-wrap: anywhere;
+}
+
 .preview-source-badge__note {
   color: #94a3b8;
   font-size: 0.6875rem;

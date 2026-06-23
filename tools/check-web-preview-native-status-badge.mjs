@@ -7,6 +7,8 @@ const AVATAR_PREVIEW_URL = new URL(
   import.meta.url,
 );
 const AVATAR_PREVIEW_PATH = fileURLToPath(AVATAR_PREVIEW_URL);
+const APP_CSS_URL = new URL("../apps/web-preview/src/App.css", import.meta.url);
+const APP_CSS_PATH = fileURLToPath(APP_CSS_URL);
 const NATIVE_MOTION_FRAME_HOOK_URL = new URL(
   "../apps/web-preview/src/hooks/useNativeMotionFrame.ts",
   import.meta.url,
@@ -37,10 +39,13 @@ const hasJsxAttribute = (source, attributeName, expectedValue) => {
 };
 
 const runSmokeCheck = async () => {
-  const [source, nativeMotionFrameHookSource] = await Promise.all([
-    readFile(AVATAR_PREVIEW_PATH, "utf8"),
-    readFile(NATIVE_MOTION_FRAME_HOOK_PATH, "utf8"),
-  ]);
+  const [source, appCssSource, nativeMotionFrameHookSource] = await Promise.all(
+    [
+      readFile(AVATAR_PREVIEW_PATH, "utf8"),
+      readFile(APP_CSS_PATH, "utf8"),
+      readFile(NATIVE_MOTION_FRAME_HOOK_PATH, "utf8"),
+    ],
+  );
 
   if (!source.includes('className="preview-source-badge"')) {
     fail("AvatarPreview.tsx must render the preview-source-badge class");
@@ -95,6 +100,10 @@ const runSmokeCheck = async () => {
 
   if (!source.includes('className="preview-source-badge__endpoint"')) {
     fail("native source badge endpoint note must be visible in badge markup");
+  }
+
+  if (!/\.preview-source-badge__endpoint\s*\{[\s\S]*?\}/.test(appCssSource)) {
+    fail("preview-source-badge__endpoint must have dedicated CSS styling");
   }
 
   if (!nativeMotionFrameHookSource.includes(NATIVE_MOTION_ENDPOINT)) {
