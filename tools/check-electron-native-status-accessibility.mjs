@@ -175,7 +175,7 @@ requireMatch(
 );
 requireMatch(
   source,
-  /<button\s+type=['"]button['"]\s+onClick=\{copyNativeRuntimeDiagnostics\}>\s*Copy diagnostics\s*<\/button>/u,
+  /<button[\s\S]*?onClick=\{copyNativeRuntimeDiagnostics\}[\s\S]*?>\s*Copy diagnostics\s*<\/button>/u,
   "native runtime diagnostics must keep the visible Copy diagnostics button",
 );
 requireMatch(
