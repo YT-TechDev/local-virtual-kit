@@ -245,6 +245,29 @@ const runSmokeCheck = async () => {
     fail("local privacy note must use preview-source-badge__note markup");
   }
 
+  const sourceBadgeCssSelector = ".preview-source-badge";
+  const sourceBadgeCssRuleBody = getCssRuleBody(
+    appCssSource,
+    sourceBadgeCssSelector,
+  );
+
+  if (sourceBadgeCssRuleBody === null) {
+    fail("preview-source-badge must have dedicated CSS styling");
+  }
+
+  assertCssDeclaration(
+    sourceBadgeCssRuleBody,
+    sourceBadgeCssSelector,
+    "box-sizing",
+    "border-box",
+  );
+  assertCssDeclaration(
+    sourceBadgeCssRuleBody,
+    sourceBadgeCssSelector,
+    "max-width",
+    "min(100%, 28rem)",
+  );
+
   const helperCssSelector = ".preview-source-badge__helper";
   const helperCssRuleBody = getCssRuleBody(appCssSource, helperCssSelector);
 
