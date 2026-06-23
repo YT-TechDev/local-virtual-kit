@@ -40,6 +40,40 @@ const hasJsxAttribute = (source, attributeName, expectedValue) => {
   return attributePattern.test(source);
 };
 
+const getNamedImportsFromModule = (source, modulePath) => {
+  const modulePathPattern = escapeRegExp(modulePath);
+  const importPattern = new RegExp(
+    `^\\s*import\\s+\\{([^;]*?)\\}\\s*from\\s*["']${modulePathPattern}["'];`,
+    "gm",
+  );
+  const namedImports = new Set();
+
+  for (const match of source.matchAll(importPattern)) {
+    const importSpecifiers = match[1]
+      .split(",")
+      .map((specifier) => specifier.trim().replace(/^type\s+/, ""))
+      .filter(Boolean);
+
+    for (const specifier of importSpecifiers) {
+      namedImports.add(specifier.split(/\s+as\s+/)[0].trim());
+    }
+  }
+
+  return namedImports;
+};
+
+const assertNamedImportsFromModule = (source, modulePath, requiredImports) => {
+  const namedImports = getNamedImportsFromModule(source, modulePath);
+
+  for (const requiredImport of requiredImports) {
+    if (!namedImports.has(requiredImport)) {
+      fail(
+        `AvatarPreview.tsx must import ${requiredImport} from ${modulePath}`,
+      );
+    }
+  }
+};
+
 const runSmokeCheck = async () => {
   const [source, appCssSource, nativeMotionFrameHookSource] = await Promise.all(
     [
@@ -61,15 +95,13 @@ const runSmokeCheck = async () => {
     fail("useNativeMotionFrame.ts must export the native MotionFrame endpoint");
   }
 
-  if (
-    !source.includes(
-      "NATIVE_MOTION_WS_URL,\n  RECONNECT_DELAY_MS,\n  useNativeMotionFrame,\n  type NativeMotionConnectionStatus,",
-    )
-  ) {
-    fail(
-      "AvatarPreview.tsx must reuse NATIVE_MOTION_WS_URL from useNativeMotionFrame.ts",
-    );
-  }
+  assertNamedImportsFromModule(source, "../hooks/useNativeMotionFrame", [
+    "NATIVE_FRAME_STALE_TIMEOUT_MS",
+    "NATIVE_MOTION_WS_URL",
+    "RECONNECT_DELAY_MS",
+    "useNativeMotionFrame",
+    "NativeMotionConnectionStatus",
+  ]);
 
   if (
     !nativeMotionFrameHookSource.includes(
