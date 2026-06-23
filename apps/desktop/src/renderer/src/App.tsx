@@ -353,6 +353,7 @@ function App(): React.JSX.Element {
     }
 
     setRuntimeStatusRefreshMessage(null)
+    setCopyDiagnosticsMessage(null)
     setIsRuntimeStatusRefreshPending(true)
 
     try {
