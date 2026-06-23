@@ -338,6 +338,12 @@ requireMatch(
   "Refresh status button must bind disabled={isRuntimeStatusRefreshPending}",
 );
 
+requireMatch(
+  source,
+  /\{isRuntimeStatusRefreshPending\s*\?\s*\(\s*<span\s+className=['"]status-refresh-feedback['"]\s+role=['"]status['"]>\s*Refreshing status\.\.\./u,
+  'runtime status refresh pending message must render with className="status-refresh-feedback" and role="status" while isRuntimeStatusRefreshPending is true',
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -367,5 +373,6 @@ console.log(
     "stopNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime stops; " +
     "isRuntimeStatusRefreshPending state declared; refreshRuntimeStatus clears runtimeStatusRefreshMessage before setting pending; " +
     "refreshRuntimeStatus sets isRuntimeStatusRefreshPending(true) before try and clears in finally; " +
-    "Refresh status button binds disabled={isRuntimeStatusRefreshPending}.",
+    "Refresh status button binds disabled={isRuntimeStatusRefreshPending}; " +
+    "runtime status refresh pending message renders with role=status while pending.",
 );

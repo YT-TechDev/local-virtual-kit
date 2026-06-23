@@ -974,7 +974,11 @@ function App(): React.JSX.Element {
                   >
                     Refresh status
                   </button>
-                  {currentRuntimeStatusRefreshMessage ? (
+                  {isRuntimeStatusRefreshPending ? (
+                    <span className="status-refresh-feedback" role="status">
+                      Refreshing status...
+                    </span>
+                  ) : currentRuntimeStatusRefreshMessage ? (
                     <span
                       className={`status-refresh-feedback status-refresh-feedback--${currentRuntimeStatusRefreshMessage.tone}`}
                       role="status"
