@@ -116,7 +116,7 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
     case "connected":
       return "Connected to localhost and receiving valid native MotionFrames.";
     case "connected_waiting_for_frame":
-      return "The localhost bridge accepted the preview connection, but no valid native MotionFrame has arrived yet.";
+      return `The localhost bridge accepted the preview connection, but no valid native MotionFrame has arrived yet; the fallback avatar appears after about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s if frames do not arrive.`;
     case "connecting":
       return "Opening the localhost MotionFrame bridge connection; the fallback avatar stays visible while waiting.";
     case "reconnecting":
