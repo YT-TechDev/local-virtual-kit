@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { parseNativeMotionFrameJson } from "@lvk/motion-protocol";
 import type { MotionFrame } from "@lvk/motion-protocol";
 
-const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
+export const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 const RECONNECT_DELAY_MS = 1000;
 const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
 
