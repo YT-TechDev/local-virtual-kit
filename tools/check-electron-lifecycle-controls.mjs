@@ -296,6 +296,18 @@ requireMatch(
   "startNativePipelineAndOpenPreview must clear openError before starting so stale preview open errors do not persist",
 );
 
+requireMatch(
+  source,
+  /const\s+startNativePipeline\s*=\s*async[\s\S]*?setOpenError\(null\)/u,
+  "startNativePipeline must clear openError so stale preview open errors do not remain visible when the native runtime starts",
+);
+
+requireMatch(
+  source,
+  /const\s+stopNativePipeline\s*=\s*async[\s\S]*?setOpenError\(null\)/u,
+  "stopNativePipeline must clear openError so stale preview open errors do not remain visible when the native runtime stops",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -320,5 +332,7 @@ console.log(
     "all three preview open buttons bind disabled={isPreviewOpenPending}; " +
     "openError block has role=alert, aria-labelledby=preview-open-error-label, and visible Preview open error label; " +
     "openPreviewUrl clears openError before each attempt so stale errors do not persist on retry or after success; " +
-    "startNativePipelineAndOpenPreview clears openError before starting.",
+    "startNativePipelineAndOpenPreview clears openError before starting; " +
+    "startNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime starts; " +
+    "stopNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime stops.",
 );

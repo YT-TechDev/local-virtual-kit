@@ -392,6 +392,7 @@ function App(): React.JSX.Element {
 
     setStopFeedback(null)
     setPreviewOpenFeedback(null)
+    setOpenError(null)
     setPipelineError(null)
     setPipelineActionPending('start')
 
@@ -563,6 +564,7 @@ function App(): React.JSX.Element {
 
     setStartFeedback(null)
     setPreviewOpenFeedback(null)
+    setOpenError(null)
     setStopFeedback(null)
     setPipelineError(null)
     setPipelineActionPending('stop')
