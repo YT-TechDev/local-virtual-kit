@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import {
@@ -57,6 +57,7 @@ const NATIVE_FRAME_STALE_TIMEOUT_SECONDS = NATIVE_FRAME_STALE_TIMEOUT_MS / 1000;
 const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
+const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
 
 function getAvatarPreviewLabel(source: PreviewSource) {
   return source === "native"
@@ -235,6 +236,20 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
   const [endpointCopyFeedback, setEndpointCopyFeedback] = useState<
     string | null
   >(null);
+
+  useEffect(() => {
+    if (endpointCopyFeedback === null) {
+      return undefined;
+    }
+
+    const clearFeedbackTimer = window.setTimeout(() => {
+      setEndpointCopyFeedback(null);
+    }, ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(clearFeedbackTimer);
+    };
+  }, [endpointCopyFeedback]);
 
   const handleCopyEndpoint = () => {
     if (navigator.clipboard === undefined) {
