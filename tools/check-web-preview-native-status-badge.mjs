@@ -265,6 +265,18 @@ const runSmokeCheck = async () => {
     );
   }
 
+  const endpointCopyFeedbackMarkup = source.slice(
+    endpointCopyFeedbackIndex,
+    source.indexOf("{endpointCopyFeedback}", endpointCopyFeedbackIndex),
+  );
+
+  if (
+    !endpointCopyFeedbackMarkup.includes('role="status"') ||
+    !endpointCopyFeedbackMarkup.includes('aria-live="polite"')
+  ) {
+    fail("native endpoint copy feedback must be a polite status live region");
+  }
+
   if (!source.includes("navigator.clipboard")) {
     fail("native endpoint copy action must use the browser Clipboard API");
   }
