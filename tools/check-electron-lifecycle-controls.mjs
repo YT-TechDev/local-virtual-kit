@@ -316,8 +316,14 @@ requireMatch(
 
 requireMatch(
   source,
-  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?setRuntimeStatusRefreshMessage\(null\)\s*\n\s*setIsRuntimeStatusRefreshPending\(true\)/u,
+  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?setRuntimeStatusRefreshMessage\(null\)[\s\S]*?setIsRuntimeStatusRefreshPending\(true\)/u,
   "refreshRuntimeStatus must clear runtimeStatusRefreshMessage before setting isRuntimeStatusRefreshPending(true)",
+);
+
+requireMatch(
+  source,
+  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?setRuntimeStatusRefreshMessage\(null\)\s*\n\s*setCopyDiagnosticsMessage\(null\)\s*\n\s*setIsRuntimeStatusRefreshPending\(true\)/u,
+  "refreshRuntimeStatus must clear stale copy diagnostics feedback before setting isRuntimeStatusRefreshPending(true)",
 );
 
 requireMatch(
@@ -389,7 +395,7 @@ console.log(
     "startNativePipelineAndOpenPreview clears openError before starting; " +
     "startNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime starts; " +
     "stopNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime stops; " +
-    "isRuntimeStatusRefreshPending state declared; refreshRuntimeStatus clears runtimeStatusRefreshMessage before setting pending; " +
+    "isRuntimeStatusRefreshPending state declared; refreshRuntimeStatus clears runtimeStatusRefreshMessage and copy diagnostics feedback before setting pending; " +
     "refreshRuntimeStatus sets isRuntimeStatusRefreshPending(true) before try and clears in finally; " +
     "Refresh status button binds disabled={isRuntimeStatusRefreshPending}; " +
     "runtime status refresh pending message renders with role=status while pending; " +
