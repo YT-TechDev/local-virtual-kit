@@ -349,18 +349,23 @@ function App(): React.JSX.Element {
 
   const refreshRuntimeStatus = async (): Promise<void> => {
     setRuntimeStatusRefreshMessage(null)
+    setIsRuntimeStatusRefreshPending(true)
 
-    const refreshedRuntimeStatus = await loadRuntimeStatus()
-    const didRefreshRuntimeStatus = refreshedRuntimeStatus !== null
-    const refreshedRuntimeDiagnostics = refreshedRuntimeStatus
-      ? buildNativeRuntimeDiagnostics(refreshedRuntimeStatus, pipelineError)
-      : nativeRuntimeDiagnostics
+    try {
+      const refreshedRuntimeStatus = await loadRuntimeStatus()
+      const didRefreshRuntimeStatus = refreshedRuntimeStatus !== null
+      const refreshedRuntimeDiagnostics = refreshedRuntimeStatus
+        ? buildNativeRuntimeDiagnostics(refreshedRuntimeStatus, pipelineError)
+        : nativeRuntimeDiagnostics
 
-    setRuntimeStatusRefreshMessage({
-      diagnostics: refreshedRuntimeDiagnostics,
-      message: didRefreshRuntimeStatus ? 'Status refreshed.' : 'Failed to refresh status.',
-      tone: didRefreshRuntimeStatus ? 'success' : 'danger'
-    })
+      setRuntimeStatusRefreshMessage({
+        diagnostics: refreshedRuntimeDiagnostics,
+        message: didRefreshRuntimeStatus ? 'Status refreshed.' : 'Failed to refresh status.',
+        tone: didRefreshRuntimeStatus ? 'success' : 'danger'
+      })
+    } finally {
+      setIsRuntimeStatusRefreshPending(false)
+    }
   }
 
   const openPreviewUrl = async (url: string): Promise<void> => {

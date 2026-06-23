@@ -308,6 +308,36 @@ requireMatch(
   "stopNativePipeline must clear openError so stale preview open errors do not remain visible when the native runtime stops",
 );
 
+requireMatch(
+  source,
+  /const\s+\[isRuntimeStatusRefreshPending,\s*setIsRuntimeStatusRefreshPending\]\s*=\s*useState\(false\)/u,
+  "isRuntimeStatusRefreshPending state must be declared as useState(false)",
+);
+
+requireMatch(
+  source,
+  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?setRuntimeStatusRefreshMessage\(null\)\s*\n\s*setIsRuntimeStatusRefreshPending\(true\)/u,
+  "refreshRuntimeStatus must clear runtimeStatusRefreshMessage before setting isRuntimeStatusRefreshPending(true)",
+);
+
+requireMatch(
+  source,
+  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?setIsRuntimeStatusRefreshPending\(true\)\s*\n\s*\n?\s*try/u,
+  "refreshRuntimeStatus must set isRuntimeStatusRefreshPending(true) before the try block",
+);
+
+requireMatch(
+  source,
+  /const\s+refreshRuntimeStatus\s*=\s*async[\s\S]*?finally\s*\{[\s\S]*?setIsRuntimeStatusRefreshPending\(false\)/u,
+  "refreshRuntimeStatus must clear isRuntimeStatusRefreshPending(false) in finally",
+);
+
+requireMatch(
+  source,
+  /<button[\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}/u,
+  "Refresh status button must bind disabled={isRuntimeStatusRefreshPending}",
+);
+
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
@@ -334,5 +364,8 @@ console.log(
     "openPreviewUrl clears openError before each attempt so stale errors do not persist on retry or after success; " +
     "startNativePipelineAndOpenPreview clears openError before starting; " +
     "startNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime starts; " +
-    "stopNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime stops.",
+    "stopNativePipeline clears openError so stale preview open errors do not remain visible when the native runtime stops; " +
+    "isRuntimeStatusRefreshPending state declared; refreshRuntimeStatus clears runtimeStatusRefreshMessage before setting pending; " +
+    "refreshRuntimeStatus sets isRuntimeStatusRefreshPending(true) before try and clears in finally; " +
+    "Refresh status button binds disabled={isRuntimeStatusRefreshPending}.",
 );
