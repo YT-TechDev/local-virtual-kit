@@ -19,6 +19,7 @@ const NATIVE_MOTION_FRAME_HOOK_PATH = fileURLToPath(
 
 const NATIVE_MOTION_ENDPOINT = "ws://127.0.0.1:45731/motion";
 const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
+const RECONNECT_DELAY_MS = 1000;
 
 const fail = (message) => {
   throw new Error(
@@ -62,7 +63,7 @@ const runSmokeCheck = async () => {
 
   if (
     !source.includes(
-      "NATIVE_MOTION_WS_URL,\n  useNativeMotionFrame,\n  type NativeMotionConnectionStatus,",
+      "NATIVE_MOTION_WS_URL,\n  RECONNECT_DELAY_MS,\n  useNativeMotionFrame,\n  type NativeMotionConnectionStatus,",
     )
   ) {
     fail(
@@ -81,11 +82,30 @@ const runSmokeCheck = async () => {
   }
 
   if (
+    !nativeMotionFrameHookSource.includes(
+      `export const RECONNECT_DELAY_MS = ${RECONNECT_DELAY_MS};`,
+    )
+  ) {
+    fail(
+      "useNativeMotionFrame.ts must export RECONNECT_DELAY_MS as the reconnect source of truth",
+    );
+  }
+
+  if (
     !source.includes("NATIVE_FRAME_STALE_TIMEOUT_MS,") ||
     !source.includes("NATIVE_FRAME_STALE_TIMEOUT_MS / 1000")
   ) {
     fail(
       "AvatarPreview.tsx must reuse NATIVE_FRAME_STALE_TIMEOUT_MS from useNativeMotionFrame.ts",
+    );
+  }
+
+  if (
+    !source.includes("RECONNECT_DELAY_MS,") ||
+    !source.includes("RECONNECT_DELAY_MS / 1000")
+  ) {
+    fail(
+      "AvatarPreview.tsx must reuse RECONNECT_DELAY_MS from useNativeMotionFrame.ts",
     );
   }
 
@@ -120,6 +140,14 @@ const runSmokeCheck = async () => {
     )
   ) {
     fail("native fallback helper text must mention the stale-frame timeout");
+  }
+
+  if (
+    !source.includes(
+      "retrying in about ${RECONNECT_DELAY_SECONDS.toFixed(1)}s without changing transport behavior",
+    )
+  ) {
+    fail("native reconnecting helper text must mention the reconnect delay");
   }
 
   if (!source.includes("endpointNote: null")) {
