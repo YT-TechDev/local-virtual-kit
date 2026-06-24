@@ -175,6 +175,11 @@ requireMatch(
 );
 requireMatch(
   source,
+  /const\s+refreshRuntimeStatus\s*=\s*async\s*\(\):\s*Promise<void>\s*=>\s*\{[\s\S]*?setRuntimeStatusRefreshMessage\(null\)[\s\S]*?setCopyDiagnosticsMessage\(null\)[\s\S]*?setEndpointCopyFeedback\(null\)[\s\S]*?setIsRuntimeStatusRefreshPending\(true\)[\s\S]*?await\s+loadRuntimeStatus\(\)/u,
+  "Refresh status start must clear endpoint copy feedback before requesting runtime status",
+);
+requireMatch(
+  source,
   /<button[\s\S]*?onClick=\{copyNativeRuntimeDiagnostics\}[\s\S]*?>\s*Copy diagnostics\s*<\/button>/u,
   "native runtime diagnostics must keep the visible Copy diagnostics button",
 );
@@ -277,5 +282,5 @@ console.log(
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
     "feedback when diagnostics change; last refreshed uses a local renderer timestamp; " +
-    "endpoint copy keeps a local clipboard copy button, lint-safe endpoint-change stale feedback clearing, timer-cleared feedback, and CSS hooks.",
+    "endpoint copy keeps a local clipboard copy button, lint-safe endpoint-change stale feedback clearing, refresh-start stale feedback clearing, timer-cleared feedback, and CSS hooks.",
 );
