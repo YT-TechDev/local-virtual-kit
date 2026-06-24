@@ -348,9 +348,16 @@ function App(): React.JSX.Element {
     }
   }, [desktopApi, loadRuntimeStatus])
 
+  const motionEndpoint = runtimeStatus?.motionEndpoint ?? null
+
   useEffect(() => {
-    setEndpointCopyFeedback(null)
-  }, [runtimeStatus?.motionEndpoint])
+    const clearEndpointCopyFeedbackTimeoutId = window.setTimeout(() => {
+      setEndpointCopyFeedback(null)
+    }, 0)
+    return () => {
+      window.clearTimeout(clearEndpointCopyFeedbackTimeoutId)
+    }
+  }, [motionEndpoint])
 
   useEffect(() => {
     if (endpointCopyFeedback === null) {
