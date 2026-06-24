@@ -249,13 +249,13 @@ requireMatch(
 );
 requireMatch(
   source,
-  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?>\s*Copy endpoint\s*<\/button>/u,
-  "endpoint copy button must keep type=button, onClick=copyMotionEndpoint, and visible Copy endpoint label",
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?aria-describedby=['"]native-motion-endpoint-copy-feedback['"][\s\S]*?>\s*Copy endpoint\s*<\/button>/u,
+  'endpoint copy button must keep type=button, onClick=copyMotionEndpoint, visible Copy endpoint label, and aria-describedby="native-motion-endpoint-copy-feedback"',
 );
 requireMatch(
   source,
-  /endpointCopyFeedback\s*\?\s*\(\s*\n?\s*<span\s+className=['"]endpoint-copy-feedback['"]\s+role=['"]status['"]\s+aria-live=['"]polite['"]>\s*\n?\s*\{endpointCopyFeedback\}/u,
-  'endpoint copy feedback must render with className="endpoint-copy-feedback", role="status", and aria-live="polite"',
+  /endpointCopyFeedback\s*\?\s*\(\s*\n?\s*<span[\s\S]*?id=['"]native-motion-endpoint-copy-feedback['"][\s\S]*?className=['"]endpoint-copy-feedback['"][\s\S]*?role=['"]status['"][\s\S]*?aria-live=['"]polite['"][\s\S]*?>\s*\n?\s*\{endpointCopyFeedback\}/u,
+  'endpoint copy feedback must render with id="native-motion-endpoint-copy-feedback", className="endpoint-copy-feedback", role="status", and aria-live="polite"',
 );
 requireMatch(
   styles,
