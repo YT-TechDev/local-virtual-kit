@@ -229,6 +229,11 @@ requireMatch(
 );
 requireMatch(
   source,
+  /useEffect\(\s*\(\)\s*=>\s*\{\s*setEndpointCopyFeedback\(null\)\s*\},\s*\[runtimeStatus\?\.motionEndpoint\]\)/u,
+  "endpointCopyFeedback must clear when runtimeStatus.motionEndpoint changes",
+);
+requireMatch(
+  source,
   /useEffect\(\s*\(\)\s*=>\s*\{[\s\S]*?endpointCopyFeedback\s*===\s*null[\s\S]*?window\.setTimeout[\s\S]*?setEndpointCopyFeedback\(null\)[\s\S]*?window\.clearTimeout/u,
   "endpointCopyFeedback must be cleared by a timer useEffect using window.setTimeout",
 );
@@ -267,5 +272,5 @@ console.log(
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
     "feedback when diagnostics change; last refreshed uses a local renderer timestamp; " +
-    "endpoint copy keeps a local clipboard copy button, timer-cleared feedback, and CSS hooks.",
+    "endpoint copy keeps a local clipboard copy button, endpoint-change stale feedback clearing, timer-cleared feedback, and CSS hooks.",
 );
