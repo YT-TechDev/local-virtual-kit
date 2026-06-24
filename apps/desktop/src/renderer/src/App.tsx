@@ -1040,15 +1040,21 @@ function App(): React.JSX.Element {
                     type="button"
                     onClick={refreshRuntimeStatus}
                     disabled={isRuntimeStatusRefreshPending}
+                    aria-describedby="native-runtime-refresh-status-feedback"
                   >
                     Refresh status
                   </button>
                   {isRuntimeStatusRefreshPending ? (
-                    <span className="status-refresh-feedback" role="status">
+                    <span
+                      id="native-runtime-refresh-status-feedback"
+                      className="status-refresh-feedback"
+                      role="status"
+                    >
                       Refreshing status...
                     </span>
                   ) : currentRuntimeStatusRefreshMessage ? (
                     <span
+                      id="native-runtime-refresh-status-feedback"
                       className={`status-refresh-feedback status-refresh-feedback--${currentRuntimeStatusRefreshMessage.tone}`}
                       role="status"
                     >

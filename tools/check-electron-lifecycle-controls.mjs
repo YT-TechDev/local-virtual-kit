@@ -346,7 +346,7 @@ requireMatch(
 
 requireMatch(
   source,
-  /\{isRuntimeStatusRefreshPending\s*\?\s*\(\s*<span\s+className=['"]status-refresh-feedback['"]\s+role=['"]status['"]>\s*Refreshing status\.\.\./u,
+  /\{isRuntimeStatusRefreshPending\s*\?\s*\(\s*<span[\s\S]*?className=['"]status-refresh-feedback['"][\s\S]*?role=['"]status['"][\s\S]*?>\s*Refreshing status\.\.\./u,
   'runtime status refresh pending message must render with className="status-refresh-feedback" and role="status" while isRuntimeStatusRefreshPending is true',
 );
 
