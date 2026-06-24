@@ -300,11 +300,13 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
                 className="preview-source-badge__copy-button"
                 type="button"
                 onClick={handleCopyEndpoint}
+                aria-describedby="web-preview-endpoint-copy-feedback"
               >
                 Copy endpoint
               </button>
               {endpointCopyFeedback !== null && (
                 <span
+                  id="web-preview-endpoint-copy-feedback"
                   className="preview-source-badge__copy-feedback"
                   role="status"
                   aria-live="polite"
