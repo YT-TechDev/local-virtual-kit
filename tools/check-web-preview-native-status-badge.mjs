@@ -26,6 +26,7 @@ const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
 const ENDPOINT_COPY_FEEDBACK_ID = "web-preview-endpoint-copy-feedback";
+const SOURCE_BADGE_ENDPOINT_NOTE_ID = "web-preview-native-endpoint-note";
 
 const fail = (message) => {
   throw new Error(
@@ -50,6 +51,15 @@ const hasConditionalEndpointFeedbackDescription = (source) => {
   const feedbackIdPattern = escapeRegExp(ENDPOINT_COPY_FEEDBACK_ID);
   const conditionalDescriptionPattern = new RegExp(
     `\\baria-describedby=\\{\\s*currentEndpointCopyFeedback\\s*!==\\s*null\\s*\\?\\s*["']${feedbackIdPattern}["']\\s*:\\s*undefined\\s*\\}`,
+  );
+
+  return conditionalDescriptionPattern.test(source);
+};
+
+const hasConditionalSourceBadgeEndpointDescription = (source) => {
+  const endpointNoteIdPattern = escapeRegExp(SOURCE_BADGE_ENDPOINT_NOTE_ID);
+  const conditionalDescriptionPattern = new RegExp(
+    `\\baria-describedby=\\{\\s*sourceBadgeContent\\.endpointNote\\s*!==\\s*null\\s*\\?\\s*(?:["']${endpointNoteIdPattern}["']|SOURCE_BADGE_ENDPOINT_NOTE_ID)\\s*:\\s*undefined\\s*\\}`,
   );
 
   return conditionalDescriptionPattern.test(source);
@@ -189,6 +199,8 @@ const runSmokeCheck = async () => {
     fail("preview-source-badge must be rendered on an aside element");
   }
 
+  const badgeTag = badgeTagMatch[0];
+
   const guardedBadgePattern =
     /\{!\s*isObsMode\s*&&\s*\(\s*<aside\b(?=[\s\S]*?className=["']preview-source-badge["'])/;
 
@@ -250,6 +262,16 @@ const runSmokeCheck = async () => {
     fail("native source badge endpoint note must be visible in badge markup");
   }
 
+  if (
+    !source.includes(
+      `const SOURCE_BADGE_ENDPOINT_NOTE_ID = "${SOURCE_BADGE_ENDPOINT_NOTE_ID}"`,
+    )
+  ) {
+    fail(
+      `native endpoint note must use a stable ${SOURCE_BADGE_ENDPOINT_NOTE_ID} id constant`,
+    );
+  }
+
   const endpointCopyGuardIndex = source.indexOf(
     "{sourceBadgeContent.endpointNote !== null && (",
   );
@@ -283,6 +305,31 @@ const runSmokeCheck = async () => {
     source.lastIndexOf("<span", endpointCopyFeedbackIndex),
     source.indexOf("{currentEndpointCopyFeedback}", endpointCopyFeedbackIndex),
   );
+  const endpointNoteMarkup = source.slice(
+    source.lastIndexOf("<span", endpointCopyButtonIndex - 1),
+    endpointCopyButtonIndex,
+  );
+
+  if (!hasConditionalSourceBadgeEndpointDescription(badgeTag)) {
+    fail(
+      `preview-source-badge aria-describedby must reference ${SOURCE_BADGE_ENDPOINT_NOTE_ID} only when sourceBadgeContent.endpointNote !== null`,
+    );
+  }
+
+  if (
+    !endpointNoteMarkup.includes("id={SOURCE_BADGE_ENDPOINT_NOTE_ID}") &&
+    !hasJsxAttribute(endpointNoteMarkup, "id", SOURCE_BADGE_ENDPOINT_NOTE_ID)
+  ) {
+    fail(
+      `native endpoint note must be rendered with id="${SOURCE_BADGE_ENDPOINT_NOTE_ID}"`,
+    );
+  }
+
+  if (!endpointNoteMarkup.includes("{sourceBadgeContent.endpointNote}")) {
+    fail(
+      "native endpoint note must continue to render sourceBadgeContent.endpointNote",
+    );
+  }
 
   if (!hasConditionalEndpointFeedbackDescription(endpointCopyButtonMarkup)) {
     fail(
@@ -636,8 +683,6 @@ const runSmokeCheck = async () => {
   ) {
     fail("native source badge must keep existing status text/helper semantics");
   }
-
-  const badgeTag = badgeTagMatch[0];
 
   const requiredAttributes = [
     ["role", "status"],
