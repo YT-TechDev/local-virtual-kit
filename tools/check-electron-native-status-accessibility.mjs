@@ -165,8 +165,18 @@ requireMatch(
 
 requireMatch(
   source,
-  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?>\s*Refresh status\s*<\/button>/u,
-  "native runtime diagnostics must keep a visible Refresh status button that is disabled while a status request is in flight",
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?>\s*Refresh status\s*<\/button>/u,
+  "native runtime diagnostics must keep a visible Refresh status button that calls the existing refresh handler",
+);
+requireMatch(
+  source,
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?>/u,
+  "native runtime diagnostics Refresh status button must be disabled while a status request is in flight",
+);
+requireMatch(
+  source,
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?>\s*Refresh status\s*<\/button>/u,
+  "native runtime diagnostics Refresh status button must keep the visible label unchanged",
 );
 requireMatch(
   source,
