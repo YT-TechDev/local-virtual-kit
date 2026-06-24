@@ -823,6 +823,7 @@ function App(): React.JSX.Element {
                   <button
                     type="button"
                     onClick={copyMotionEndpoint}
+                    disabled={isRuntimeStatusRefreshPending}
                     aria-describedby="native-motion-endpoint-copy-feedback"
                   >
                     Copy endpoint
