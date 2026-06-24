@@ -58,6 +58,7 @@ const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
+const SOURCE_BADGE_ENDPOINT_NOTE_ID = "web-preview-native-endpoint-note";
 
 type EndpointCopyFeedbackState = {
   message: string;
@@ -293,6 +294,11 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           aria-live="polite"
           aria-atomic="true"
           aria-label="Preview source status"
+          aria-describedby={
+            sourceBadgeContent.endpointNote !== null
+              ? SOURCE_BADGE_ENDPOINT_NOTE_ID
+              : undefined
+          }
         >
           <span className="preview-source-badge__label">
             {badgeIndicatorVariant !== null && (
@@ -310,7 +316,10 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           )}
           {sourceBadgeContent.endpointNote !== null && (
             <span className="preview-source-badge__endpoint-row">
-              <span className="preview-source-badge__endpoint">
+              <span
+                id={SOURCE_BADGE_ENDPOINT_NOTE_ID}
+                className="preview-source-badge__endpoint"
+              >
                 {sourceBadgeContent.endpointNote}
               </span>
               <button
