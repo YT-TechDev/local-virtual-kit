@@ -807,6 +807,7 @@ function App(): React.JSX.Element {
           </section>
 
           <section
+            id="native-runtime-status-section"
             className="card"
             aria-labelledby="runtime-heading"
             aria-busy={isRuntimeStatusRefreshPending}
@@ -1040,6 +1041,7 @@ function App(): React.JSX.Element {
                     type="button"
                     onClick={refreshRuntimeStatus}
                     disabled={isRuntimeStatusRefreshPending}
+                    aria-controls="native-runtime-status-section"
                     aria-describedby="native-runtime-refresh-status-feedback"
                   >
                     Refresh status

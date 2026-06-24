@@ -165,8 +165,8 @@ requireMatch(
 
 requireMatch(
   source,
-  /<section[\s\S]*?className=['"]card['"][\s\S]*?aria-labelledby=['"]runtime-heading['"][\s\S]*?aria-busy=\{isRuntimeStatusRefreshPending\}[\s\S]*?>[\s\S]*?<h2\s+id=['"]runtime-heading['"]>Source status<\/h2>[\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?onClick=\{copyNativeRuntimeDiagnostics\}/u,
-  "native runtime status section must expose aria-busy while status refresh is pending",
+  /<section[\s\S]*?id=['"]native-runtime-status-section['"][\s\S]*?className=['"]card['"][\s\S]*?aria-labelledby=['"]runtime-heading['"][\s\S]*?aria-busy=\{isRuntimeStatusRefreshPending\}[\s\S]*?>[\s\S]*?<h2\s+id=['"]runtime-heading['"]>Source status<\/h2>[\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?onClick=\{copyNativeRuntimeDiagnostics\}/u,
+  'native runtime status section must expose id="native-runtime-status-section", aria-labelledby="runtime-heading", and aria-busy while status refresh is pending',
 );
 
 requireMatch(
@@ -181,8 +181,8 @@ requireMatch(
 );
 requireMatch(
   source,
-  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?aria-describedby=['"]native-runtime-refresh-status-feedback['"][\s\S]*?>/u,
-  'native runtime diagnostics Refresh status button must describe the refresh feedback with aria-describedby="native-runtime-refresh-status-feedback"',
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?aria-controls=['"]native-runtime-status-section['"][\s\S]*?aria-describedby=['"]native-runtime-refresh-status-feedback['"][\s\S]*?>/u,
+  'native runtime diagnostics Refresh status button must control the runtime status section and describe the refresh feedback with aria-controls="native-runtime-status-section" and aria-describedby="native-runtime-refresh-status-feedback"',
 );
 requireMatch(
   source,
@@ -319,7 +319,7 @@ console.log(
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
     "aria-labelledby linkage; pipelineError keeps alert semantics; settingsError keeps structured summary/detail data, load/save summaries, a visible Settings error label, alert semantics, aria-labelledby linkage, and settings-specific CSS hooks; settings save feedback keeps stable normalized settings keys, success status semantics, stale-hide behavior, failure clearing, and CSS hooks; " +
-    "refresh status keeps a visible in-flight-disabled local status control, describes its local refresh feedback, and exposes the runtime status section busy state; copy diagnostics keeps a visible local clipboard control, describes its local copy feedback, and exact local preview; " +
+    "refresh status keeps a visible in-flight-disabled local status control, controls the runtime status section, describes its local refresh feedback, and exposes the runtime status section id and busy state; copy diagnostics keeps a visible local clipboard control, describes its local copy feedback, and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
     "feedback when diagnostics change; last refreshed uses a local renderer timestamp; " +
