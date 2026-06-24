@@ -49,7 +49,7 @@ const hasJsxAttribute = (source, attributeName, expectedValue) => {
 const hasConditionalEndpointFeedbackDescription = (source) => {
   const feedbackIdPattern = escapeRegExp(ENDPOINT_COPY_FEEDBACK_ID);
   const conditionalDescriptionPattern = new RegExp(
-    `\\baria-describedby=\\{\\s*endpointCopyFeedback\\s*!==\\s*null\\s*\\?\\s*["']${feedbackIdPattern}["']\\s*:\\s*undefined\\s*\\}`,
+    `\\baria-describedby=\\{\\s*currentEndpointCopyFeedback\\s*!==\\s*null\\s*\\?\\s*["']${feedbackIdPattern}["']\\s*:\\s*undefined\\s*\\}`,
   );
 
   return conditionalDescriptionPattern.test(source);
@@ -281,12 +281,12 @@ const runSmokeCheck = async () => {
   );
   const endpointCopyFeedbackMarkup = source.slice(
     source.lastIndexOf("<span", endpointCopyFeedbackIndex),
-    source.indexOf("{endpointCopyFeedback}", endpointCopyFeedbackIndex),
+    source.indexOf("{currentEndpointCopyFeedback}", endpointCopyFeedbackIndex),
   );
 
   if (!hasConditionalEndpointFeedbackDescription(endpointCopyButtonMarkup)) {
     fail(
-      `native endpoint copy button aria-describedby must reference ${ENDPOINT_COPY_FEEDBACK_ID} only when endpointCopyFeedback !== null`,
+      `native endpoint copy button aria-describedby must reference ${ENDPOINT_COPY_FEEDBACK_ID} only when currentEndpointCopyFeedback !== null`,
     );
   }
 
@@ -307,6 +307,18 @@ const runSmokeCheck = async () => {
     !endpointCopyFeedbackMarkup.includes('aria-live="polite"')
   ) {
     fail("native endpoint copy feedback must be a polite status live region");
+  }
+
+  if (!source.includes("{currentEndpointCopyFeedback}")) {
+    fail(
+      "native endpoint copy feedback must render currentEndpointCopyFeedback",
+    );
+  }
+
+  if (source.includes("}, [sourceBadgeContent.endpointNote]);")) {
+    fail(
+      "native endpoint copy feedback must not use a synchronous endpoint-note cleanup effect",
+    );
   }
 
   if (!source.includes("navigator.clipboard")) {
@@ -335,6 +347,35 @@ const runSmokeCheck = async () => {
   }
 
   if (
+    !source.includes("type EndpointCopyFeedbackState = {") ||
+    !source.includes("message: string;") ||
+    !source.includes("endpointNote: string | null;") ||
+    !source.includes("useState<EndpointCopyFeedbackState>(null)")
+  ) {
+    fail(
+      "native endpoint copy feedback state must store a message and associated endpoint note",
+    );
+  }
+
+  const currentFeedbackPattern =
+    /const currentEndpointCopyFeedback =\s*endpointCopyFeedback\?\.endpointNote === sourceBadgeContent\.endpointNote\s*\?\s*endpointCopyFeedback\.message\s*:\s*null;/;
+
+  if (!currentFeedbackPattern.test(source)) {
+    fail(
+      "native endpoint copy feedback must derive rendered feedback by matching the stored endpoint note to the current endpoint note",
+    );
+  }
+
+  const feedbackStatePattern =
+    /setEndpointCopyFeedback\(\{\s*message: ENDPOINT_COPY_(?:SUCCESS|FAILURE)_TEXT,\s*endpointNote: sourceBadgeContent\.endpointNote,\s*\}\);/g;
+
+  if ([...source.matchAll(feedbackStatePattern)].length < 3) {
+    fail(
+      "native endpoint copy success and failure paths must store feedback with the current endpoint note",
+    );
+  }
+
+  if (
     !source.includes(
       `const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = ${ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS};`,
     ) ||
@@ -348,15 +389,6 @@ const runSmokeCheck = async () => {
   ) {
     fail(
       "native endpoint copy feedback must auto-clear after a short delay with timer cleanup",
-    );
-  }
-
-  const endpointChangeFeedbackCleanupPattern =
-    /useEffect\(\(\)\s*=>\s*\{\s*setEndpointCopyFeedback\(null\);\s*\},\s*\[sourceBadgeContent\.endpointNote\]\);/;
-
-  if (!endpointChangeFeedbackCleanupPattern.test(source)) {
-    fail(
-      "native endpoint copy feedback must clear when the displayed endpoint note changes",
     );
   }
 

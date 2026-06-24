@@ -59,6 +59,11 @@ const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
 
+type EndpointCopyFeedbackState = {
+  message: string;
+  endpointNote: string | null;
+} | null;
+
 function getAvatarPreviewLabel(source: PreviewSource) {
   return source === "native"
     ? "Native MotionFrame avatar preview"
@@ -233,9 +238,12 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
   const badgeIndicatorVariant = getBadgeIndicatorVariant(source, nativeStatus);
   const shellClassName = `preview-shell preview-shell--${mode}`;
   const panelClassName = `preview-panel preview-panel--${mode}`;
-  const [endpointCopyFeedback, setEndpointCopyFeedback] = useState<
-    string | null
-  >(null);
+  const [endpointCopyFeedback, setEndpointCopyFeedback] =
+    useState<EndpointCopyFeedbackState>(null);
+  const currentEndpointCopyFeedback =
+    endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
+      ? endpointCopyFeedback.message
+      : null;
 
   useEffect(() => {
     if (endpointCopyFeedback === null) {
@@ -251,23 +259,28 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
     };
   }, [endpointCopyFeedback]);
 
-  useEffect(() => {
-    setEndpointCopyFeedback(null);
-  }, [sourceBadgeContent.endpointNote]);
-
   const handleCopyEndpoint = () => {
     if (navigator.clipboard === undefined) {
-      setEndpointCopyFeedback(ENDPOINT_COPY_FAILURE_TEXT);
+      setEndpointCopyFeedback({
+        message: ENDPOINT_COPY_FAILURE_TEXT,
+        endpointNote: sourceBadgeContent.endpointNote,
+      });
       return;
     }
 
     navigator.clipboard
       .writeText(NATIVE_MOTION_WS_URL)
       .then(() => {
-        setEndpointCopyFeedback(ENDPOINT_COPY_SUCCESS_TEXT);
+        setEndpointCopyFeedback({
+          message: ENDPOINT_COPY_SUCCESS_TEXT,
+          endpointNote: sourceBadgeContent.endpointNote,
+        });
       })
       .catch(() => {
-        setEndpointCopyFeedback(ENDPOINT_COPY_FAILURE_TEXT);
+        setEndpointCopyFeedback({
+          message: ENDPOINT_COPY_FAILURE_TEXT,
+          endpointNote: sourceBadgeContent.endpointNote,
+        });
       });
   };
 
@@ -305,21 +318,21 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
                 type="button"
                 onClick={handleCopyEndpoint}
                 aria-describedby={
-                  endpointCopyFeedback !== null
+                  currentEndpointCopyFeedback !== null
                     ? "web-preview-endpoint-copy-feedback"
                     : undefined
                 }
               >
                 Copy endpoint
               </button>
-              {endpointCopyFeedback !== null && (
+              {currentEndpointCopyFeedback !== null && (
                 <span
                   id="web-preview-endpoint-copy-feedback"
                   className="preview-source-badge__copy-feedback"
                   role="status"
                   aria-live="polite"
                 >
-                  {endpointCopyFeedback}
+                  {currentEndpointCopyFeedback}
                 </span>
               )}
             </span>
