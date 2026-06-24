@@ -812,7 +812,7 @@ function App(): React.JSX.Element {
                     Copy endpoint
                   </button>
                   {endpointCopyFeedback ? (
-                    <span className="endpoint-copy-feedback" role="status">
+                    <span className="endpoint-copy-feedback" role="status" aria-live="polite">
                       {endpointCopyFeedback}
                     </span>
                   ) : null}

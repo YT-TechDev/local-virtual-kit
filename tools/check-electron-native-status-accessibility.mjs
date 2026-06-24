@@ -244,8 +244,8 @@ requireMatch(
 );
 requireMatch(
   source,
-  /endpointCopyFeedback\s*\?\s*\(\s*\n?\s*<span\s+className=['"]endpoint-copy-feedback['"]\s+role=['"]status['"]>\s*\n?\s*\{endpointCopyFeedback\}/u,
-  'endpoint copy feedback must render with className="endpoint-copy-feedback" and role="status"',
+  /endpointCopyFeedback\s*\?\s*\(\s*\n?\s*<span\s+className=['"]endpoint-copy-feedback['"]\s+role=['"]status['"]\s+aria-live=['"]polite['"]>\s*\n?\s*\{endpointCopyFeedback\}/u,
+  'endpoint copy feedback must render with className="endpoint-copy-feedback", role="status", and aria-live="polite"',
 );
 requireMatch(
   styles,
