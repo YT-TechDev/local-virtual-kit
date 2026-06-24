@@ -46,6 +46,15 @@ const hasJsxAttribute = (source, attributeName, expectedValue) => {
   return attributePattern.test(source);
 };
 
+const hasConditionalEndpointFeedbackDescription = (source) => {
+  const feedbackIdPattern = escapeRegExp(ENDPOINT_COPY_FEEDBACK_ID);
+  const conditionalDescriptionPattern = new RegExp(
+    `\\baria-describedby=\\{\\s*endpointCopyFeedback\\s*!==\\s*null\\s*\\?\\s*["']${feedbackIdPattern}["']\\s*:\\s*undefined\\s*\\}`,
+  );
+
+  return conditionalDescriptionPattern.test(source);
+};
+
 const getNamedImportsFromModule = (source, modulePath) => {
   const modulePathPattern = escapeRegExp(modulePath);
   const importPattern = new RegExp(
@@ -275,15 +284,9 @@ const runSmokeCheck = async () => {
     source.indexOf("{endpointCopyFeedback}", endpointCopyFeedbackIndex),
   );
 
-  if (
-    !hasJsxAttribute(
-      endpointCopyButtonMarkup,
-      "aria-describedby",
-      ENDPOINT_COPY_FEEDBACK_ID,
-    )
-  ) {
+  if (!hasConditionalEndpointFeedbackDescription(endpointCopyButtonMarkup)) {
     fail(
-      `native endpoint copy button must describe itself with ${ENDPOINT_COPY_FEEDBACK_ID}`,
+      `native endpoint copy button aria-describedby must reference ${ENDPOINT_COPY_FEEDBACK_ID} only when endpointCopyFeedback !== null`,
     );
   }
 
