@@ -351,6 +351,15 @@ const runSmokeCheck = async () => {
     );
   }
 
+  const endpointChangeFeedbackCleanupPattern =
+    /useEffect\(\(\)\s*=>\s*\{\s*setEndpointCopyFeedback\(null\);\s*\},\s*\[sourceBadgeContent\.endpointNote\]\);/;
+
+  if (!endpointChangeFeedbackCleanupPattern.test(source)) {
+    fail(
+      "native endpoint copy feedback must clear when the displayed endpoint note changes",
+    );
+  }
+
   const demoBadgeContentMatch = source.match(
     /return \{\s*label: ["']Source: Local demo MotionFrame["'],[\s\S]*?endpointNote: null,\s*\};/,
   );

@@ -251,6 +251,10 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
     };
   }, [endpointCopyFeedback]);
 
+  useEffect(() => {
+    setEndpointCopyFeedback(null);
+  }, [sourceBadgeContent.endpointNote]);
+
   const handleCopyEndpoint = () => {
     if (navigator.clipboard === undefined) {
       setEndpointCopyFeedback(ENDPOINT_COPY_FAILURE_TEXT);
