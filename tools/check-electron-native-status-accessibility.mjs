@@ -259,8 +259,8 @@ requireMatch(
 );
 requireMatch(
   source,
-  /currentCopyDiagnosticsMessage\s*\?\s*\(\s*<span[\s\S]*?id=['"]native-runtime-diagnostics-copy-feedback['"][\s\S]*?className=['"]diagnostics-copy-feedback['"][\s\S]*?role=['"]status['"][\s\S]*?>\s*\{currentCopyDiagnosticsMessage\}/u,
-  'copy diagnostics feedback must render with id="native-runtime-diagnostics-copy-feedback", className="diagnostics-copy-feedback", and role="status"',
+  /currentCopyDiagnosticsMessage\s*\?\s*\(\s*<span[\s\S]*?id=['"]native-runtime-diagnostics-copy-feedback['"][\s\S]*?className=['"]diagnostics-copy-feedback['"][\s\S]*?role=['"]status['"][\s\S]*?aria-live=['"]polite['"][\s\S]*?>\s*\{currentCopyDiagnosticsMessage\}/u,
+  'copy diagnostics feedback must render with id="native-runtime-diagnostics-copy-feedback", className="diagnostics-copy-feedback", role="status", and aria-live="polite"',
 );
 
 requireMatch(

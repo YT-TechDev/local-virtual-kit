@@ -1074,6 +1074,7 @@ function App(): React.JSX.Element {
                       id="native-runtime-diagnostics-copy-feedback"
                       className="diagnostics-copy-feedback"
                       role="status"
+                      aria-live="polite"
                     >
                       {currentCopyDiagnosticsMessage}
                     </span>
