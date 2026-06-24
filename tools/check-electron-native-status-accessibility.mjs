@@ -217,8 +217,8 @@ requireMatch(
 
 requireMatch(
   source,
-  /<strong\s+id=['"]diagnostics-preview-label['"]\s+className=['"]status-detail-label['"]>\s*Diagnostics preview\s*<\/strong>[\s\S]*?<pre>\s*\{nativeRuntimeDiagnostics\}\s*<\/pre>/u,
-  "native runtime diagnostics preview must keep a visible label and show the exact copied diagnostics text",
+  /<div\s+className=['"]diagnostics-preview['"]\s+aria-labelledby=['"]diagnostics-preview-label['"]>[\s\S]*?<strong\s+id=['"]diagnostics-preview-label['"]\s+className=['"]status-detail-label['"]>\s*Diagnostics preview\s*<\/strong>[\s\S]*?<pre>\s*\{nativeRuntimeDiagnostics\}\s*<\/pre>/u,
+  'native runtime diagnostics preview must use aria-labelledby="diagnostics-preview-label" for the visible label and show the exact copied diagnostics text',
 );
 requireMatch(
   source,
