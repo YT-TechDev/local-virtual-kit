@@ -222,6 +222,42 @@ requireMatch(
   "copy diagnostics feedback must clear when nativeRuntimeDiagnostics changes",
 );
 
+requireMatch(
+  source,
+  /const\s+\[endpointCopyFeedback,\s*setEndpointCopyFeedback\]\s*=\s*useState<string\s*\|\s*null>\(null\)/u,
+  "endpointCopyFeedback state must be string | null initialized to null",
+);
+requireMatch(
+  source,
+  /useEffect\(\s*\(\)\s*=>\s*\{[\s\S]*?endpointCopyFeedback\s*===\s*null[\s\S]*?window\.setTimeout[\s\S]*?setEndpointCopyFeedback\(null\)[\s\S]*?window\.clearTimeout/u,
+  "endpointCopyFeedback must be cleared by a timer useEffect using window.setTimeout",
+);
+requireMatch(
+  source,
+  /const\s+copyMotionEndpoint\s*=\s*async\s*\(\):\s*Promise<void>\s*=>\s*\{[\s\S]*?runtimeStatus\?\.motionEndpoint[\s\S]*?navigator\.clipboard[\s\S]*?setEndpointCopyFeedback\(['"]Copy failed\.['"]\)[\s\S]*?navigator\.clipboard\.writeText\(runtimeStatus\.motionEndpoint\)[\s\S]*?setEndpointCopyFeedback\(['"]Endpoint copied\.['"]\)/u,
+  "copyMotionEndpoint must guard on runtimeStatus.motionEndpoint and navigator.clipboard, write via local clipboard API, and set Endpoint copied. on success and Copy failed. on failure",
+);
+requireMatch(
+  source,
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?>\s*Copy endpoint\s*<\/button>/u,
+  "endpoint copy button must keep type=button, onClick=copyMotionEndpoint, and visible Copy endpoint label",
+);
+requireMatch(
+  source,
+  /endpointCopyFeedback\s*\?\s*\(\s*\n?\s*<span\s+className=['"]endpoint-copy-feedback['"]\s+role=['"]status['"]>\s*\n?\s*\{endpointCopyFeedback\}/u,
+  'endpoint copy feedback must render with className="endpoint-copy-feedback" and role="status"',
+);
+requireMatch(
+  styles,
+  /\.endpoint-copy-feedback[\s\S]*?\{/u,
+  "endpoint copy feedback styles must keep the .endpoint-copy-feedback hook",
+);
+requireMatch(
+  styles,
+  /\.endpoint-dd\s*\{/u,
+  "endpoint dd layout must keep the .endpoint-dd hook",
+);
+
 console.log(
   "Electron native status accessibility smoke OK: lastError keeps a visible " +
     "Latest error label with alert semantics and aria-labelledby linkage; " +
@@ -230,5 +266,6 @@ console.log(
     "refresh status keeps a visible in-flight-disabled local status control; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
-    "feedback when diagnostics change; last refreshed uses a local renderer timestamp.",
+    "feedback when diagnostics change; last refreshed uses a local renderer timestamp; " +
+    "endpoint copy keeps a local clipboard copy button, timer-cleared feedback, and CSS hooks.",
 );
