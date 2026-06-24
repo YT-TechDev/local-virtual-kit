@@ -248,8 +248,13 @@ requireMatch(
 );
 requireMatch(
   source,
-  /<span[\s\S]*?id=['"]native-runtime-refresh-status-feedback['"][\s\S]*?className=(?:['"]status-refresh-feedback['"]|\{`status-refresh-feedback status-refresh-feedback--\$\{currentRuntimeStatusRefreshMessage\.tone\}`\})[\s\S]*?role=['"]status['"][\s\S]*?>/u,
-  'runtime status refresh feedback must render with id="native-runtime-refresh-status-feedback" and status semantics',
+  /isRuntimeStatusRefreshPending\s*\?\s*\(\s*<span[\s\S]*?id=['"]native-runtime-refresh-status-feedback['"][\s\S]*?className=['"]status-refresh-feedback['"][\s\S]*?role=['"]status['"][\s\S]*?aria-live=['"]polite['"][\s\S]*?>\s*Refreshing status\.\.\./u,
+  'pending runtime status refresh feedback must render with id="native-runtime-refresh-status-feedback", className="status-refresh-feedback", role="status", and aria-live="polite"',
+);
+requireMatch(
+  source,
+  /currentRuntimeStatusRefreshMessage\s*\?\s*\(\s*<span[\s\S]*?id=['"]native-runtime-refresh-status-feedback['"][\s\S]*?className=\{`status-refresh-feedback status-refresh-feedback--\$\{currentRuntimeStatusRefreshMessage\.tone\}`\}[\s\S]*?role=['"]status['"][\s\S]*?aria-live=['"]polite['"][\s\S]*?>\s*\{currentRuntimeStatusRefreshMessage\.message\}/u,
+  'result runtime status refresh feedback must render with id="native-runtime-refresh-status-feedback", tone-specific status-refresh-feedback class behavior, role="status", and aria-live="polite"',
 );
 
 requireMatch(
