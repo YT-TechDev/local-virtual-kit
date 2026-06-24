@@ -207,6 +207,13 @@ dd {
   margin: 0;
 }
 
+.endpoint-dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -282,6 +289,7 @@ dd {
 }
 
 .diagnostics-copy-feedback,
+.endpoint-copy-feedback,
 .status-refresh-feedback,
 .runtime-refresh-timestamp {
   color: var(--ev-c-text-2);

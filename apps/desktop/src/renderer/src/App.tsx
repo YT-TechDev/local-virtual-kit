@@ -246,6 +246,7 @@ function App(): React.JSX.Element {
     useState<RuntimeStatusRefreshMessage | null>(null)
   const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] =
     useState<CopyDiagnosticsMessage | null>(null)
+  const [endpointCopyFeedback, setEndpointCopyFeedback] = useState<string | null>(null)
 
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
@@ -346,6 +347,18 @@ function App(): React.JSX.Element {
       window.clearInterval(statusPollIntervalId)
     }
   }, [desktopApi, loadRuntimeStatus])
+
+  useEffect(() => {
+    if (endpointCopyFeedback === null) {
+      return undefined
+    }
+    const timer = window.setTimeout(() => {
+      setEndpointCopyFeedback(null)
+    }, 2000)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [endpointCopyFeedback])
 
   const refreshRuntimeStatus = async (): Promise<void> => {
     if (isRuntimeStatusRefreshPending) {
@@ -571,6 +584,19 @@ function App(): React.JSX.Element {
     }
   }
 
+  const copyMotionEndpoint = async (): Promise<void> => {
+    if (!runtimeStatus?.motionEndpoint || !navigator.clipboard) {
+      setEndpointCopyFeedback('Copy failed.')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(runtimeStatus.motionEndpoint)
+      setEndpointCopyFeedback('Endpoint copied.')
+    } catch {
+      setEndpointCopyFeedback('Copy failed.')
+    }
+  }
+
   const stopNativePipeline = async (): Promise<void> => {
     if (!desktopApi || pipelineActionPending) {
       return
@@ -780,8 +806,16 @@ function App(): React.JSX.Element {
             <dl className="status-list">
               <div>
                 <dt>MotionFrame endpoint</dt>
-                <dd>
+                <dd className="endpoint-dd">
                   <code>{runtimeStatus.motionEndpoint}</code>
+                  <button type="button" onClick={copyMotionEndpoint}>
+                    Copy endpoint
+                  </button>
+                  {endpointCopyFeedback ? (
+                    <span className="endpoint-copy-feedback" role="status">
+                      {endpointCopyFeedback}
+                    </span>
+                  ) : null}
                 </dd>
               </div>
               <div>
