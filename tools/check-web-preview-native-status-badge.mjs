@@ -25,6 +25,7 @@ const PREVIEW_LOCAL_PRIVACY_NOTE =
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
+const ENDPOINT_COPY_FEEDBACK_ID = "web-preview-endpoint-copy-feedback";
 
 const fail = (message) => {
   throw new Error(
@@ -265,10 +266,38 @@ const runSmokeCheck = async () => {
     );
   }
 
+  const endpointCopyButtonMarkup = source.slice(
+    source.lastIndexOf("<button", endpointCopyButtonIndex),
+    source.indexOf("</button>", endpointCopyButtonIndex),
+  );
   const endpointCopyFeedbackMarkup = source.slice(
-    endpointCopyFeedbackIndex,
+    source.lastIndexOf("<span", endpointCopyFeedbackIndex),
     source.indexOf("{endpointCopyFeedback}", endpointCopyFeedbackIndex),
   );
+
+  if (
+    !hasJsxAttribute(
+      endpointCopyButtonMarkup,
+      "aria-describedby",
+      ENDPOINT_COPY_FEEDBACK_ID,
+    )
+  ) {
+    fail(
+      `native endpoint copy button must describe itself with ${ENDPOINT_COPY_FEEDBACK_ID}`,
+    );
+  }
+
+  if (
+    !hasJsxAttribute(
+      endpointCopyFeedbackMarkup,
+      "id",
+      ENDPOINT_COPY_FEEDBACK_ID,
+    )
+  ) {
+    fail(
+      `native endpoint copy feedback must use id="${ENDPOINT_COPY_FEEDBACK_ID}"`,
+    );
+  }
 
   if (
     !endpointCopyFeedbackMarkup.includes('role="status"') ||
