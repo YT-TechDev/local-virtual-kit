@@ -1049,6 +1049,7 @@ function App(): React.JSX.Element {
                       id="native-runtime-refresh-status-feedback"
                       className="status-refresh-feedback"
                       role="status"
+                      aria-live="polite"
                     >
                       Refreshing status...
                     </span>
@@ -1057,6 +1058,7 @@ function App(): React.JSX.Element {
                       id="native-runtime-refresh-status-feedback"
                       className={`status-refresh-feedback status-refresh-feedback--${currentRuntimeStatusRefreshMessage.tone}`}
                       role="status"
+                      aria-live="polite"
                     >
                       {currentRuntimeStatusRefreshMessage.message}
                     </span>
