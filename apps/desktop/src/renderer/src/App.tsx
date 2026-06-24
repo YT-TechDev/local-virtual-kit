@@ -819,11 +819,20 @@ function App(): React.JSX.Element {
                 <dt>MotionFrame endpoint</dt>
                 <dd className="endpoint-dd">
                   <code>{runtimeStatus.motionEndpoint}</code>
-                  <button type="button" onClick={copyMotionEndpoint}>
+                  <button
+                    type="button"
+                    onClick={copyMotionEndpoint}
+                    aria-describedby="native-motion-endpoint-copy-feedback"
+                  >
                     Copy endpoint
                   </button>
                   {endpointCopyFeedback ? (
-                    <span className="endpoint-copy-feedback" role="status" aria-live="polite">
+                    <span
+                      id="native-motion-endpoint-copy-feedback"
+                      className="endpoint-copy-feedback"
+                      role="status"
+                      aria-live="polite"
+                    >
                       {endpointCopyFeedback}
                     </span>
                   ) : null}
