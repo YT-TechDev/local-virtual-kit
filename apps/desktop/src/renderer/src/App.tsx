@@ -1092,11 +1092,7 @@ function App(): React.JSX.Element {
                     </time>
                   </p>
                 ) : null}
-                <div
-                  className="diagnostics-preview"
-                  aria-labelledby="diagnostics-preview-label"
-                  aria-label="Native runtime diagnostics preview"
-                >
+                <div className="diagnostics-preview" aria-labelledby="diagnostics-preview-label">
                   <strong id="diagnostics-preview-label" className="status-detail-label">
                     Diagnostics preview
                   </strong>
