@@ -254,8 +254,8 @@ requireMatch(
 );
 requireMatch(
   source,
-  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?aria-describedby=['"]native-motion-endpoint-copy-feedback['"][\s\S]*?>\s*Copy endpoint\s*<\/button>/u,
-  'endpoint copy button must keep type=button, onClick=copyMotionEndpoint, visible Copy endpoint label, and aria-describedby="native-motion-endpoint-copy-feedback"',
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{copyMotionEndpoint\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?aria-describedby=['"]native-motion-endpoint-copy-feedback['"][\s\S]*?>\s*Copy endpoint\s*<\/button>/u,
+  'endpoint copy button must keep type=button, onClick=copyMotionEndpoint, disabled={isRuntimeStatusRefreshPending}, visible Copy endpoint label, and aria-describedby="native-motion-endpoint-copy-feedback"',
 );
 requireMatch(
   source,
@@ -282,5 +282,5 @@ console.log(
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
     "feedback when diagnostics change; last refreshed uses a local renderer timestamp; " +
-    "endpoint copy keeps a local clipboard copy button, lint-safe endpoint-change stale feedback clearing, refresh-start stale feedback clearing, timer-cleared feedback, and CSS hooks.",
+    "endpoint copy keeps a local clipboard copy button, refresh-pending disabled state, lint-safe endpoint-change stale feedback clearing, refresh-start stale feedback clearing, timer-cleared feedback, and CSS hooks.",
 );
