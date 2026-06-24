@@ -1065,11 +1065,16 @@ function App(): React.JSX.Element {
                     type="button"
                     onClick={copyNativeRuntimeDiagnostics}
                     disabled={isRuntimeStatusRefreshPending}
+                    aria-describedby="native-runtime-diagnostics-copy-feedback"
                   >
                     Copy diagnostics
                   </button>
                   {currentCopyDiagnosticsMessage ? (
-                    <span className="diagnostics-copy-feedback" role="status">
+                    <span
+                      id="native-runtime-diagnostics-copy-feedback"
+                      className="diagnostics-copy-feedback"
+                      role="status"
+                    >
                       {currentCopyDiagnosticsMessage}
                     </span>
                   ) : null}
