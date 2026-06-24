@@ -181,6 +181,11 @@ requireMatch(
 );
 requireMatch(
   source,
+  /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?disabled=\{isRuntimeStatusRefreshPending\}[\s\S]*?aria-describedby=['"]native-runtime-refresh-status-feedback['"][\s\S]*?>/u,
+  'native runtime diagnostics Refresh status button must describe the refresh feedback with aria-describedby="native-runtime-refresh-status-feedback"',
+);
+requireMatch(
+  source,
   /<button[\s\S]*?type=['"]button['"][\s\S]*?onClick=\{refreshRuntimeStatus\}[\s\S]*?>\s*Refresh status\s*<\/button>/u,
   "native runtime diagnostics Refresh status button must keep the visible label unchanged",
 );
@@ -235,6 +240,11 @@ requireMatch(
   source,
   /className=\{`status-refresh-feedback status-refresh-feedback--\$\{currentRuntimeStatusRefreshMessage\.tone\}`\}[\s\S]*?\{currentRuntimeStatusRefreshMessage\.message\}/u,
   "runtime status refresh feedback must render only the current diagnostics-scoped message",
+);
+requireMatch(
+  source,
+  /<span[\s\S]*?id=['"]native-runtime-refresh-status-feedback['"][\s\S]*?className=(?:['"]status-refresh-feedback['"]|\{`status-refresh-feedback status-refresh-feedback--\$\{currentRuntimeStatusRefreshMessage\.tone\}`\})[\s\S]*?role=['"]status['"][\s\S]*?>/u,
+  'runtime status refresh feedback must render with id="native-runtime-refresh-status-feedback" and status semantics',
 );
 
 requireMatch(
@@ -294,7 +304,7 @@ console.log(
     "Latest error label with alert semantics and aria-labelledby linkage; " +
     "lastMessage keeps a visible Latest status label with status semantics and " +
     "aria-labelledby linkage; pipelineError keeps alert semantics; settingsError keeps structured summary/detail data, load/save summaries, a visible Settings error label, alert semantics, aria-labelledby linkage, and settings-specific CSS hooks; settings save feedback keeps stable normalized settings keys, success status semantics, stale-hide behavior, failure clearing, and CSS hooks; " +
-    "refresh status keeps a visible in-flight-disabled local status control and exposes the runtime status section busy state; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
+    "refresh status keeps a visible in-flight-disabled local status control, describes its local refresh feedback, and exposes the runtime status section busy state; copy diagnostics keeps a visible local clipboard control and exact local preview; " +
     "diagnostics content keeps expected fields, filters optional lines, " +
     "joins with newlines, writes nativeRuntimeDiagnostics, and resets refresh and copy " +
     "feedback when diagnostics change; last refreshed uses a local renderer timestamp; " +
