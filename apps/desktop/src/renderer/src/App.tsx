@@ -806,7 +806,11 @@ function App(): React.JSX.Element {
             ) : null}
           </section>
 
-          <section className="card" aria-labelledby="runtime-heading">
+          <section
+            className="card"
+            aria-labelledby="runtime-heading"
+            aria-busy={isRuntimeStatusRefreshPending}
+          >
             <div className="card-header">
               <div>
                 <p className="section-label">Runtime</p>
