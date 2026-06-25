@@ -18,9 +18,7 @@ const requireFromWebPreview = createRequire(WEB_PREVIEW_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
 
 const fail = (message) => {
-  throw new Error(
-    `Web Preview native runtime deps check failed: ${message}`,
-  );
+  throw new Error(`Web Preview native runtime deps check failed: ${message}`);
 };
 
 const assertEqual = (actual, expected, label) => {
