@@ -297,6 +297,10 @@ const runSmokeCheck = async () => {
     );
   }
 
+  const endpointRowMarkup = source.slice(
+    source.lastIndexOf("<span", endpointCopyGuardIndex),
+    endpointCopyFeedbackIndex,
+  );
   const endpointCopyButtonMarkup = source.slice(
     source.lastIndexOf("<button", endpointCopyButtonIndex),
     source.indexOf("</button>", endpointCopyButtonIndex),
@@ -313,6 +317,27 @@ const runSmokeCheck = async () => {
   if (!hasConditionalSourceBadgeEndpointDescription(badgeTag)) {
     fail(
       `preview-source-badge aria-describedby must reference ${SOURCE_BADGE_ENDPOINT_NOTE_ID} only when sourceBadgeContent.endpointNote !== null`,
+    );
+  }
+
+  if (!hasJsxAttribute(endpointRowMarkup, "role", "group")) {
+    fail(
+      "native endpoint row must expose the endpoint note and copy action as a group",
+    );
+  }
+
+  if (
+    !endpointRowMarkup.includes(
+      "aria-labelledby={SOURCE_BADGE_ENDPOINT_NOTE_ID}",
+    ) &&
+    !hasJsxAttribute(
+      endpointRowMarkup,
+      "aria-labelledby",
+      SOURCE_BADGE_ENDPOINT_NOTE_ID,
+    )
+  ) {
+    fail(
+      `native endpoint row group must be labelled by ${SOURCE_BADGE_ENDPOINT_NOTE_ID}`,
     );
   }
 

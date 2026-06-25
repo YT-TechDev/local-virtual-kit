@@ -315,7 +315,11 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
             </span>
           )}
           {sourceBadgeContent.endpointNote !== null && (
-            <span className="preview-source-badge__endpoint-row">
+            <span
+              className="preview-source-badge__endpoint-row"
+              role="group"
+              aria-labelledby={SOURCE_BADGE_ENDPOINT_NOTE_ID}
+            >
               <span
                 id={SOURCE_BADGE_ENDPOINT_NOTE_ID}
                 className="preview-source-badge__endpoint"
