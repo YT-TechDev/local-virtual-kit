@@ -12,7 +12,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node ../../tools/check-web-preview-native-status-badge.mjs && node ../../tools/check-web-preview-motion-frame-mapping.mjs && node ../../tools/check-web-preview-native-motion-frame-freshness.mjs && node ../../tools/check-web-preview-native-motion-frame-acceptance.mjs && node ../../tools/check-web-preview-native-fallback-readiness.mjs"
+    "test": "node ../../tools/check-web-preview-native-status-badge.mjs && node ../../tools/check-web-preview-motion-frame-mapping.mjs && node ../../tools/check-web-preview-native-motion-frame-freshness.mjs && node ../../tools/check-web-preview-native-motion-frame-acceptance.mjs && node ../../tools/check-web-preview-native-fallback-readiness.mjs && node ../../tools/check-web-preview-native-lifecycle-transitions.mjs"
   },
   "dependencies": {
     "@lvk/motion-protocol": "workspace:*",
