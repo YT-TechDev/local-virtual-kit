@@ -477,6 +477,106 @@ requireMatch(
   "attachProcessHandlers must attach a stdout 'data' handler that intentionally does not log (empty handler with comment)",
 );
 
+// ---------------------------------------------------------------------------
+// G. Termination hardening
+// ---------------------------------------------------------------------------
+
+// stop() must reset isStopping = false in a finally block
+const isStoppingResetInFinally = src.match(
+  /async\s+stop\s*\(\s*\)[\s\S]{0,2000}?finally\s*\{[\s\S]{0,200}?this\.isStopping\s*=\s*false/u,
+);
+if (!isStoppingResetInFinally) {
+  fail("stop() must reset this.isStopping = false inside a finally block");
+}
+
+// stop() must null both process refs before the finally block closes
+const nullRefsInsideTry = src.match(
+  /async\s+stop\s*\(\s*\)[\s\S]{0,2000}?this\.trackerProcess\s*=\s*null[\s\S]{0,100}?this\.bridgeProcess\s*=\s*null[\s\S]{0,300}?finally/u,
+);
+if (!nullRefsInsideTry) {
+  fail(
+    "stop() must null both trackerProcess and bridgeProcess before the finally block",
+  );
+}
+
+// stop() must set exited status for both processes before the finally block
+const exitedStatusInsideTry = src.match(
+  /async\s+stop\s*\(\s*\)[\s\S]{0,2000}?nativeTrackerStatus:\s*['"]exited['"][\s\S]{0,100}?motionBridgeStatus:\s*['"]exited['"][\s\S]{0,300}?finally/u,
+);
+if (!exitedStatusInsideTry) {
+  fail(
+    "stop() must set nativeTrackerStatus='exited' and motionBridgeStatus='exited' before the finally block",
+  );
+}
+
+// terminateProcess() must define a local settle() helper
+const terminateDefinesSettle = src.match(
+  /private\s+async\s+terminateProcess[\s\S]{0,400}?const\s+settle\s*=/u,
+);
+if (!terminateDefinesSettle) {
+  fail("terminateProcess() must define a local settle() helper");
+}
+
+// settle() helper must call clearTimeout(timeout)
+const settleClearsTimeout = src.match(
+  /const\s+settle\s*=[\s\S]{0,300}?clearTimeout\s*\(\s*timeout\s*\)/u,
+);
+if (!settleClearsTimeout) {
+  fail("terminateProcess() settle() helper must call clearTimeout(timeout)");
+}
+
+// settle() helper must remove the exit listener
+const settleRemovesListener = src.match(
+  /const\s+settle\s*=[\s\S]{0,300}?removeListener\s*\(\s*['"]exit['"]\s*,\s*settle\s*\)/u,
+);
+if (!settleRemovesListener) {
+  fail(
+    "terminateProcess() settle() helper must call removeListener('exit', settle) to clean up",
+  );
+}
+
+// terminateProcess() must register settle as the exit listener
+requireMatch(
+  /childProcess\.on\s*\(\s*['"]exit['"]\s*,\s*settle\s*\)/u,
+  "terminateProcess() must register settle as the 'exit' listener via childProcess.on('exit', settle)",
+);
+
+// terminateProcess() must send SIGTERM first (before the timeout)
+const sigtermBeforeTimeout = src.match(
+  /private\s+async\s+terminateProcess[\s\S]{0,1200}?this\.killProcess\s*\(\s*childProcess\s*,\s*['"]SIGTERM['"]\s*\)/u,
+);
+if (!sigtermBeforeTimeout) {
+  fail(
+    "terminateProcess() must call killProcess(childProcess, 'SIGTERM') to send SIGTERM",
+  );
+}
+
+// terminateProcess() must use FORCE_KILL_TIMEOUT_MS in setTimeout
+requireMatch(
+  /setTimeout\s*\([\s\S]{0,300}?FORCE_KILL_TIMEOUT_MS\s*\)/u,
+  "terminateProcess() must use FORCE_KILL_TIMEOUT_MS as the setTimeout delay",
+);
+
+// The force-kill timeout must call killProcess with SIGKILL
+const timeoutSendsKill = src.match(
+  /setTimeout\s*\(\s*\(\s*\)\s*=>\s*\{[\s\S]{0,200}?this\.killProcess\s*\(\s*childProcess\s*,\s*['"]SIGKILL['"]\s*\)/u,
+);
+if (!timeoutSendsKill) {
+  fail(
+    "terminateProcess() force-kill timeout must call killProcess(childProcess, 'SIGKILL')",
+  );
+}
+
+// killProcess() must guard null and already-exited processes before calling kill
+const killProcessGuards = src.match(
+  /private\s+killProcess[\s\S]{0,300}?!\s*childProcess\s*\|\|\s*hasExited\s*\(\s*childProcess\s*\)/u,
+);
+if (!killProcessGuards) {
+  fail(
+    "killProcess() must guard with '!childProcess || hasExited(childProcess)' before calling childProcess.kill()",
+  );
+}
+
 console.log(
   "Electron native pipeline lifecycle transitions OK:\n" +
     "  A. Active-status guard — isActiveStatus checks 'starting'|'running'|'stopping'; " +
@@ -492,7 +592,7 @@ console.log(
     "  D. Stop transition — early return when no processes and no active statuses; " +
     "isStopping set to true; stopping status and message set; tracker stdout unpiped from bridge stdin; " +
     "bridge stdin ended when writable; both terminated via Promise.all; " +
-    "refs nulled; exited status and stopped message set; isStopping reset to false.\n" +
+    "refs nulled; exited status and stopped message set; isStopping reset to false in finally block.\n" +
     "  E. Cleanup-on-quit — isStopping set; tracker stdout unpiped; bridge stdin ended; " +
     "both processes killed; both refs nulled.\n" +
     "  F. Unexpected exit/error — tracker error sets nativeTrackerStatus='error' with truncated description; " +
@@ -500,5 +600,10 @@ console.log(
     "bridge error sets motionBridgeStatus='error' with truncated description; " +
     "bridge non-zero exit sets 'error' and terminates tracker; " +
     "bridge server-error stderr sets 'error' and terminates both processes; " +
-    "stdout handler intentionally empty (native frames not logged from Electron main).",
+    "stdout handler intentionally empty (native frames not logged from Electron main).\n" +
+    "  G. Termination hardening — stop() resets isStopping in finally block; " +
+    "process refs nulled and exited status set before finally; " +
+    "terminateProcess() uses local settle() helper; settle() clears timeout and removes exit listener; " +
+    "SIGTERM sent first; FORCE_KILL_TIMEOUT_MS setTimeout calls killProcess(SIGKILL); " +
+    "killProcess() guards null/already-exited before calling kill.",
 );
