@@ -108,6 +108,17 @@
   overflow-wrap: anywhere;
 }
 
+.preview-source-badge__diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+
+.preview-source-badge__diagnostic {
+  color: #dbeafe;
+  font-size: 0.6875rem;
+}
+
 .preview-source-badge__endpoint-row {
   align-items: center;
   display: flex;

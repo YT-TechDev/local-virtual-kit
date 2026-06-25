@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HOOK_PATH = fileURLToPath(
+  new URL(
+    "../apps/web-preview/src/hooks/useNativeMotionFrame.ts",
+    import.meta.url,
+  ),
+);
+const AVATAR_PREVIEW_PATH = fileURLToPath(
+  new URL(
+    "../apps/web-preview/src/components/AvatarPreview.tsx",
+    import.meta.url,
+  ),
+);
+const MOTION_PROTOCOL_SRC_PATH = fileURLToPath(
+  new URL("../packages/motion-protocol/src", import.meta.url),
+);
+
+const fail = (message) => {
+  throw new Error(`Web Preview native frame status check failed: ${message}`);
+};
+
+const readSourceFiles = async (directoryPath) => {
+  const entries = await readdir(directoryPath, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const entryPath = join(directoryPath, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...(await readSourceFiles(entryPath)));
+      continue;
+    }
+
+    if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name)) {
+      files.push([entryPath, await readFile(entryPath, "utf8")]);
+    }
+  }
+
+  return files;
+};
+
+const runCheck = async () => {
+  const [hookSource, avatarPreviewSource, motionProtocolFiles] =
+    await Promise.all([
+      readFile(HOOK_PATH, "utf8"),
+      readFile(AVATAR_PREVIEW_PATH, "utf8"),
+      readSourceFiles(MOTION_PROTOCOL_SRC_PATH),
+    ]);
+
+  if (!hookSource.includes("receivedFrameCount: number;")) {
+    fail(
+      "useNativeMotionFrame must expose receivedFrameCount in its state type",
+    );
+  }
+
+  if (!hookSource.includes("lastFrameReceivedAtMs: number | null;")) {
+    fail(
+      "useNativeMotionFrame must expose lastFrameReceivedAtMs in its state type",
+    );
+  }
+
+  if (!hookSource.includes("setReceivedFrameCount((count) => count + 1)")) {
+    fail("receivedFrameCount must increment when a native frame is received");
+  }
+
+  if (!hookSource.includes("setLastFrameReceivedAtMs(Date.now())")) {
+    fail(
+      "lastFrameReceivedAtMs must use local browser time when a frame arrives",
+    );
+  }
+
+  if (
+    !hookSource.includes("if (frame === null)") ||
+    hookSource.indexOf("if (frame === null)") >
+      hookSource.indexOf("setReceivedFrameCount((count) => count + 1)")
+  ) {
+    fail("diagnostics must only update for actual native MotionFrame values");
+  }
+
+  for (const resetSnippet of [
+    "setReceivedFrameCount(0)",
+    "setLastFrameReceivedAtMs(null)",
+    "receivedFrameCount: enabled ? receivedFrameCount : 0",
+    "lastFrameReceivedAtMs: enabled ? lastFrameReceivedAtMs : null",
+  ]) {
+    if (!hookSource.includes(resetSnippet)) {
+      fail(`useNativeMotionFrame must reset diagnostics with ${resetSnippet}`);
+    }
+  }
+
+  for (const avatarSnippet of [
+    "receivedFrameCount,",
+    "lastFrameReceivedAtMs,",
+    "Frames received: ${receivedFrameCount}",
+    "Last frame: not yet received",
+    "Last frame: recently received",
+    'className="preview-source-badge__diagnostics"',
+    "sourceBadgeContent.diagnostics !== null",
+    "{!isObsMode && (",
+  ]) {
+    if (!avatarPreviewSource.includes(avatarSnippet)) {
+      fail(
+        `AvatarPreview.tsx must include native-only diagnostics: ${avatarSnippet}`,
+      );
+    }
+  }
+
+  if (!avatarPreviewSource.includes("diagnostics: null")) {
+    fail(
+      "demo/OBS-hidden source badge path must not render native diagnostics",
+    );
+  }
+
+  for (const [filePath, source] of motionProtocolFiles) {
+    if (
+      source.includes("receivedFrameCount") ||
+      source.includes("lastFrameReceivedAtMs")
+    ) {
+      fail(
+        `MotionFrame schema/protocol source must not include UI diagnostics (${filePath})`,
+      );
+    }
+  }
+
+  console.log("Web Preview native frame status check passed.");
+};
+
+runCheck().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});

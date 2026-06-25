@@ -32,7 +32,8 @@
     "test:electron-native-runtime-status-contract": "node tools/check-electron-native-runtime-status-contract.mjs",
     "test:electron-native-pipeline-lifecycle-transitions": "node tools/check-electron-native-pipeline-lifecycle-transitions.mjs",
     "test:electron-runtime-status-summary": "node tools/check-electron-runtime-status-summary.mjs",
-    "test:electron-runtime-message-panel": "node tools/check-electron-runtime-message-panel.mjs"
+    "test:electron-runtime-message-panel": "node tools/check-electron-runtime-message-panel.mjs",
+    "test:web-preview-native-frame-status": "node tools/check-web-preview-native-frame-status.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"

@@ -138,15 +138,27 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
   }
 }
 
+function getNativeFrameReceivedStatus(lastFrameReceivedAtMs: number | null) {
+  return lastFrameReceivedAtMs === null
+    ? "Last frame: not yet received"
+    : "Last frame: recently received";
+}
+
 function getSourceBadgeContent(
   source: PreviewSource,
   nativeStatus: NativeMotionConnectionStatus,
+  receivedFrameCount: number,
+  lastFrameReceivedAtMs: number | null,
 ) {
   if (source === "native") {
     return {
       label: `Source: Native localhost · ${getNativeStatusText(nativeStatus)}`,
       helper: getNativeStatusHelper(nativeStatus),
       endpointNote: `Local MotionFrame endpoint: ${NATIVE_MOTION_WS_URL}`,
+      diagnostics: [
+        `Frames received: ${receivedFrameCount}`,
+        getNativeFrameReceivedStatus(lastFrameReceivedAtMs),
+      ],
     };
   }
 
@@ -154,6 +166,7 @@ function getSourceBadgeContent(
     label: "Source: Local demo MotionFrame",
     helper:
       "No native runtime connected — showing a built-in local demo MotionFrame so the preview stays useful offline.",
+    diagnostics: null,
     endpointNote: null,
   };
 }
@@ -232,11 +245,20 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
 }
 
 export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
-  const { latestFrame: nativeFrame, connectionStatus: nativeStatus } =
-    useNativeMotionFrame(source === "native");
+  const {
+    latestFrame: nativeFrame,
+    connectionStatus: nativeStatus,
+    receivedFrameCount,
+    lastFrameReceivedAtMs,
+  } = useNativeMotionFrame(source === "native");
   const isObsMode = mode === "obs";
   const avatarPreviewLabel = getAvatarPreviewLabel(source);
-  const sourceBadgeContent = getSourceBadgeContent(source, nativeStatus);
+  const sourceBadgeContent = getSourceBadgeContent(
+    source,
+    nativeStatus,
+    receivedFrameCount,
+    lastFrameReceivedAtMs,
+  );
   const badgeIndicatorVariant = getBadgeIndicatorVariant(source, nativeStatus);
   const shellClassName = `preview-shell preview-shell--${mode}`;
   const panelClassName = `preview-panel preview-panel--${mode}`;
@@ -313,6 +335,18 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
           {sourceBadgeContent.helper !== null && (
             <span className="preview-source-badge__helper">
               {sourceBadgeContent.helper}
+            </span>
+          )}
+          {sourceBadgeContent.diagnostics !== null && (
+            <span className="preview-source-badge__diagnostics">
+              {sourceBadgeContent.diagnostics.map((diagnostic) => (
+                <span
+                  className="preview-source-badge__diagnostic"
+                  key={diagnostic}
+                >
+                  {diagnostic}
+                </span>
+              ))}
             </span>
           )}
           {sourceBadgeContent.endpointNote !== null && (
