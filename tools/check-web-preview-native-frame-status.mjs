@@ -95,9 +95,15 @@ const runCheck = async () => {
   for (const avatarSnippet of [
     "receivedFrameCount,",
     "lastFrameReceivedAtMs,",
+    "NATIVE_FRAME_AGE_REFRESH_INTERVAL_MS",
+    "window.setInterval",
+    "setNativeFrameAgeCurrentTimeMs(Date.now())",
+    "window.clearInterval",
     "Frames received: ${receivedFrameCount}",
     "Last frame: not yet received",
-    "Last frame: recently received",
+    "currentTimeMs - lastFrameReceivedAtMs",
+    "elapsedSeconds.toFixed(1)",
+    "Last frame: ${elapsedSeconds.toFixed(1)}s ago",
     'className="preview-source-badge__diagnostics"',
     "sourceBadgeContent.diagnostics !== null",
     "{!isObsMode && (",
@@ -115,10 +121,26 @@ const runCheck = async () => {
     );
   }
 
+  if (avatarPreviewSource.includes("Last frame: recently received")) {
+    fail("static Last frame: recently received text must no longer be used");
+  }
+
+  if (
+    !avatarPreviewSource.includes(
+      'source !== "native" || lastFrameReceivedAtMs === null',
+    )
+  ) {
+    fail(
+      "native frame age refresh must only run while native source has received a frame",
+    );
+  }
+
   for (const [filePath, source] of motionProtocolFiles) {
     if (
       source.includes("receivedFrameCount") ||
-      source.includes("lastFrameReceivedAtMs")
+      source.includes("lastFrameReceivedAtMs") ||
+      source.includes("nativeFrameAgeCurrentTimeMs") ||
+      source.includes("NATIVE_FRAME_AGE_REFRESH_INTERVAL_MS")
     ) {
       fail(
         `MotionFrame schema/protocol source must not include UI diagnostics (${filePath})`,
