@@ -58,6 +58,7 @@ const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
+const NATIVE_FRAME_AGE_REFRESH_INTERVAL_MS = 500;
 const ENDPOINT_COPY_FEEDBACK_ID = "web-preview-endpoint-copy-feedback";
 const SOURCE_BADGE_ENDPOINT_NOTE_ID = "web-preview-native-endpoint-note";
 
@@ -138,10 +139,20 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
   }
 }
 
-function getNativeFrameReceivedStatus(lastFrameReceivedAtMs: number | null) {
-  return lastFrameReceivedAtMs === null
-    ? "Last frame: not yet received"
-    : "Last frame: recently received";
+function getNativeFrameReceivedStatus(
+  lastFrameReceivedAtMs: number | null,
+  currentTimeMs: number,
+) {
+  if (lastFrameReceivedAtMs === null) {
+    return "Last frame: not yet received";
+  }
+
+  const elapsedSeconds = Math.max(
+    0,
+    (currentTimeMs - lastFrameReceivedAtMs) / 1000,
+  );
+
+  return `Last frame: ${elapsedSeconds.toFixed(1)}s ago`;
 }
 
 function getSourceBadgeContent(
@@ -149,6 +160,7 @@ function getSourceBadgeContent(
   nativeStatus: NativeMotionConnectionStatus,
   receivedFrameCount: number,
   lastFrameReceivedAtMs: number | null,
+  currentTimeMs: number,
 ) {
   if (source === "native") {
     return {
@@ -157,7 +169,7 @@ function getSourceBadgeContent(
       endpointNote: `Local MotionFrame endpoint: ${NATIVE_MOTION_WS_URL}`,
       diagnostics: [
         `Frames received: ${receivedFrameCount}`,
-        getNativeFrameReceivedStatus(lastFrameReceivedAtMs),
+        getNativeFrameReceivedStatus(lastFrameReceivedAtMs, currentTimeMs),
       ],
     };
   }
@@ -252,12 +264,15 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
     lastFrameReceivedAtMs,
   } = useNativeMotionFrame(source === "native");
   const isObsMode = mode === "obs";
+  const [nativeFrameAgeCurrentTimeMs, setNativeFrameAgeCurrentTimeMs] =
+    useState(() => Date.now());
   const avatarPreviewLabel = getAvatarPreviewLabel(source);
   const sourceBadgeContent = getSourceBadgeContent(
     source,
     nativeStatus,
     receivedFrameCount,
     lastFrameReceivedAtMs,
+    nativeFrameAgeCurrentTimeMs,
   );
   const badgeIndicatorVariant = getBadgeIndicatorVariant(source, nativeStatus);
   const shellClassName = `preview-shell preview-shell--${mode}`;
@@ -268,6 +283,20 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
       : null;
+
+  useEffect(() => {
+    if (source !== "native" || lastFrameReceivedAtMs === null) {
+      return undefined;
+    }
+
+    const refreshNativeFrameAgeTimer = window.setInterval(() => {
+      setNativeFrameAgeCurrentTimeMs(Date.now());
+    }, NATIVE_FRAME_AGE_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(refreshNativeFrameAgeTimer);
+    };
+  }, [lastFrameReceivedAtMs, source]);
 
   useEffect(() => {
     if (endpointCopyFeedback === null) {
