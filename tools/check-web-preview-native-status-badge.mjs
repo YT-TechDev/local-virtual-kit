@@ -50,7 +50,7 @@ const hasJsxAttribute = (source, attributeName, expectedValue) => {
 const hasConditionalEndpointFeedbackDescription = (source) => {
   const feedbackIdPattern = escapeRegExp(ENDPOINT_COPY_FEEDBACK_ID);
   const conditionalDescriptionPattern = new RegExp(
-    `\\baria-describedby=\\{\\s*currentEndpointCopyFeedback\\s*!==\\s*null\\s*\\?\\s*["']${feedbackIdPattern}["']\\s*:\\s*undefined\\s*\\}`,
+    `\\baria-describedby=\\{\\s*currentEndpointCopyFeedback\\s*!==\\s*null\\s*\\?\\s*(?:["']${feedbackIdPattern}["']|ENDPOINT_COPY_FEEDBACK_ID)\\s*:\\s*undefined\\s*\\}`,
   );
 
   return conditionalDescriptionPattern.test(source);
@@ -272,6 +272,16 @@ const runSmokeCheck = async () => {
     );
   }
 
+  if (
+    !source.includes(
+      `const ENDPOINT_COPY_FEEDBACK_ID = "${ENDPOINT_COPY_FEEDBACK_ID}"`,
+    )
+  ) {
+    fail(
+      `native endpoint copy feedback must use a stable ${ENDPOINT_COPY_FEEDBACK_ID} id constant`,
+    );
+  }
+
   const endpointCopyGuardIndex = source.indexOf(
     "{sourceBadgeContent.endpointNote !== null && (",
   );
@@ -363,6 +373,7 @@ const runSmokeCheck = async () => {
   }
 
   if (
+    !endpointCopyFeedbackMarkup.includes("id={ENDPOINT_COPY_FEEDBACK_ID}") &&
     !hasJsxAttribute(
       endpointCopyFeedbackMarkup,
       "id",

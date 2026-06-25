@@ -58,6 +58,7 @@ const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
+const ENDPOINT_COPY_FEEDBACK_ID = "web-preview-endpoint-copy-feedback";
 const SOURCE_BADGE_ENDPOINT_NOTE_ID = "web-preview-native-endpoint-note";
 
 type EndpointCopyFeedbackState = {
@@ -332,7 +333,7 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
                 onClick={handleCopyEndpoint}
                 aria-describedby={
                   currentEndpointCopyFeedback !== null
-                    ? "web-preview-endpoint-copy-feedback"
+                    ? ENDPOINT_COPY_FEEDBACK_ID
                     : undefined
                 }
               >
@@ -340,7 +341,7 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
               </button>
               {currentEndpointCopyFeedback !== null && (
                 <span
-                  id="web-preview-endpoint-copy-feedback"
+                  id={ENDPOINT_COPY_FEEDBACK_ID}
                   className="preview-source-badge__copy-feedback"
                   role="status"
                   aria-live="polite"
