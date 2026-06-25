@@ -107,11 +107,7 @@ const runCheck = async () => {
     { left: 0, right: 1 },
     "eyes.leftOpen and eyes.rightOpen are clamped to 0..1",
   );
-  assertDeepEqual(
-    mapped.gaze,
-    [1, -1],
-    "eyes.gaze.x/y are clamped to -1..1",
-  );
+  assertDeepEqual(mapped.gaze, [1, -1], "eyes.gaze.x/y are clamped to -1..1");
   assertDeepEqual(
     mapped.mouth,
     { open: 1, smile: 0 },
