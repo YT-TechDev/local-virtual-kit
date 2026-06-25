@@ -540,9 +540,8 @@ export class NativePipelineManager {
 
     await new Promise<void>((resolvePromise) => {
       let settled = false
-      let timeout: ReturnType<typeof setTimeout>
 
-      const settle = () => {
+      const settle = (): void => {
         if (settled) return
         settled = true
         clearTimeout(timeout)
@@ -550,7 +549,7 @@ export class NativePipelineManager {
         resolvePromise()
       }
 
-      timeout = setTimeout(() => {
+      const timeout = setTimeout(() => {
         this.killProcess(childProcess, 'SIGKILL')
         settle()
       }, FORCE_KILL_TIMEOUT_MS)
