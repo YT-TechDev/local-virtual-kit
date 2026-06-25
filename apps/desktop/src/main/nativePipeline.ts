@@ -373,35 +373,38 @@ export class NativePipelineManager {
     }
 
     this.isStopping = true
-    this.status = {
-      ...this.status,
-      nativeTrackerStatus: this.trackerProcess ? 'stopping' : this.status.nativeTrackerStatus,
-      motionBridgeStatus: this.bridgeProcess ? 'stopping' : this.status.motionBridgeStatus,
-      lastMessage: 'Stopping development native MotionFrame pipeline.'
-    }
+    try {
+      this.status = {
+        ...this.status,
+        nativeTrackerStatus: this.trackerProcess ? 'stopping' : this.status.nativeTrackerStatus,
+        motionBridgeStatus: this.bridgeProcess ? 'stopping' : this.status.motionBridgeStatus,
+        lastMessage: 'Stopping development native MotionFrame pipeline.'
+      }
 
-    if (this.trackerProcess && this.bridgeProcess) {
-      this.trackerProcess.stdout.unpipe(this.bridgeProcess.stdin)
-    }
+      if (this.trackerProcess && this.bridgeProcess) {
+        this.trackerProcess.stdout.unpipe(this.bridgeProcess.stdin)
+      }
 
-    if (this.bridgeProcess?.stdin.writable) {
-      this.bridgeProcess.stdin.end()
-    }
+      if (this.bridgeProcess?.stdin.writable) {
+        this.bridgeProcess.stdin.end()
+      }
 
-    await Promise.all([
-      this.terminateProcess(this.trackerProcess),
-      this.terminateProcess(this.bridgeProcess)
-    ])
+      await Promise.all([
+        this.terminateProcess(this.trackerProcess),
+        this.terminateProcess(this.bridgeProcess)
+      ])
 
-    this.trackerProcess = null
-    this.bridgeProcess = null
-    this.status = {
-      ...this.status,
-      nativeTrackerStatus: 'exited',
-      motionBridgeStatus: 'exited',
-      lastMessage: 'Development native MotionFrame pipeline stopped.'
+      this.trackerProcess = null
+      this.bridgeProcess = null
+      this.status = {
+        ...this.status,
+        nativeTrackerStatus: 'exited',
+        motionBridgeStatus: 'exited',
+        lastMessage: 'Development native MotionFrame pipeline stopped.'
+      }
+    } finally {
+      this.isStopping = false
     }
-    this.isStopping = false
 
     return this.getStatus()
   }
@@ -536,14 +539,23 @@ export class NativePipelineManager {
     }
 
     await new Promise<void>((resolvePromise) => {
-      const timeout = setTimeout(() => {
-        this.killProcess(childProcess)
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout>
+
+      const settle = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        childProcess.removeListener('exit', settle)
+        resolvePromise()
+      }
+
+      timeout = setTimeout(() => {
+        this.killProcess(childProcess, 'SIGKILL')
+        settle()
       }, FORCE_KILL_TIMEOUT_MS)
 
-      childProcess.once('exit', () => {
-        clearTimeout(timeout)
-        resolvePromise()
-      })
+      childProcess.on('exit', settle)
 
       this.killProcess(childProcess, 'SIGTERM')
     })
