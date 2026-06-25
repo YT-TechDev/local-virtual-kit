@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MotionFrame } from "@lvk/motion-protocol";
 import { parseFreshNativeMotionFrame } from "../motion/nativeMotionFrameAcceptance";
+import { isNativeFallbackReady } from "../motion/nativeMotionFrameFallback";
 
 export const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 export const RECONNECT_DELAY_MS = 1000;
@@ -61,7 +62,13 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
     }
 
     const markFallbackIfSocketIsOpen = () => {
-      if (isUnmounted || websocket?.readyState !== WebSocket.OPEN) {
+      if (
+        !isNativeFallbackReady(
+          isUnmounted,
+          websocket?.readyState ?? null,
+          WebSocket.OPEN,
+        )
+      ) {
         return;
       }
 
