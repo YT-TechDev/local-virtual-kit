@@ -2,18 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import type { MotionFrame } from "@lvk/motion-protocol";
 import { parseFreshNativeMotionFrame } from "../motion/nativeMotionFrameAcceptance";
 import { isNativeFallbackReady } from "../motion/nativeMotionFrameFallback";
+import {
+  getNativeMotionConnectingStatus,
+  getNativeMotionReconnectStatus,
+} from "../motion/nativeMotionFrameLifecycle";
+import type { NativeMotionConnectionStatus } from "../motion/nativeMotionFrameLifecycle";
+export type { NativeMotionConnectionStatus } from "../motion/nativeMotionFrameLifecycle";
 
 export const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 export const RECONNECT_DELAY_MS = 1000;
 export const NATIVE_FRAME_STALE_TIMEOUT_MS = 1800;
-
-export type NativeMotionConnectionStatus =
-  | "disabled"
-  | "connecting"
-  | "connected"
-  | "connected_waiting_for_frame"
-  | "reconnecting"
-  | "fallback";
 
 type NativeMotionFrameState = {
   latestFrame: MotionFrame | null;
@@ -85,13 +83,17 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
     };
 
     const scheduleReconnect = () => {
-      if (isUnmounted || reconnectTimer !== undefined) {
+      const reconnectStatus = getNativeMotionReconnectStatus(
+        isUnmounted,
+        reconnectTimer !== undefined,
+      );
+      if (reconnectStatus === null) {
         return;
       }
 
       clearStaleFrameTimer();
       clearNativeFrame();
-      setConnectionStatus("reconnecting");
+      setConnectionStatus(reconnectStatus);
       reconnectTimer = window.setTimeout(() => {
         reconnectTimer = undefined;
         connect();
@@ -107,7 +109,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
       latestTimestampRef.current = -Infinity;
       clearNativeFrame();
       setConnectionStatus(
-        hasAttemptedConnection ? "reconnecting" : "connecting",
+        getNativeMotionConnectingStatus(hasAttemptedConnection),
       );
       hasAttemptedConnection = true;
       const activeWebSocket = new WebSocket(NATIVE_MOTION_WS_URL);
