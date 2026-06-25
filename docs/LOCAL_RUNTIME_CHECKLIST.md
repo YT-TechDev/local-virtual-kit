@@ -9,6 +9,12 @@ This checklist verifies the LVK v0.1 local runtime paths without changing runtim
 - Do not claim real webcam/OpenCV validation unless it was performed on a local machine with a camera, OS camera permission, and an OpenCV-enabled native build.
 - Electron, webcam, OBS, and OS camera permission checks are local/manual checks. They are not expected to pass in headless CI, Codex, cloud runners, or machines without camera forwarding.
 
+## Current v0.1 verification status
+
+The completed 2026-06-26 local verification pass is recorded in [`docs/reports/local-runtime-verification-2026-06-26.md`](./reports/local-runtime-verification-2026-06-26.md). That pass confirmed automated checks, native dummy output, MotionFrame bridge smoke, Web Preview dummy/native modes, and Electron native pipeline start/stop for the current local-first dummy/native-dummy runtime paths.
+
+OBS Browser Source validation and OpenCV camera validation remain environment-dependent follow-up checks. Do not claim OBS, webcam/OpenCV, or OS camera permission validation unless those checks are performed in an environment that provides the required local tools, hardware, and permissions.
+
 ## Automated checks
 
 Run these checks from the repository root when preparing a full local runtime verification pass. For a documentation-only change, `pnpm format:check` is the minimum required check; other runtime checks may be documented as not run when they are outside the change scope.
