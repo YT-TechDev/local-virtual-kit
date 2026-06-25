@@ -7,6 +7,7 @@ import {
   getNativeMotionReconnectStatus,
 } from "../motion/nativeMotionFrameLifecycle";
 import type { NativeMotionConnectionStatus } from "../motion/nativeMotionFrameLifecycle";
+import { createBrowserNativeMotionFrameRuntime } from "../motion/nativeMotionFrameRuntime";
 export type { NativeMotionConnectionStatus } from "../motion/nativeMotionFrameLifecycle";
 
 export const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
@@ -27,6 +28,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
   useEffect(() => {
     latestTimestampRef.current = -Infinity;
 
+    const runtime = createBrowserNativeMotionFrameRuntime();
     let websocket: WebSocket | null = null;
     let reconnectTimer: number | undefined;
     let staleFrameTimer: number | undefined;
@@ -35,14 +37,14 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
 
     const clearReconnectTimer = () => {
       if (reconnectTimer !== undefined) {
-        window.clearTimeout(reconnectTimer);
+        runtime.clearTimeout(reconnectTimer);
         reconnectTimer = undefined;
       }
     };
 
     const clearStaleFrameTimer = () => {
       if (staleFrameTimer !== undefined) {
-        window.clearTimeout(staleFrameTimer);
+        runtime.clearTimeout(staleFrameTimer);
         staleFrameTimer = undefined;
       }
     };
@@ -76,7 +78,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
 
     const resetStaleFrameTimer = () => {
       clearStaleFrameTimer();
-      staleFrameTimer = window.setTimeout(() => {
+      staleFrameTimer = runtime.setTimeout(() => {
         staleFrameTimer = undefined;
         markFallbackIfSocketIsOpen();
       }, NATIVE_FRAME_STALE_TIMEOUT_MS);
@@ -94,7 +96,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
       clearStaleFrameTimer();
       clearNativeFrame();
       setConnectionStatus(reconnectStatus);
-      reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = runtime.setTimeout(() => {
         reconnectTimer = undefined;
         connect();
       }, RECONNECT_DELAY_MS);
@@ -112,7 +114,7 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
         getNativeMotionConnectingStatus(hasAttemptedConnection),
       );
       hasAttemptedConnection = true;
-      const activeWebSocket = new WebSocket(NATIVE_MOTION_WS_URL);
+      const activeWebSocket = runtime.createWebSocket(NATIVE_MOTION_WS_URL);
       websocket = activeWebSocket;
 
       const isActiveWebSocketOpen = () =>
