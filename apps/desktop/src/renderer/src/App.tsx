@@ -820,6 +820,38 @@ function App(): React.JSX.Element {
               <StatusPill label="Auto-refreshing" />
             </div>
 
+            <div className="runtime-status-summary" aria-label="Native runtime overview">
+              <p className="runtime-status-summary__header">Native runtime overview</p>
+              <ul className="runtime-status-summary__items">
+                <li className="runtime-status-summary__item">
+                  <span>Native tracker</span>
+                  <StatusPill
+                    label={statusLabels[runtimeStatus.nativeTrackerStatus]}
+                    tone={getStatusTone(runtimeStatus.nativeTrackerStatus)}
+                  />
+                </li>
+                <li className="runtime-status-summary__item">
+                  <span>Motion bridge</span>
+                  <StatusPill
+                    label={bridgeLabels[runtimeStatus.motionBridgeStatus]}
+                    tone={getStatusTone(runtimeStatus.motionBridgeStatus)}
+                  />
+                </li>
+                <li className="runtime-status-summary__item">
+                  <span>Camera source</span>
+                  <StatusPill label={cameraSourceLabels[activeCameraSource]} />
+                </li>
+                {lastRuntimeStatusRefreshLabel ? (
+                  <li className="runtime-status-summary__item">
+                    <span>Last refreshed</span>
+                    <time dateTime={lastRuntimeStatusRefreshAt?.toISOString()}>
+                      {lastRuntimeStatusRefreshLabel}
+                    </time>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+
             <dl className="status-list">
               <div>
                 <dt>MotionFrame endpoint</dt>
