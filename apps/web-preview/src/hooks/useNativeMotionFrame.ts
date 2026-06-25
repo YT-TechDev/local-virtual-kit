@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { parseNativeMotionFrameJson } from "@lvk/motion-protocol";
 import type { MotionFrame } from "@lvk/motion-protocol";
-import { isFreshMotionFrame } from "../motion/nativeMotionFrameFreshness";
+import { parseFreshNativeMotionFrame } from "../motion/nativeMotionFrameAcceptance";
 
 export const NATIVE_MOTION_WS_URL = "ws://127.0.0.1:45731/motion";
 export const RECONNECT_DELAY_MS = 1000;
@@ -126,9 +125,12 @@ export function useNativeMotionFrame(enabled: boolean): NativeMotionFrameState {
           return;
         }
 
-        const frame = parseNativeMotionFrameJson(event.data);
+        const frame = parseFreshNativeMotionFrame(
+          event.data,
+          latestTimestampRef.current,
+        );
 
-        if (!isFreshMotionFrame(frame, latestTimestampRef.current)) {
+        if (frame === null) {
           return;
         }
 
