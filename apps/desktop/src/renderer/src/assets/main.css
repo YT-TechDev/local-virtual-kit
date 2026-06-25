@@ -424,6 +424,38 @@ dd {
   font-weight: 700;
 }
 
+.runtime-details-panel {
+  margin-top: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.runtime-details-panel__header {
+  margin-bottom: 6px;
+  color: #9fb2d4;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runtime-details-panel__items {
+  display: grid;
+  gap: 8px;
+}
+
+.runtime-details-panel__item {
+  min-width: 0;
+}
+
+.runtime-details-panel__items > .runtime-message,
+.runtime-details-panel__items > .error-message {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 @media (max-width: 860px) {
   body {
     min-width: 0;

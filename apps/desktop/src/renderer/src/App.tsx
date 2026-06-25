@@ -1133,30 +1133,41 @@ function App(): React.JSX.Element {
               </div>
             ) : null}
 
-            {runtimeStatus.lastError ? (
-              <p
-                className="error-message compact"
-                role="alert"
-                aria-labelledby="latest-error-label"
-              >
-                <strong id="latest-error-label" className="status-detail-label">
-                  Latest error
-                </strong>
-                {runtimeStatus.lastError}
-              </p>
-            ) : null}
-            {pipelineError ? (
-              <p className="error-message compact" role="alert">
-                {pipelineError}
-              </p>
-            ) : null}
-            {runtimeStatus.lastMessage ? (
-              <p className="runtime-message" role="status" aria-labelledby="latest-status-label">
-                <strong id="latest-status-label" className="status-detail-label">
-                  Latest status
-                </strong>
-                {runtimeStatus.lastMessage}
-              </p>
+            {runtimeStatus.lastMessage || runtimeStatus.lastError || pipelineError ? (
+              <div className="runtime-details-panel">
+                <p className="runtime-details-panel__header">Runtime details</p>
+                <div className="runtime-details-panel__items">
+                  {runtimeStatus.lastMessage ? (
+                    <p
+                      className="runtime-message"
+                      role="status"
+                      aria-labelledby="latest-status-label"
+                    >
+                      <strong id="latest-status-label" className="status-detail-label">
+                        Latest status
+                      </strong>
+                      {runtimeStatus.lastMessage}
+                    </p>
+                  ) : null}
+                  {runtimeStatus.lastError ? (
+                    <p
+                      className="error-message compact"
+                      role="alert"
+                      aria-labelledby="latest-error-label"
+                    >
+                      <strong id="latest-error-label" className="status-detail-label">
+                        Latest error
+                      </strong>
+                      {runtimeStatus.lastError}
+                    </p>
+                  ) : null}
+                  {pipelineError ? (
+                    <p className="error-message compact" role="alert">
+                      {pipelineError}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </section>
 
