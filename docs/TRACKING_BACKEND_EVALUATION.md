@@ -149,6 +149,31 @@ A design-only helper-process prototype design memo is recorded in `docs/TRACKING
 
 Use this workflow in a future backend evaluation PR after collecting real local measurements. The template below is evidence scaffolding only; leaving it blank or filling it with assumptions is not a validation result by itself.
 
+### Native runtime capabilities preflight
+
+Before running a backend or camera validation pass, run the Native Core capabilities command:
+
+```bash
+lvk-tracker-core --print-runtime-capabilities
+```
+
+This command reports build/runtime capability metadata such as OpenCV camera support, OpenCV face detector support, supported camera sources, and supported face detectors. It exits before opening any camera source, before starting the tracking loop, and before emitting MotionFrame JSON.
+
+Example output shape with generic values:
+
+```txt
+LVK native runtime capabilities
+opencvCameraSupport=false
+opencvFaceDetectorSupport=false
+supportedCameraSources=dummy
+supportedFaceDetectors=noop
+cameraOpened=false
+motionFramesEmitted=false
+localOnly=true
+```
+
+The OpenCV support values are build-dependent. This preflight does not open a camera, does not emit MotionFrame JSON, and does not validate OBS, webcam/OpenCV camera access, OS camera permission, or actual camera capture. Treat it as a build/runtime capability preflight only.
+
 - Capture diagnostics from stderr-only `[pipeline] periodic:` and `[face] periodic:` lines. Keep stdout reserved for newline-delimited MotionFrame JSON so bridges and protocol consumers remain unchanged.
 - Summarize the captured stderr log with `node tools/summarize-native-diagnostics.mjs <stderr-log-path>`. This summarizer reads safe metadata such as pipeline timing fields, `detectionDurationMs`, `hasFace`, detector counts, and has-face / lost-face rates; it must not consume raw frames, pixels, image dumps, or MotionFrame stdout.
 - Run `pnpm test:native-diagnostics-summarize` before relying on the summarizer in an evaluation PR.
