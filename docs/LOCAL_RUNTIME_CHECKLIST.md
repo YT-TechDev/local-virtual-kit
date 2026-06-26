@@ -95,7 +95,17 @@ This is a local/manual check because it requires local OpenCV support, a webcam,
 
 - [ ] Confirm CMake found OpenCV during native configure.
 - [ ] Confirm the OS grants camera permission to the terminal or Electron host process being tested.
-- [ ] Run a finite local camera smoke only when a webcam is available:
+- [ ] Run a finite local camera smoke only when a webcam is available. Use the helper script (which first checks `--print-runtime-capabilities` and skips honestly when OpenCV is unavailable):
+
+```bash
+node tools/check-native-opencv-camera-smoke.mjs
+# or with an explicit binary path:
+node tools/check-native-opencv-camera-smoke.mjs native/tracker-core/build/lvk-tracker-core
+# or via the package script:
+pnpm smoke:native-opencv-camera:local
+```
+
+Alternatively, run the raw smoke command directly:
 
 ```bash
 ./native/tracker-core/build/lvk-tracker-core --camera-source opencv --frames 3 --log-camera-status
