@@ -198,17 +198,47 @@ function resolveTrackerExecutable(repoRoot: string): string | null {
   )
 }
 
+const CAPABILITIES_REQUIRED_KEYS = [
+  'opencvCameraSupport',
+  'opencvFaceDetectorSupport',
+  'supportedCameraSources',
+  'supportedFaceDetectors'
+] as const
+
+const CAPABILITIES_FAILED_RESULT: NativeRuntimeCapabilities = {
+  opencvCameraSupport: null,
+  opencvFaceDetectorSupport: null,
+  supportedCameraSources: [],
+  supportedFaceDetectors: [],
+  cameraOpened: false,
+  motionFramesEmitted: false,
+  localOnly: true,
+  error: 'Native runtime capabilities command failed. Rebuild the native tracker and retry.'
+}
+
 function parseCapabilitiesOutput(stdout: string): NativeRuntimeCapabilities {
+  if (!stdout.includes('LVK native runtime capabilities')) {
+    return CAPABILITIES_FAILED_RESULT
+  }
+
   const lines = stdout.split('\n')
   const getValue = (key: string): string | undefined => {
     const line = lines.find((l) => l.startsWith(`${key}=`))
     return line ? line.slice(key.length + 1).trim() : undefined
   }
+
+  for (const key of CAPABILITIES_REQUIRED_KEYS) {
+    if (getValue(key) === undefined) {
+      return CAPABILITIES_FAILED_RESULT
+    }
+  }
+
   const parseBool = (val: string | undefined): boolean | null => {
     if (val === 'true') return true
     if (val === 'false') return false
     return null
   }
+
   return {
     opencvCameraSupport: parseBool(getValue('opencvCameraSupport')),
     opencvFaceDetectorSupport: parseBool(getValue('opencvFaceDetectorSupport')),
@@ -218,6 +248,17 @@ function parseCapabilitiesOutput(stdout: string): NativeRuntimeCapabilities {
     motionFramesEmitted: false,
     localOnly: true
   }
+}
+
+const CAPABILITIES_SPAWN_FAILED_RESULT: NativeRuntimeCapabilities = {
+  opencvCameraSupport: null,
+  opencvFaceDetectorSupport: null,
+  supportedCameraSources: [],
+  supportedFaceDetectors: [],
+  cameraOpened: false,
+  motionFramesEmitted: false,
+  localOnly: true,
+  error: 'Native runtime capabilities command could not start. Build the native tracker and retry.'
 }
 
 export async function queryNativeRuntimeCapabilities(): Promise<NativeRuntimeCapabilities> {
@@ -246,21 +287,16 @@ export async function queryNativeRuntimeCapabilities(): Promise<NativeRuntimeCap
       stdout += chunk.toString()
     })
 
-    child.on('close', () => {
+    child.on('close', (code: number | null) => {
+      if (code !== 0) {
+        resolve(CAPABILITIES_FAILED_RESULT)
+        return
+      }
       resolve(parseCapabilitiesOutput(stdout))
     })
 
-    child.on('error', (err: Error) => {
-      resolve({
-        opencvCameraSupport: null,
-        opencvFaceDetectorSupport: null,
-        supportedCameraSources: [],
-        supportedFaceDetectors: [],
-        cameraOpened: false,
-        motionFramesEmitted: false,
-        localOnly: true,
-        error: truncateStatusMessage(describeTrackerSpawnError(err))
-      })
+    child.on('error', () => {
+      resolve(CAPABILITIES_SPAWN_FAILED_RESULT)
     })
   })
 }

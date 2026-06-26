@@ -216,6 +216,51 @@ requireMatch(
   "nativePipeline.ts must hardcode localOnly: true in capability results",
 );
 
+// Non-zero exit code must produce a generic error, not parsed output
+requireMatch(
+  pipelineSrc,
+  /child\.on\s*\(\s*['"]close['"][\s\S]*?code[\s\S]*?!==\s*0/u,
+  "nativePipeline.ts close handler must treat non-zero exit codes as a failure",
+);
+
+// close handler must not call parseCapabilitiesOutput unconditionally
+const closeHandlerMatch = pipelineSrc.match(
+  /child\.on\s*\(\s*['"]close['"][\s\S]*?\}\s*\)/u,
+);
+if (!closeHandlerMatch) {
+  fail(
+    "nativePipeline.ts must define a close handler for the capabilities child process",
+  );
+}
+if (
+  !/code\s*!==\s*0/.test(closeHandlerMatch[0]) ||
+  !closeHandlerMatch[0].includes("parseCapabilitiesOutput")
+) {
+  fail(
+    "nativePipeline.ts close handler must guard parseCapabilitiesOutput behind a zero-exit-code check",
+  );
+}
+
+// Spawn error handler must not forward describeTrackerSpawnError or err.message to renderer
+requireNoMatch(
+  pipelineSrc,
+  /child\.on\s*\(\s*['"]error['"][\s\S]{0,300}describeTrackerSpawnError/u,
+  "nativePipeline.ts capabilities error handler must not pass describeTrackerSpawnError to the renderer",
+);
+
+requireNoMatch(
+  pipelineSrc,
+  /child\.on\s*\(\s*['"]error['"][\s\S]{0,300}err\.message/u,
+  "nativePipeline.ts capabilities error handler must not expose err.message to the renderer",
+);
+
+// Header validation must be present before parsing
+requireMatch(
+  pipelineSrc,
+  /LVK native runtime capabilities/u,
+  "nativePipeline.ts must validate the 'LVK native runtime capabilities' header before accepting output",
+);
+
 // ---------------------------------------------------------------------------
 // E. Renderer UI
 // ---------------------------------------------------------------------------
@@ -274,7 +319,10 @@ console.log(
     "queryNativeRuntimeCapabilities is called.\n" +
     "  D. Capability query — queryNativeRuntimeCapabilities exported; " +
     "--print-runtime-capabilities flag used; " +
-    "cameraOpened/motionFramesEmitted/localOnly hardcoded in results.\n" +
+    "cameraOpened/motionFramesEmitted/localOnly hardcoded in results; " +
+    "non-zero exit codes produce a sanitized generic error; " +
+    "spawn error handler does not expose describeTrackerSpawnError or err.message; " +
+    "output header validated before parsing.\n" +
     "  E. Renderer UI — capabilities section present with heading and disclaimer; " +
     "getNativeRuntimeCapabilities called; no webcam/OBS/OS camera permission validation claimed.",
 );
