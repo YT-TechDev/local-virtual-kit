@@ -4,6 +4,7 @@ import {
   type DesktopRuntimeSettings,
   type LvkDesktopApi,
   type LvkRuntimeStatus,
+  type NativeRuntimeCapabilities,
   type NativePipelineStartOptions
 } from './api'
 
@@ -31,6 +32,11 @@ const api: LvkDesktopApi = {
   },
   async openExternalUrl(url: string): Promise<void> {
     await ipcRenderer.invoke(LVK_IPC_CHANNELS.openExternalUrl, url)
+  },
+  async getNativeRuntimeCapabilities(): Promise<NativeRuntimeCapabilities> {
+    return (await ipcRenderer.invoke(
+      LVK_IPC_CHANNELS.getNativeRuntimeCapabilities
+    )) as NativeRuntimeCapabilities
   }
 }
 

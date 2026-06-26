@@ -5,6 +5,7 @@ import nodeProcess from 'node:process'
 import type {
   LvkRuntimeStatus,
   MotionBridgeStatus,
+  NativeRuntimeCapabilities,
   NativePipelineCameraSource,
   NativePipelineFaceDetector,
   NativeTrackerStatus
@@ -195,6 +196,73 @@ function resolveTrackerExecutable(repoRoot: string): string | null {
     getTrackerExecutableCandidates(repoRoot).find((candidatePath) => existsSync(candidatePath)) ??
     null
   )
+}
+
+function parseCapabilitiesOutput(stdout: string): NativeRuntimeCapabilities {
+  const lines = stdout.split('\n')
+  const getValue = (key: string): string | undefined => {
+    const line = lines.find((l) => l.startsWith(`${key}=`))
+    return line ? line.slice(key.length + 1).trim() : undefined
+  }
+  const parseBool = (val: string | undefined): boolean | null => {
+    if (val === 'true') return true
+    if (val === 'false') return false
+    return null
+  }
+  return {
+    opencvCameraSupport: parseBool(getValue('opencvCameraSupport')),
+    opencvFaceDetectorSupport: parseBool(getValue('opencvFaceDetectorSupport')),
+    supportedCameraSources: getValue('supportedCameraSources')?.split(',').filter(Boolean) ?? [],
+    supportedFaceDetectors: getValue('supportedFaceDetectors')?.split(',').filter(Boolean) ?? [],
+    cameraOpened: false,
+    motionFramesEmitted: false,
+    localOnly: true
+  }
+}
+
+export async function queryNativeRuntimeCapabilities(): Promise<NativeRuntimeCapabilities> {
+  const repoRoot = findRepoRoot()
+  const executablePath = resolveTrackerExecutable(repoRoot)
+
+  if (!executablePath) {
+    return {
+      opencvCameraSupport: null,
+      opencvFaceDetectorSupport: null,
+      supportedCameraSources: [],
+      supportedFaceDetectors: [],
+      cameraOpened: false,
+      motionFramesEmitted: false,
+      localOnly: true,
+      skipped: true,
+      error: 'Native tracker binary not found. Build the native tracker first.'
+    }
+  }
+
+  return new Promise((resolve) => {
+    let stdout = ''
+    const child = spawn(executablePath, ['--print-runtime-capabilities'])
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+
+    child.on('close', () => {
+      resolve(parseCapabilitiesOutput(stdout))
+    })
+
+    child.on('error', (err: Error) => {
+      resolve({
+        opencvCameraSupport: null,
+        opencvFaceDetectorSupport: null,
+        supportedCameraSources: [],
+        supportedFaceDetectors: [],
+        cameraOpened: false,
+        motionFramesEmitted: false,
+        localOnly: true,
+        error: truncateStatusMessage(describeTrackerSpawnError(err))
+      })
+    })
+  })
 }
 
 export class NativePipelineManager {

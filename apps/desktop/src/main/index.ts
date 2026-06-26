@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { NativePipelineManager } from './nativePipeline'
+import { NativePipelineManager, queryNativeRuntimeCapabilities } from './nativePipeline'
 import { loadRuntimeSettings, saveRuntimeSettings } from './runtimeSettingsConfig'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -139,6 +139,9 @@ function registerLvkIpcHandlers(): void {
     nativePipeline.start(parseNativePipelineStartOptions(options))
   )
   ipcMain.handle(LVK_IPC_CHANNELS.stopNativePipeline, () => nativePipeline.stop())
+  ipcMain.handle(LVK_IPC_CHANNELS.getNativeRuntimeCapabilities, () =>
+    queryNativeRuntimeCapabilities()
+  )
   ipcMain.handle(LVK_IPC_CHANNELS.openExternalUrl, async (_event, url: unknown) => {
     if (typeof url !== 'string' || !isSafeLocalPreviewUrl(url)) {
       throw new Error('Only local LVK preview URLs can be opened from the desktop shell.')

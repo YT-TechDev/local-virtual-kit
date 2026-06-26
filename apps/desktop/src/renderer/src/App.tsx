@@ -3,6 +3,7 @@ import type {
   DesktopRuntimeSettings,
   LvkRuntimeStatus,
   MotionBridgeStatus,
+  NativeRuntimeCapabilities,
   NativePipelineCameraSource,
   NativePipelineFaceDetector,
   NativeTrackerStatus
@@ -247,6 +248,10 @@ function App(): React.JSX.Element {
   const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] =
     useState<CopyDiagnosticsMessage | null>(null)
   const [endpointCopyFeedback, setEndpointCopyFeedback] = useState<string | null>(null)
+  const [nativeCapabilities, setNativeCapabilities] = useState<NativeRuntimeCapabilities | null>(
+    null
+  )
+  const [isCapabilitiesLoading, setIsCapabilitiesLoading] = useState(false)
 
   const isMountedRef = useRef(false)
   const isRuntimeStatusRequestInFlightRef = useRef(false)
@@ -568,6 +573,17 @@ function App(): React.JSX.Element {
     setSelectedCameraHeight(cameraHeight)
     void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), cameraHeight })
   }
+
+  const fetchNativeCapabilities = useCallback(async (): Promise<void> => {
+    if (!desktopApi || isCapabilitiesLoading) return
+    setIsCapabilitiesLoading(true)
+    try {
+      const result = await desktopApi.getNativeRuntimeCapabilities()
+      setNativeCapabilities(result)
+    } finally {
+      setIsCapabilitiesLoading(false)
+    }
+  }, [desktopApi, isCapabilitiesLoading])
 
   const copyNativeRuntimeDiagnostics = async (): Promise<void> => {
     if (isRuntimeStatusRefreshPending) {
@@ -1168,6 +1184,81 @@ function App(): React.JSX.Element {
                   ) : null}
                 </div>
               </div>
+            ) : null}
+          </section>
+
+          <section className="card" aria-labelledby="native-capabilities-heading">
+            <div className="card-header">
+              <div>
+                <p className="section-label">Preflight check</p>
+                <h2 id="native-capabilities-heading">Native runtime capabilities</h2>
+              </div>
+            </div>
+
+            <p className="note">
+              Safe build-time preflight. Does not open a camera, start tracking, or validate webcam
+              access, OS camera permission, or OBS Browser Source.
+            </p>
+
+            <div className="diagnostics-copy-row">
+              <button
+                type="button"
+                onClick={fetchNativeCapabilities}
+                disabled={!desktopApi || isCapabilitiesLoading}
+              >
+                {isCapabilitiesLoading ? 'Checking…' : 'Check capabilities'}
+              </button>
+            </div>
+
+            {nativeCapabilities ? (
+              nativeCapabilities.skipped === true || nativeCapabilities.error !== undefined ? (
+                <p className="error-message compact" role="alert">
+                  {nativeCapabilities.error ?? 'Native tracker binary unavailable.'}
+                </p>
+              ) : (
+                <dl className="status-list">
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">OpenCV camera support</dt>
+                    <dd>
+                      {nativeCapabilities.opencvCameraSupport === true
+                        ? 'Enabled'
+                        : nativeCapabilities.opencvCameraSupport === false
+                          ? 'Disabled'
+                          : 'Unknown'}
+                    </dd>
+                  </div>
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">OpenCV face detector support</dt>
+                    <dd>
+                      {nativeCapabilities.opencvFaceDetectorSupport === true
+                        ? 'Enabled'
+                        : nativeCapabilities.opencvFaceDetectorSupport === false
+                          ? 'Disabled'
+                          : 'Unknown'}
+                    </dd>
+                  </div>
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">Supported camera sources</dt>
+                    <dd>{nativeCapabilities.supportedCameraSources.join(', ') || '—'}</dd>
+                  </div>
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">Supported face detectors</dt>
+                    <dd>{nativeCapabilities.supportedFaceDetectors.join(', ') || '—'}</dd>
+                  </div>
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">Camera opened</dt>
+                    <dd>No</dd>
+                  </div>
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">MotionFrames emitted</dt>
+                    <dd>No</dd>
+                  </div>
+                  <div className="status-list__item">
+                    <dt className="status-detail-label">Local only</dt>
+                    <dd>Yes</dd>
+                  </div>
+                </dl>
+              )
             ) : null}
           </section>
 
