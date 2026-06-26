@@ -15,6 +15,35 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
+const windowsOpenCvDllPathGuidance = `
+The native tracker failed to start with STATUS_DLL_NOT_FOUND / 0xC0000135.
+For Windows OpenCV-enabled vcpkg builds, ensure the relevant OpenCV runtime DLL directory is available on PATH before running this local smoke helper.
+This guidance is for local/dev validation only; the checker does not modify PATH, bundle DLLs, or implement packaging behavior.
+Use placeholder paths in docs and reports, for example:
+- <vcpkg-root>/installed/x64-windows/bin
+- <vcpkg-root>/installed/x64-windows/debug/bin
+Do not commit local absolute paths.`;
+
+const dllMissingStatusCodes = new Set([0xc0000135, 3221225781, -1073741515]);
+const dllMissingPattern =
+  /STATUS_DLL_NOT_FOUND|0xC0000135|3221225781|-1073741515/iu;
+
+function isWindowsDllMissingFailure(result) {
+  return (
+    dllMissingStatusCodes.has(result.status) ||
+    dllMissingPattern.test(result.error?.message ?? "") ||
+    dllMissingPattern.test(result.stderr ?? "")
+  );
+}
+
+function withWindowsOpenCvDllPathGuidance(message, result) {
+  if (!isWindowsDllMissingFailure(result)) {
+    return message;
+  }
+
+  return `${message}\n\n${windowsOpenCvDllPathGuidance}`;
+}
+
 const skip = (reason) => {
   console.log(`OpenCV camera smoke skipped: ${reason}`);
   process.exit(0);
@@ -79,14 +108,22 @@ const capResult = spawnSync(executablePath, ["--print-runtime-capabilities"], {
 });
 
 if (capResult.error) {
-  fail(`could not run ${executablePath}: ${capResult.error.message}`);
+  fail(
+    withWindowsOpenCvDllPathGuidance(
+      `could not run ${executablePath}: ${capResult.error.message}`,
+      capResult,
+    ),
+  );
 }
 
 if (capResult.status !== 0) {
   const stderr = capResult.stderr.trim();
   fail(
-    `${executablePath} --print-runtime-capabilities exited with status ${capResult.status}` +
-      (stderr ? `; stderr: ${stderr}` : ""),
+    withWindowsOpenCvDllPathGuidance(
+      `${executablePath} --print-runtime-capabilities exited with status ${capResult.status}` +
+        (stderr ? `; stderr: ${stderr}` : ""),
+      capResult,
+    ),
   );
 }
 
@@ -112,14 +149,22 @@ const smokeResult = spawnSync(
 );
 
 if (smokeResult.error) {
-  fail(`could not run smoke command: ${smokeResult.error.message}`);
+  fail(
+    withWindowsOpenCvDllPathGuidance(
+      `could not run smoke command: ${smokeResult.error.message}`,
+      smokeResult,
+    ),
+  );
 }
 
 if (smokeResult.status !== 0) {
   const stderr = smokeResult.stderr.trim();
   fail(
-    `smoke command exited with status ${smokeResult.status}` +
-      (stderr ? `\nstderr: ${stderr}` : ""),
+    withWindowsOpenCvDllPathGuidance(
+      `smoke command exited with status ${smokeResult.status}` +
+        (stderr ? `\nstderr: ${stderr}` : ""),
+      smokeResult,
+    ),
   );
 }
 
