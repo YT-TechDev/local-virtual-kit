@@ -51,11 +51,11 @@ localOnly=true
 
 ## 5. Additional checks run
 
-| Command | Result |
-| --- | --- |
-| `pnpm format:check` | PASS — all files formatted |
-| `node tools/check-native-runtime-capabilities.mjs` (Debug binary) | PASS — capabilities check passed |
-| `pnpm test` | PASS — all workspace and tool tests passed |
+| Command                                                           | Result                                     |
+| ----------------------------------------------------------------- | ------------------------------------------ |
+| `pnpm format:check`                                               | PASS — all files formatted                 |
+| `node tools/check-native-runtime-capabilities.mjs` (Debug binary) | PASS — capabilities check passed           |
+| `pnpm test`                                                       | PASS — all workspace and tool tests passed |
 
 ## 6. Privacy and artifact guardrails
 
