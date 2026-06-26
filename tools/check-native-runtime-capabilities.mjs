@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+
+const fail = (message) => {
+  console.error(`Native runtime capabilities check failed: ${message}`);
+  process.exit(1);
+};
+
+function resolveExecutable() {
+  const provided = process.argv[2];
+  if (provided) {
+    return provided;
+  }
+
+  const candidates = [
+    join(
+      repoRoot,
+      "native",
+      "tracker-core",
+      "build",
+      "Debug",
+      "lvk-tracker-core.exe",
+    ),
+    join(
+      repoRoot,
+      "native",
+      "tracker-core",
+      "build",
+      "Release",
+      "lvk-tracker-core.exe",
+    ),
+    join(repoRoot, "native", "tracker-core", "build", "lvk-tracker-core"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+const executablePath = resolveExecutable();
+
+if (!executablePath) {
+  console.log(
+    "Native runtime capabilities check skipped: native binary not found. " +
+      "Build the native tracker first with cmake -S native/tracker-core -B native/tracker-core/build && cmake --build native/tracker-core/build, " +
+      "or pass the binary path as the first argument.",
+  );
+  process.exit(0);
+}
+
+const result = spawnSync(executablePath, ["--print-runtime-capabilities"], {
+  encoding: "utf8",
+  maxBuffer: 1024 * 1024,
+});
+
+if (result.error) {
+  fail(`could not run ${executablePath}: ${result.error.message}`);
+}
+
+if (result.status !== 0) {
+  const stderr = result.stderr.trim();
+  fail(
+    `${executablePath} exited with status ${result.status}${
+      stderr ? `; stderr: ${stderr}` : ""
+    }`,
+  );
+}
+
+const stdout = result.stdout;
+
+const requiredKeys = [
+  "opencvCameraSupport=",
+  "opencvFaceDetectorSupport=",
+  "supportedCameraSources=",
+  "supportedFaceDetectors=",
+  "cameraOpened=false",
+  "motionFramesEmitted=false",
+  "localOnly=true",
+];
+
+for (const key of requiredKeys) {
+  if (!stdout.includes(key)) {
+    fail(
+      `expected stdout to include ${JSON.stringify(key)}\nActual stdout:\n${stdout}`,
+    );
+  }
+}
+
+if (!stdout.includes("LVK native runtime capabilities")) {
+  fail(
+    `expected stdout to include header "LVK native runtime capabilities"\nActual stdout:\n${stdout}`,
+  );
+}
+
+const motionFramePattern = /^\{"type":"motion_frame"/m;
+if (motionFramePattern.test(stdout)) {
+  fail(
+    `stdout must not contain MotionFrame JSON lines, but a MotionFrame-shaped line was found.\nActual stdout:\n${stdout}`,
+  );
+}
+
+const forbiddenTerms = ["telemetry", "analytics", "upload", "cloud", "network"];
+for (const term of forbiddenTerms) {
+  if (stdout.toLowerCase().includes(term)) {
+    fail(
+      `stdout must not include the term ${JSON.stringify(term)}\nActual stdout:\n${stdout}`,
+    );
+  }
+}
+
+console.log("Native runtime capabilities check passed.");
+console.log("Output:");
+process.stdout.write(stdout);
