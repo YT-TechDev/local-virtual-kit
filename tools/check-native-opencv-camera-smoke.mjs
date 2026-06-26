@@ -127,10 +127,10 @@ const smokeStdout = smokeResult.stdout;
 const smokeStderr = smokeResult.stderr;
 
 // Verify stdout contains MotionFrame-shaped JSON lines.
-const motionFramePattern = /^\{"type":"motion_frame"/m;
+const motionFramePattern = /^\{"schemaVersion":/m;
 if (!motionFramePattern.test(smokeStdout)) {
   fail(
-    `expected stdout to contain MotionFrame JSON lines matching {"type":"motion_frame"...}\nActual stdout:\n${smokeStdout}`,
+    `expected stdout to contain MotionFrame JSON lines matching {"schemaVersion":...}\nActual stdout:\n${smokeStdout}`,
   );
 }
 
