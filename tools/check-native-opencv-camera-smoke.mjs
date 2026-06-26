@@ -134,6 +134,19 @@ if (!motionFramePattern.test(smokeStdout)) {
   );
 }
 
+// Verify stdout does not contain OpenCV log contamination.
+const opencvLogMarkers = ["[ INFO:", "[ WARN:", "[ ERROR:", "[ FATAL:"];
+for (const marker of opencvLogMarkers) {
+  if (smokeStdout.includes(marker)) {
+    fail(
+      `stdout must not contain OpenCV log output; found ${JSON.stringify(marker)}.\n` +
+        `OpenCV logs contaminate the MotionFrame JSON stream. ` +
+        `Ensure cv::utils::logging::setLogLevel(LOG_LEVEL_WARNING) is called before camera open.\n` +
+        `Actual stdout:\n${smokeStdout}`,
+    );
+  }
+}
+
 // Verify stdout does not contain raw image data markers.
 const rawImageMarkers = ["data:image", "base64,", "PNG", "JFIF", "BM\x00"];
 for (const marker of rawImageMarkers) {
