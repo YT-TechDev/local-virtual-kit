@@ -96,6 +96,8 @@ This is a local/manual check because it requires local OpenCV support, a webcam,
 Use [`docs/reports/opencv-camera-smoke-template.md`](./reports/opencv-camera-smoke-template.md) when recording future OpenCV camera smoke results.
 
 - [ ] Confirm CMake found OpenCV during native configure.
+- [ ] On Windows OpenCV-enabled builds that dynamically link against vcpkg OpenCV, confirm the relevant vcpkg OpenCV DLL directory is available on `PATH` before running native runtime commands. Placeholder examples: `<vcpkg-root>/installed/x64-windows/bin` for release builds or `<vcpkg-root>/installed/x64-windows/debug/bin` for debug builds. If this runtime DLL path is missing, the native binary can fail to start with `STATUS_DLL_NOT_FOUND` / `0xC0000135`. This can affect `--print-runtime-capabilities`, `pnpm smoke:native-opencv-camera:local`, and `pnpm test` when the tested native binary is OpenCV-enabled and dynamically linked.
+- [ ] Do not commit local absolute vcpkg paths to docs, PR bodies, reports, logs, or source comments; use placeholders such as `<vcpkg-root>/installed/x64-windows/bin` instead.
 - [ ] Confirm the OS grants camera permission to the terminal or Electron host process being tested.
 - [ ] Run a finite local camera smoke only when a webcam is available. Use the helper script (which first checks `--print-runtime-capabilities` and skips honestly when OpenCV is unavailable):
 

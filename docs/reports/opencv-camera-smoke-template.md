@@ -16,6 +16,7 @@ This template is documentation-only. Replace placeholders when recording a real 
 
 - OpenCV found by CMake: yes/no
 - LVK `opencvCameraSupport`: true/false
+- OpenCV runtime DLL path configured: yes/no/not applicable/not checked
 - Webcam available: yes/no
 - OS camera permission granted: yes/no
 
@@ -49,6 +50,7 @@ Use `SKIP` when the helper did not run the actual camera smoke because a require
 
 - Native binary was missing or not built.
 - `opencvCameraSupport=false` or OpenCV was not found by CMake.
+- On dynamically linked Windows/vcpkg OpenCV builds, the required runtime DLL path was unavailable or not checked.
 - Webcam hardware was unavailable or not checked.
 - OS camera permission was unavailable, denied, or not checked.
 
@@ -67,6 +69,7 @@ Use `FAIL` when the helper or camera/runtime command attempted to run and failed
 - Do not print, write, upload, commit, or otherwise persist raw camera frames.
 - Do not commit screenshots, logs containing sensitive local paths, binaries, build artifacts, model files, cascade XML files, or other generated artifacts.
 - Do not include local machine paths, private/internal links, or unrelated tool/session URLs in the report.
+- Use placeholders such as `<vcpkg-root>/installed/x64-windows/bin` or `<vcpkg-root>/installed/x64-windows/debug/bin` instead of local absolute vcpkg paths when documenting Windows runtime DLL/PATH status.
 
 ## 6. Confirmation checklist
 
@@ -74,6 +77,7 @@ Use `FAIL` when the helper or camera/runtime command attempted to run and failed
 - [ ] Raw camera frames remained local to Native Core memory.
 - [ ] No screenshots were committed.
 - [ ] No logs containing sensitive local paths were committed.
+- [ ] No local absolute paths were committed to docs, PR bodies, reports, logs, or source comments.
 - [ ] No binaries, build artifacts, model files, or cascade XML files were committed.
 - [ ] No telemetry, analytics, cloud upload, external frame processing, hidden network calls, or new network behavior was introduced.
 - [ ] This report does not claim OBS, Electron GUI, webcam/OpenCV, OS camera permission, or real hardware validation beyond what was actually performed.
