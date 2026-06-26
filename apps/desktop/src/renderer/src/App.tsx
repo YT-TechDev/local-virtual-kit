@@ -703,6 +703,32 @@ function App(): React.JSX.Element {
     previewOpenFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
       ? previewOpenFeedback.message
       : null
+  const hasSuccessfulNativeCapabilities = Boolean(
+    nativeCapabilities &&
+    nativeCapabilities.skipped !== true &&
+    nativeCapabilities.error === undefined
+  )
+  const opencvCapabilityAdvisories = [
+    selectedCameraSource === 'opencv' && !hasSuccessfulNativeCapabilities
+      ? 'Run Check capabilities before starting an OpenCV pipeline.'
+      : null,
+    selectedFaceDetector === 'opencv' && !hasSuccessfulNativeCapabilities
+      ? 'Run Check capabilities before starting an OpenCV pipeline.'
+      : null,
+    selectedCameraSource === 'opencv' &&
+    hasSuccessfulNativeCapabilities &&
+    nativeCapabilities?.opencvCameraSupport === false
+      ? 'OpenCV camera support appears disabled or unavailable based on the latest Native runtime capabilities preflight.'
+      : null,
+    selectedFaceDetector === 'opencv' &&
+    hasSuccessfulNativeCapabilities &&
+    nativeCapabilities?.opencvFaceDetectorSupport === false
+      ? 'OpenCV face detection support appears disabled or unavailable based on the latest Native runtime capabilities preflight.'
+      : null
+  ].filter(
+    (message, index, messages): message is string =>
+      Boolean(message) && messages.indexOf(message) === index
+  )
 
   return (
     <main className="desktop-shell">
@@ -1042,6 +1068,17 @@ function App(): React.JSX.Element {
               <p className="settings-save-feedback" role="status">
                 {currentSettingsSaveFeedback}
               </p>
+            ) : null}
+
+            {opencvCapabilityAdvisories.length > 0 ? (
+              <div className="runtime-message compact" role="status">
+                <strong className="status-detail-label">OpenCV capability advisory</strong>
+                <ul>
+                  {opencvCapabilityAdvisories.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
 
             <div className="button-row" aria-label="Development native pipeline controls">
