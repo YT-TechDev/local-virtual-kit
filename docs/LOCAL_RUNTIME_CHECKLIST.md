@@ -93,6 +93,8 @@ This is a local/manual check because Electron requires a graphical desktop sessi
 
 This is a local/manual check because it requires local OpenCV support, a webcam, and OS camera permission.
 
+Use [`docs/reports/opencv-camera-smoke-template.md`](./reports/opencv-camera-smoke-template.md) when recording future OpenCV camera smoke results.
+
 - [ ] Confirm CMake found OpenCV during native configure.
 - [ ] Confirm the OS grants camera permission to the terminal or Electron host process being tested.
 - [ ] Run a finite local camera smoke only when a webcam is available. Use the helper script (which first checks `--print-runtime-capabilities` and skips honestly when OpenCV is unavailable):
