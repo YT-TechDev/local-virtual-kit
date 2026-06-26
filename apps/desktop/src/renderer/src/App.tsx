@@ -201,6 +201,9 @@ const formatCapabilitySupport = (support: boolean | null): string => {
 const formatCapabilityList = (values: string[]): string =>
   values.length > 0 ? values.join(', ') : 'none'
 
+const formatNativeCapabilitiesCheckedAtLabel = (checkedAt: Date): string =>
+  checkedAt.toLocaleString()
+
 const getCapabilitiesResultState = (capabilities: NativeRuntimeCapabilities): string => {
   if (capabilities.skipped === true) {
     return 'skipped'
@@ -222,7 +225,10 @@ const sanitizeCapabilityErrorMessage = (message: string): string =>
       '[redacted]'
     )
 
-const buildNativeCapabilitiesCopySummary = (capabilities: NativeRuntimeCapabilities): string => {
+const buildNativeCapabilitiesCopySummary = (
+  capabilities: NativeRuntimeCapabilities,
+  checkedAt: Date | null
+): string => {
   const lines = [
     `OpenCV camera support: ${formatCapabilitySupport(capabilities.opencvCameraSupport)}`,
     `OpenCV face detector support: ${formatCapabilitySupport(
@@ -235,6 +241,10 @@ const buildNativeCapabilitiesCopySummary = (capabilities: NativeRuntimeCapabilit
     'Local only: yes',
     `Result state: ${getCapabilitiesResultState(capabilities)}`
   ]
+
+  if (checkedAt !== null) {
+    lines.push(`Last checked: ${checkedAt.toISOString()}`)
+  }
 
   if (capabilities.error !== undefined) {
     lines.push(`Sanitized error message: ${sanitizeCapabilityErrorMessage(capabilities.error)}`)
@@ -314,6 +324,8 @@ function App(): React.JSX.Element {
   const [nativeCapabilities, setNativeCapabilities] = useState<NativeRuntimeCapabilities | null>(
     null
   )
+  const [lastNativeCapabilitiesCheckedAt, setLastNativeCapabilitiesCheckedAt] =
+    useState<Date | null>(null)
   const [isCapabilitiesLoading, setIsCapabilitiesLoading] = useState(false)
 
   const isMountedRef = useRef(false)
@@ -643,6 +655,7 @@ function App(): React.JSX.Element {
     try {
       const result = await desktopApi.getNativeRuntimeCapabilities()
       setNativeCapabilities(result)
+      setLastNativeCapabilitiesCheckedAt(new Date())
       setCopyCapabilitiesMessage(null)
     } finally {
       setIsCapabilitiesLoading(false)
@@ -685,7 +698,10 @@ function App(): React.JSX.Element {
       return
     }
 
-    const summary = buildNativeCapabilitiesCopySummary(nativeCapabilities)
+    const summary = buildNativeCapabilitiesCopySummary(
+      nativeCapabilities,
+      lastNativeCapabilitiesCheckedAt
+    )
 
     try {
       await navigator.clipboard.writeText(summary)
@@ -793,8 +809,12 @@ function App(): React.JSX.Element {
       ? previewOpenFeedback.message
       : null
   const nativeCapabilitiesCopySummary = nativeCapabilities
-    ? buildNativeCapabilitiesCopySummary(nativeCapabilities)
+    ? buildNativeCapabilitiesCopySummary(nativeCapabilities, lastNativeCapabilitiesCheckedAt)
     : ''
+  const nativeCapabilitiesCheckedAtLabel =
+    nativeCapabilities && lastNativeCapabilitiesCheckedAt
+      ? formatNativeCapabilitiesCheckedAtLabel(lastNativeCapabilitiesCheckedAt)
+      : null
   const currentCopyCapabilitiesMessage =
     copyCapabilitiesMessage?.summary === nativeCapabilitiesCopySummary
       ? copyCapabilitiesMessage.message
@@ -1363,52 +1383,72 @@ function App(): React.JSX.Element {
 
             {nativeCapabilities ? (
               nativeCapabilities.skipped === true || nativeCapabilities.error !== undefined ? (
-                <p className="error-message compact" role="alert">
-                  {nativeCapabilities.error ?? 'Native tracker binary unavailable.'}
-                </p>
+                <>
+                  {nativeCapabilitiesCheckedAtLabel ? (
+                    <p className="runtime-refresh-timestamp">
+                      <strong className="status-detail-label">Last checked</strong>
+                      <time dateTime={lastNativeCapabilitiesCheckedAt?.toISOString()}>
+                        {nativeCapabilitiesCheckedAtLabel}
+                      </time>
+                    </p>
+                  ) : null}
+                  <p className="error-message compact" role="alert">
+                    {nativeCapabilities.error ?? 'Native tracker binary unavailable.'}
+                  </p>
+                </>
               ) : (
-                <dl className="status-list">
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">OpenCV camera support</dt>
-                    <dd>
-                      {nativeCapabilities.opencvCameraSupport === true
-                        ? 'Enabled'
-                        : nativeCapabilities.opencvCameraSupport === false
-                          ? 'Disabled'
-                          : 'Unknown'}
-                    </dd>
-                  </div>
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">OpenCV face detector support</dt>
-                    <dd>
-                      {nativeCapabilities.opencvFaceDetectorSupport === true
-                        ? 'Enabled'
-                        : nativeCapabilities.opencvFaceDetectorSupport === false
-                          ? 'Disabled'
-                          : 'Unknown'}
-                    </dd>
-                  </div>
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">Supported camera sources</dt>
-                    <dd>{nativeCapabilities.supportedCameraSources.join(', ') || '—'}</dd>
-                  </div>
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">Supported face detectors</dt>
-                    <dd>{nativeCapabilities.supportedFaceDetectors.join(', ') || '—'}</dd>
-                  </div>
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">Camera opened</dt>
-                    <dd>No</dd>
-                  </div>
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">MotionFrames emitted</dt>
-                    <dd>No</dd>
-                  </div>
-                  <div className="status-list__item">
-                    <dt className="status-detail-label">Local only</dt>
-                    <dd>Yes</dd>
-                  </div>
-                </dl>
+                <>
+                  {nativeCapabilitiesCheckedAtLabel ? (
+                    <p className="runtime-refresh-timestamp">
+                      <strong className="status-detail-label">Last checked</strong>
+                      <time dateTime={lastNativeCapabilitiesCheckedAt?.toISOString()}>
+                        {nativeCapabilitiesCheckedAtLabel}
+                      </time>
+                    </p>
+                  ) : null}
+                  <dl className="status-list">
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">OpenCV camera support</dt>
+                      <dd>
+                        {nativeCapabilities.opencvCameraSupport === true
+                          ? 'Enabled'
+                          : nativeCapabilities.opencvCameraSupport === false
+                            ? 'Disabled'
+                            : 'Unknown'}
+                      </dd>
+                    </div>
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">OpenCV face detector support</dt>
+                      <dd>
+                        {nativeCapabilities.opencvFaceDetectorSupport === true
+                          ? 'Enabled'
+                          : nativeCapabilities.opencvFaceDetectorSupport === false
+                            ? 'Disabled'
+                            : 'Unknown'}
+                      </dd>
+                    </div>
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">Supported camera sources</dt>
+                      <dd>{nativeCapabilities.supportedCameraSources.join(', ') || '—'}</dd>
+                    </div>
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">Supported face detectors</dt>
+                      <dd>{nativeCapabilities.supportedFaceDetectors.join(', ') || '—'}</dd>
+                    </div>
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">Camera opened</dt>
+                      <dd>No</dd>
+                    </div>
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">MotionFrames emitted</dt>
+                      <dd>No</dd>
+                    </div>
+                    <div className="status-list__item">
+                      <dt className="status-detail-label">Local only</dt>
+                      <dd>Yes</dd>
+                    </div>
+                  </dl>
+                </>
               )
             ) : null}
           </section>

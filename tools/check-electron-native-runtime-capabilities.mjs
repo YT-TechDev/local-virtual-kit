@@ -289,6 +289,36 @@ requireMatch(
   "App.tsx capabilities section must include a disclaimer that it does not open a camera",
 );
 
+requireMatch(
+  appSrc,
+  /Last checked/u,
+  "App.tsx capabilities section must include 'Last checked' timestamp copy",
+);
+
+requireMatch(
+  appSrc,
+  /lastNativeCapabilitiesCheckedAt[\s\S]*?useState<\s*Date\s*\|\s*null\s*>\(\s*null\s*\)/u,
+  "App.tsx must keep renderer-local timestamp state for the last capabilities fetch",
+);
+
+requireMatch(
+  appSrc,
+  /fetchNativeCapabilities[\s\S]*?getNativeRuntimeCapabilities\(\)[\s\S]*?setNativeCapabilities\(result\)[\s\S]*?setLastNativeCapabilitiesCheckedAt\(new Date\(\)\)/u,
+  "App.tsx must update the capabilities timestamp when capabilities are fetched",
+);
+
+requireMatch(
+  appSrc,
+  /buildNativeCapabilitiesCopySummary[\s\S]*?checkedAt:\s*Date\s*\|\s*null[\s\S]*?Last checked:\s*\$\{checkedAt\.toISOString\(\)\}/u,
+  "App.tsx copied capabilities summary must include an unambiguous timestamp line",
+);
+
+requireNoMatch(
+  appSrc,
+  /useEffect\s*\([\s\S]{0,600}getNativeRuntimeCapabilities\(/u,
+  "App.tsx must not auto-run the capabilities check on startup",
+);
+
 // The capabilities section must not claim webcam/OS camera permission/OBS validation
 const capabilitiesSectionMatch = appSrc.match(
   /native-capabilities-heading[\s\S]*?<\/section>/u,
@@ -321,7 +351,7 @@ requireMatch(
 
 requireMatch(
   appSrc,
-  /const\s+buildNativeCapabilitiesCopySummary\s*=\s*\([\s\S]*?NativeRuntimeCapabilities[\s\S]*?opencvCameraSupport[\s\S]*?opencvFaceDetectorSupport[\s\S]*?supportedCameraSources[\s\S]*?supportedFaceDetectors[\s\S]*?Camera opened: no[\s\S]*?MotionFrames emitted: no[\s\S]*?Local only: yes[\s\S]*?Result state:/u,
+  /const\s+buildNativeCapabilitiesCopySummary\s*=\s*\([\s\S]*?NativeRuntimeCapabilities[\s\S]*?checkedAt:\s*Date\s*\|\s*null[\s\S]*?opencvCameraSupport[\s\S]*?opencvFaceDetectorSupport[\s\S]*?supportedCameraSources[\s\S]*?supportedFaceDetectors[\s\S]*?Camera opened: no[\s\S]*?MotionFrames emitted: no[\s\S]*?Local only: yes[\s\S]*?Result state:[\s\S]*?Last checked:/u,
   "App.tsx must build the copied capabilities summary from typed NativeRuntimeCapabilities fields",
 );
 
