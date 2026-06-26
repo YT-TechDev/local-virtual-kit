@@ -48,6 +48,7 @@ struct TrackerOptions {
   int frameCount = kDefaultFrameCount;
   bool continuous = false;
   bool realtime = false;
+  bool printRuntimeCapabilities = false;
   bool logCameraStatus = false;
   int cameraStatusInterval = 0;
   bool logFaceStatus = false;
@@ -139,6 +140,7 @@ bool parseDoubleInRange(
 
 void printUsage(std::ostream &output) {
   output << "Usage: lvk-tracker-core [--frames N] [--continuous] [--realtime] "
+            "[--print-runtime-capabilities] "
             "[--log-camera-status] [--camera-status-interval N] "
             "[--log-face-status] [--face-status-interval N] "
             "[--log-pipeline-status] [--pipeline-status-interval N] "
@@ -175,6 +177,29 @@ void printUsage(std::ostream &output) {
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
   output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, and helper-lifecycle-handshake-malformed-ready. Defaults to normal.\n";
+  output << "--print-runtime-capabilities prints compile-time and local capability information to stdout and exits without opening a camera or emitting MotionFrame data.\n";
+}
+
+void printRuntimeCapabilities(std::ostream &output) {
+  output << "LVK native runtime capabilities\n";
+  output << "opencvCameraSupport=" << (LVK_HAS_OPENCV_CAMERA ? "true" : "false") << "\n";
+  output << "opencvFaceDetectorSupport=" << (LVK_HAS_OPENCV_FACE_DETECTOR ? "true" : "false") << "\n";
+
+  std::string cameraSources = "dummy";
+#if LVK_HAS_OPENCV_CAMERA
+  cameraSources += ",opencv";
+#endif
+  output << "supportedCameraSources=" << cameraSources << "\n";
+
+  std::string faceDetectors = "noop";
+#if LVK_HAS_OPENCV_FACE_DETECTOR
+  faceDetectors += ",opencv";
+#endif
+  output << "supportedFaceDetectors=" << faceDetectors << "\n";
+
+  output << "cameraOpened=false\n";
+  output << "motionFramesEmitted=false\n";
+  output << "localOnly=true\n";
 }
 
 void handleStopSignal(int) {
@@ -258,6 +283,11 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
 
     if (argument == "--realtime") {
       options.realtime = true;
+      continue;
+    }
+
+    if (argument == "--print-runtime-capabilities") {
+      options.printRuntimeCapabilities = true;
       continue;
     }
 
@@ -619,6 +649,11 @@ int main(int argc, char *argv[]) {
   TrackerOptions options;
   if (!parseTrackerOptions(argc, argv, options)) {
     return 1;
+  }
+
+  if (options.printRuntimeCapabilities) {
+    printRuntimeCapabilities(std::cout);
+    return 0;
   }
 
   if (!options.helperRuntimeSmokePath.empty()) {
