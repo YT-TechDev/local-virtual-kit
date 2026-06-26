@@ -307,6 +307,48 @@ requireNoMatch(
   "App.tsx capabilities section must not claim webcam, OS camera permission, or OBS validation",
 );
 
+requireMatch(
+  appSrc,
+  /OpenCV capability advisory/u,
+  "App.tsx must include an OpenCV capability advisory near runtime controls",
+);
+
+requireMatch(
+  appSrc,
+  /Run Check capabilities before starting an OpenCV pipeline\./u,
+  "App.tsx must advise users to run Check capabilities before starting an OpenCV pipeline when capabilities are unknown",
+);
+
+requireMatch(
+  appSrc,
+  /OpenCV camera support appears disabled or unavailable based on the latest Native runtime capabilities preflight\./u,
+  "App.tsx must warn when selected OpenCV camera support is disabled by the latest capabilities preflight",
+);
+
+requireMatch(
+  appSrc,
+  /OpenCV face detection support appears disabled or unavailable based on the latest Native runtime capabilities preflight\./u,
+  "App.tsx must warn when selected OpenCV face detection support is disabled by the latest capabilities preflight",
+);
+
+requireMatch(
+  appSrc,
+  /const\s+canStartNativePipeline\s*=\s*Boolean\(\s*desktopApi\s*&&\s*runtimeStatus\s*&&\s*!isPipelineBusy\s*&&\s*!isPipelineActionPending\s*\)/u,
+  "App.tsx canStartNativePipeline must not be gated by native capabilities support",
+);
+
+requireNoMatch(
+  appSrc,
+  /canStartNativePipeline[\s\S]{0,500}opencv(CameraSupport|FaceDetectorSupport)|opencv(CameraSupport|FaceDetectorSupport)[\s\S]{0,500}canStartNativePipeline/u,
+  "App.tsx must not make start button logic dependent on OpenCV capability support",
+);
+
+requireNoMatch(
+  appSrc,
+  /real\s+OpenCV\s+camera\s+smoke\s+passed|webcam\s+validated|webcam\s+access\s+confirmed|camera\s+permission\s+granted|OS\s+camera\s+permission\s+validated|OBS\s+validated/iu,
+  "App.tsx must not claim webcam, OBS, OS camera permission, or real OpenCV camera validation",
+);
+
 console.log(
   "Electron native runtime capabilities check OK:\n" +
     "  A. Preload API — NativeRuntimeCapabilities interface exported with all required fields " +
@@ -324,5 +366,7 @@ console.log(
     "spawn error handler does not expose describeTrackerSpawnError or err.message; " +
     "output header validated before parsing.\n" +
     "  E. Renderer UI — capabilities section present with heading and disclaimer; " +
-    "getNativeRuntimeCapabilities called; no webcam/OBS/OS camera permission validation claimed.",
+    "getNativeRuntimeCapabilities called; OpenCV capability advisory copy present; " +
+    "start button logic remains independent of capabilities; " +
+    "no webcam/OBS/OS camera permission/real OpenCV camera validation claimed.",
 );
