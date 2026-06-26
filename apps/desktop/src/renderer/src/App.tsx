@@ -21,6 +21,10 @@ type CopyDiagnosticsMessage = {
   diagnostics: string
   message: string
 }
+type CopyCapabilitiesMessage = {
+  message: string
+  summary: string
+}
 type SettingsErrorMessage = {
   detail: string
   summary: string
@@ -182,6 +186,63 @@ const buildNativeRuntimeDiagnostics = (
     .filter((line): line is string => Boolean(line))
     .join('\n')
 
+const formatCapabilitySupport = (support: boolean | null): string => {
+  if (support === true) {
+    return 'enabled'
+  }
+
+  if (support === false) {
+    return 'disabled'
+  }
+
+  return 'unknown'
+}
+
+const formatCapabilityList = (values: string[]): string =>
+  values.length > 0 ? values.join(', ') : 'none'
+
+const getCapabilitiesResultState = (capabilities: NativeRuntimeCapabilities): string => {
+  if (capabilities.skipped === true) {
+    return 'skipped'
+  }
+
+  if (capabilities.error !== undefined) {
+    return 'error'
+  }
+
+  return 'available'
+}
+
+const sanitizeCapabilityErrorMessage = (message: string): string =>
+  message
+    .replace(/[A-Za-z]:\\[^\s]+/gu, '[local path]')
+    .replace(/(?:\/[^\s]+)+/gu, '[local path]')
+    .replace(
+      /\b(?:stdout|stderr|executable path|binary path|local path|command dump|screenshot|log|raw frame)s?\b/giu,
+      '[redacted]'
+    )
+
+const buildNativeCapabilitiesCopySummary = (capabilities: NativeRuntimeCapabilities): string => {
+  const lines = [
+    `OpenCV camera support: ${formatCapabilitySupport(capabilities.opencvCameraSupport)}`,
+    `OpenCV face detector support: ${formatCapabilitySupport(
+      capabilities.opencvFaceDetectorSupport
+    )}`,
+    `Supported camera sources: ${formatCapabilityList(capabilities.supportedCameraSources)}`,
+    `Supported face detectors: ${formatCapabilityList(capabilities.supportedFaceDetectors)}`,
+    'Camera opened: no',
+    'MotionFrames emitted: no',
+    'Local only: yes',
+    `Result state: ${getCapabilitiesResultState(capabilities)}`
+  ]
+
+  if (capabilities.error !== undefined) {
+    lines.push(`Sanitized error message: ${sanitizeCapabilityErrorMessage(capabilities.error)}`)
+  }
+
+  return lines.join('\n')
+}
+
 const getStatusTone = (status: NativeTrackerStatus | MotionBridgeStatus): StatusTone => {
   if (status === 'running') {
     return 'success'
@@ -247,6 +308,8 @@ function App(): React.JSX.Element {
     useState<RuntimeStatusRefreshMessage | null>(null)
   const [copyDiagnosticsMessage, setCopyDiagnosticsMessage] =
     useState<CopyDiagnosticsMessage | null>(null)
+  const [copyCapabilitiesMessage, setCopyCapabilitiesMessage] =
+    useState<CopyCapabilitiesMessage | null>(null)
   const [endpointCopyFeedback, setEndpointCopyFeedback] = useState<string | null>(null)
   const [nativeCapabilities, setNativeCapabilities] = useState<NativeRuntimeCapabilities | null>(
     null
@@ -580,6 +643,7 @@ function App(): React.JSX.Element {
     try {
       const result = await desktopApi.getNativeRuntimeCapabilities()
       setNativeCapabilities(result)
+      setCopyCapabilitiesMessage(null)
     } finally {
       setIsCapabilitiesLoading(false)
     }
@@ -608,6 +672,31 @@ function App(): React.JSX.Element {
       setCopyDiagnosticsMessage({
         diagnostics: nativeRuntimeDiagnostics,
         message: 'Failed to copy diagnostics.'
+      })
+    }
+  }
+
+  const copyNativeCapabilities = async (): Promise<void> => {
+    if (!nativeCapabilities || !navigator.clipboard) {
+      setCopyCapabilitiesMessage({
+        message: 'Failed to copy capabilities.',
+        summary: ''
+      })
+      return
+    }
+
+    const summary = buildNativeCapabilitiesCopySummary(nativeCapabilities)
+
+    try {
+      await navigator.clipboard.writeText(summary)
+      setCopyCapabilitiesMessage({
+        message: 'Copied capabilities.',
+        summary
+      })
+    } catch {
+      setCopyCapabilitiesMessage({
+        message: 'Failed to copy capabilities.',
+        summary
       })
     }
   }
@@ -702,6 +791,13 @@ function App(): React.JSX.Element {
     previewOpenFeedback !== null &&
     previewOpenFeedback.nativeTrackerStatus === runtimeStatus?.nativeTrackerStatus
       ? previewOpenFeedback.message
+      : null
+  const nativeCapabilitiesCopySummary = nativeCapabilities
+    ? buildNativeCapabilitiesCopySummary(nativeCapabilities)
+    : ''
+  const currentCopyCapabilitiesMessage =
+    copyCapabilitiesMessage?.summary === nativeCapabilitiesCopySummary
+      ? copyCapabilitiesMessage.message
       : null
   const hasSuccessfulNativeCapabilities = Boolean(
     nativeCapabilities &&
@@ -1245,6 +1341,24 @@ function App(): React.JSX.Element {
               >
                 {isCapabilitiesLoading ? 'Checking…' : 'Check capabilities'}
               </button>
+              <button
+                type="button"
+                onClick={copyNativeCapabilities}
+                disabled={!nativeCapabilities}
+                aria-describedby="native-capabilities-copy-feedback"
+              >
+                Copy capabilities
+              </button>
+              {currentCopyCapabilitiesMessage ? (
+                <span
+                  id="native-capabilities-copy-feedback"
+                  className="diagnostics-copy-feedback"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {currentCopyCapabilitiesMessage}
+                </span>
+              ) : null}
             </div>
 
             {nativeCapabilities ? (

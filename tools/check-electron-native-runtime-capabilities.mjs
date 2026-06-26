@@ -308,6 +308,48 @@ requireNoMatch(
 );
 
 requireMatch(
+  capabilitiesSection,
+  /Copy capabilities/u,
+  "App.tsx capabilities section must include a Copy capabilities button",
+);
+
+requireMatch(
+  capabilitiesSection,
+  /disabled=\{!nativeCapabilities\}/u,
+  "Copy capabilities button must be enabled only when nativeCapabilities exists",
+);
+
+requireMatch(
+  appSrc,
+  /const\s+buildNativeCapabilitiesCopySummary\s*=\s*\([\s\S]*?NativeRuntimeCapabilities[\s\S]*?opencvCameraSupport[\s\S]*?opencvFaceDetectorSupport[\s\S]*?supportedCameraSources[\s\S]*?supportedFaceDetectors[\s\S]*?Camera opened: no[\s\S]*?MotionFrames emitted: no[\s\S]*?Local only: yes[\s\S]*?Result state:/u,
+  "App.tsx must build the copied capabilities summary from typed NativeRuntimeCapabilities fields",
+);
+
+requireMatch(
+  appSrc,
+  /navigator\.clipboard\.writeText\(summary\)/u,
+  "Copy capabilities must write only the sanitized typed-field summary to the clipboard",
+);
+
+requireNoMatch(
+  appSrc,
+  /navigator\.clipboard\.writeText\([^)]*(stdout|stderr|path|command|screenshot|logs?|rawFrames?)[^)]*\)/iu,
+  "Clipboard writes must not copy raw stdout/stderr/path/command/screenshot/log/raw frame values",
+);
+
+requireNoMatch(
+  appSrc,
+  /buildNativeCapabilitiesCopySummary[\s\S]{0,1200}\b(stdout|stderr|executablePath|binaryPath|commandDump|screenshots?|logs?|rawFrames?)\b/iu,
+  "Capabilities copy summary must not include raw stdout/stderr/path terminology, command dumps, screenshots, logs, or raw frames",
+);
+
+requireMatch(
+  appSrc,
+  /Copied capabilities\.|Failed to copy capabilities\./u,
+  "App.tsx must show success/failure feedback for Copy capabilities",
+);
+
+requireMatch(
   appSrc,
   /OpenCV capability advisory/u,
   "App.tsx must include an OpenCV capability advisory near runtime controls",
@@ -368,5 +410,6 @@ console.log(
     "  E. Renderer UI — capabilities section present with heading and disclaimer; " +
     "getNativeRuntimeCapabilities called; OpenCV capability advisory copy present; " +
     "start button logic remains independent of capabilities; " +
+    "copy capabilities UI writes a sanitized typed-field summary only; " +
     "no webcam/OBS/OS camera permission/real OpenCV camera validation claimed.",
 );
