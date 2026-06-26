@@ -15,6 +15,8 @@ The completed 2026-06-26 local verification pass is recorded in [`docs/reports/l
 
 OBS Browser Source validation and OpenCV camera validation remain environment-dependent follow-up checks. Do not claim OBS, webcam/OpenCV, or OS camera permission validation unless those checks are performed in an environment that provides the required local tools, hardware, and permissions.
 
+For future packaged Electron builds, see [`docs/NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md`](./NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md) for the Windows/vcpkg OpenCV runtime DLL handling strategy. Local/dev validation keeps the explicit `PATH` guidance below; packaged app behavior should be addressed in a separate implementation PR.
+
 ## Automated checks
 
 Run these checks from the repository root when preparing a full local runtime verification pass. For a documentation-only change, `pnpm format:check` is the minimum required check; other runtime checks may be documented as not run when they are outside the change scope.
