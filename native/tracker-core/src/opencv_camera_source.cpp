@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <opencv2/core.hpp>
+#include <opencv2/core/utils/logger.hpp>
 #include <opencv2/core/version.hpp>
 #include <opencv2/videoio.hpp>
 
@@ -73,6 +74,8 @@ OpenCvCameraSource::~OpenCvCameraSource() {
 
 bool OpenCvCameraSource::start() {
   stop();
+
+  cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_WARNING);
 
   emittedFrameCount_ = 0;
   failedReadCount_ = 0;
