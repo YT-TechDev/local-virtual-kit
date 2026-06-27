@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-This report records a local packaged/staged Native Core runtime smoke pass after
+This report records a local packaged/staged Native Core runtime smoke verification run after
 the OpenCV runtime manifest (`opencv-runtime-windows-x64-release.json`) and the
 Electron packaging resource wiring (`extraResources` → `native-runtime/`) were
 added in the staged packaging plan (PRs #363–#367).
