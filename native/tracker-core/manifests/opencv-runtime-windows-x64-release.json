@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "target": "windows-x64-release",
+  "configuration": "release",
+  "opencvDistribution": "modular",
+  "runtimeDlls": [
+    "opencv_core4.dll",
+    "opencv_imgproc4.dll",
+    "opencv_videoio4.dll",
+    "opencv_objdetect4.dll"
+  ]
+}

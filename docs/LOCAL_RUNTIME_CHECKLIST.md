@@ -127,6 +127,30 @@ Alternatively, run the raw smoke command directly:
 - [ ] Confirm MotionFrame output reaches the preview.
 - [ ] Confirm raw image data remains inside Native Core memory and is not printed to stdout/stderr, written to disk, uploaded, or sent to external servers.
 
+### Native runtime staging for packaged builds (local prep)
+
+This stages the required Windows x64 **release** OpenCV runtime DLLs into the git-ignored `.lvk-native-runtime/bin/` directory so that Electron packaging (`extraResources`) and the later packaged runtime smoke PR have a verified set of DLLs to copy and check. It is local prep only and does not perform packaged runtime smoke.
+
+The authoritative release manifest lives at `native/tracker-core/manifests/opencv-runtime-windows-x64-release.json` and lists only the directly required OpenCV modules (`core`, `imgproc`, `videoio`, `objdetect`) for the current OpenCV-enabled Native Core build.
+
+- [ ] Copy the manifest-listed release DLLs from the local vcpkg OpenCV bin into the staging directory. Use the `<vcpkg-root>` placeholder; do not commit a local absolute path.
+
+```bash
+pnpm copy:opencv-runtime-dlls:local -- \
+  --manifest native/tracker-core/manifests/opencv-runtime-windows-x64-release.json \
+  --source-dir <vcpkg-root>/installed/x64-windows/bin \
+  --dest-dir .lvk-native-runtime/bin
+```
+
+- [ ] Verify the staged DLLs satisfy the manifest. This script already targets the manifest path and `--dest-dir .lvk-native-runtime/bin`:
+
+```bash
+pnpm prep:native-runtime:verify:local
+```
+
+- [ ] Confirm `.lvk-native-runtime/` is **not** committed (it is git-ignored). Do not commit actual DLLs, native binaries, build artifacts, or local absolute paths.
+- [ ] Transitive runtime dependencies (for example the `videoio` ffmpeg backend and image-codec libraries) are intentionally out of scope for this manifest. A later dependency-inspection PR (or the packaged runtime smoke PR) must cover them honestly before packaged runtime startup is claimed.
+
 ### 7. OBS Browser Source preview URL
 
 This is a local/manual check because it requires OBS or equivalent browser-source validation.
