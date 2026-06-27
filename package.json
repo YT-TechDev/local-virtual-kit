@@ -36,7 +36,9 @@
     "test:electron-native-runtime-capabilities": "node tools/check-electron-native-runtime-capabilities.mjs",
     "test:web-preview-native-frame-status": "node tools/check-web-preview-native-frame-status.mjs",
     "test:native-runtime-capabilities": "node tools/check-native-runtime-capabilities.mjs",
-    "smoke:native-opencv-camera:local": "node tools/check-native-opencv-camera-smoke.mjs"
+    "smoke:native-opencv-camera:local": "node tools/check-native-opencv-camera-smoke.mjs",
+    "copy:opencv-runtime-dlls:local": "node tools/copy-opencv-runtime-dlls.mjs",
+    "test:copy-opencv-runtime-dlls": "node tools/copy-opencv-runtime-dlls.mjs --self-test"
   },
   "devDependencies": {
     "prettier": "^3.7.4"
