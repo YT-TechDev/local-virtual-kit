@@ -26,4 +26,6 @@ yarn-debug.log*
 native/**/build
 native/**/build-*
 
+.lvk-native-runtime/
+
 CLAUDE.local.md

@@ -9,6 +9,15 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# extraResources places the staged native runtime directory into packaged app resources.
+# Populate .lvk-native-runtime/ locally before packaging; it is git-ignored.
+# Expected layout in packaged app: <resources>/native-runtime/bin/ and <resources>/native-runtime/manifests/
+# See docs/ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md for the intended directory design.
+extraResources:
+  - from: ../../.lvk-native-runtime/
+    to: native-runtime/
+    filter:
+      - '**/*'
 asarUnpack:
   - resources/**
 win:
