@@ -149,7 +149,7 @@ pnpm prep:native-runtime:verify:local
 ```
 
 - [ ] Confirm `.lvk-native-runtime/` is **not** committed (it is git-ignored). Do not commit actual DLLs, native binaries, build artifacts, or local absolute paths.
-- [ ] Transitive runtime dependencies (for example the `videoio` ffmpeg backend and image-codec libraries) are intentionally out of scope for this manifest. A later dependency-inspection PR (or the packaged runtime smoke PR) must cover them honestly before packaged runtime startup is claimed.
+- [ ] Transitive runtime dependencies (for example the `videoio` ffmpeg backend and image-codec libraries) are intentionally out of scope for this manifest. A later dependency-inspection PR (or the packaged runtime smoke PR) must cover them honestly before packaged runtime startup is claimed. The 2026-06-27 packaged runtime smoke confirmed this gap: the Electron `extraResources` wiring placed the staged runtime into `<resources>/native-runtime/`, but the Native Core executable could not start from the staged/packaged directory using only the four manifest DLLs (`STATUS_DLL_NOT_FOUND` / `0xC0000135`) because of uncovered transitive dependencies. See [`docs/reports/packaged-native-runtime-smoke-2026-06-27.md`](./reports/packaged-native-runtime-smoke-2026-06-27.md).
 
 ### 7. OBS Browser Source preview URL
 
