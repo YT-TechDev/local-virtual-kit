@@ -214,6 +214,7 @@ Require an installer to mutate the system/user `PATH`, or require end users to i
 - Avoid requiring users to install vcpkg or OpenCV globally.
 - Avoid runtime network downloads for OpenCV DLLs or native runtime dependencies.
 - Defer DLL collection, dependency manifest generation, redistribution review, and package validation to a later implementation PR.
+- Before connecting the dev/local copy helper to Electron packaging, follow the OpenCV runtime DLL manifest policy in [`docs/OPENCV_RUNTIME_DLL_MANIFEST_POLICY.md`](./OPENCV_RUNTIME_DLL_MANIFEST_POLICY.md).
 
 ## Acceptance criteria for future implementation PRs
 
