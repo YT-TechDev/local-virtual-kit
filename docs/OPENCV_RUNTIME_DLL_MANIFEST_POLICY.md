@@ -47,7 +47,7 @@ LVK is intentionally taking a staged, safe packaging path:
 
 1. Define this manifest and required-DLL policy before packaging integration.
 2. Add helper support for manifest mode and verification mode in a later PR.
-3. Define the Electron packaged native runtime directory layout in a later PR.
+3. Define the Electron packaged native runtime directory layout in a later PR. The intended app-owned packaged layout is documented in [`docs/ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md`](./ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md).
 4. Connect Electron packaging configuration only after the manifest and verification behavior exist.
 5. Record packaged runtime smoke or verification results in a later PR.
 
