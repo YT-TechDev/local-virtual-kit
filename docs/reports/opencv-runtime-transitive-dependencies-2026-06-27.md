@@ -308,5 +308,3 @@ approved.
 - No actual DLLs, binaries, build artifacts, generated package outputs,
   `.lvk-native-runtime/` contents, raw logs, screenshots, or local absolute paths
   were committed.
-  </content>
-  </invoke>
