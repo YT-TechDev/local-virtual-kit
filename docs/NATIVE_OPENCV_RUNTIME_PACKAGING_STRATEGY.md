@@ -216,6 +216,7 @@ Require an installer to mutate the system/user `PATH`, or require end users to i
 - Defer DLL collection, dependency manifest generation, redistribution review, and package validation to a later implementation PR.
 - Before connecting the dev/local copy helper to Electron packaging, follow the OpenCV runtime DLL manifest policy in [`docs/OPENCV_RUNTIME_DLL_MANIFEST_POLICY.md`](./OPENCV_RUNTIME_DLL_MANIFEST_POLICY.md).
 - Before wiring Electron packaging configuration, follow the app-owned packaged native runtime directory design in [`docs/ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md`](./ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md).
+- Visual C++ runtime redistributable DLLs (`MSVCP140.dll`, `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `CONCRT140.dll`) are handled separately from app-owned OpenCV/vcpkg DLLs. See [`docs/WINDOWS_VC_REDIST_STRATEGY.md`](./WINDOWS_VC_REDIST_STRATEGY.md) for the LVK v0.x VC++ redistributable strategy.
 
 ## Acceptance criteria for future implementation PRs
 
