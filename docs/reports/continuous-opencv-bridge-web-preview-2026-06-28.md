@@ -303,8 +303,8 @@ SKIP / not performed. Out of scope for this report.
 
 - Visual rendering confirmation requires opening the browser and manually
   observing the avatar. The WebSocket connection was confirmed by bridge log;
-  rendering was not screenshot-captured or independently verified by the agent
-  session.
+  rendering was not screenshot-captured or independently verified in this
+  validation environment.
 - Camera smoke was performed on a development machine that already has the VC++
   Redistributable installed. Clean-machine camera smoke (Sandbox with no
   development toolchain) was not performed in this continuous pipeline pass.
