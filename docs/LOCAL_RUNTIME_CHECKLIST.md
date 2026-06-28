@@ -149,7 +149,7 @@ pnpm prep:native-runtime:verify:local
 ```
 
 - [ ] Confirm `.lvk-native-runtime/` is **not** committed (it is git-ignored). Do not commit actual DLLs, native binaries, build artifacts, or local absolute paths.
-- [ ] The manifest now covers the full verified static transitive runtime DLL set from the 2026-06-27 dependency inspection report. Re-run packaged runtime smoke after staging to confirm the expanded manifest resolves the `STATUS_DLL_NOT_FOUND` failure recorded in [`docs/reports/packaged-native-runtime-smoke-2026-06-27.md`](./reports/packaged-native-runtime-smoke-2026-06-27.md). Clean-machine VC++ redistributable independence is not yet proven. Do not claim packaged runtime smoke or clean-machine independence until those are explicitly validated.
+- [ ] The manifest now covers the full verified static transitive runtime DLL set from the 2026-06-27 dependency inspection report. Re-run packaged runtime smoke after staging to confirm the expanded manifest resolves the `STATUS_DLL_NOT_FOUND` failure recorded in [`docs/reports/packaged-native-runtime-smoke-2026-06-27.md`](./reports/packaged-native-runtime-smoke-2026-06-27.md). Clean-machine VC++ redistributable independence is not yet proven. Do not claim packaged runtime smoke or clean-machine independence until those are explicitly validated. See [`docs/WINDOWS_VC_REDIST_STRATEGY.md`](./WINDOWS_VC_REDIST_STRATEGY.md) for the VC++ redistributable handling strategy and follow-up clean-machine validation checklist.
 
 ### 7. OBS Browser Source preview URL
 
