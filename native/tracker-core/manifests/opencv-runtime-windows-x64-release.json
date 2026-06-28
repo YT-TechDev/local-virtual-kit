@@ -7,6 +7,23 @@
     "opencv_core4.dll",
     "opencv_imgproc4.dll",
     "opencv_videoio4.dll",
-    "opencv_objdetect4.dll"
+    "opencv_objdetect4.dll",
+    "opencv_imgcodecs4.dll",
+    "opencv_dnn4.dll",
+    "opencv_calib3d4.dll",
+    "opencv_features2d4.dll",
+    "opencv_flann4.dll",
+    "z.dll",
+    "jpeg62.dll",
+    "libpng16.dll",
+    "tiff.dll",
+    "liblzma.dll",
+    "libwebp.dll",
+    "libwebpdecoder.dll",
+    "libwebpdemux.dll",
+    "libwebpmux.dll",
+    "libsharpyuv.dll",
+    "libprotobuf.dll",
+    "abseil_dll.dll"
   ]
 }

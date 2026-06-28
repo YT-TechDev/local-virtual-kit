@@ -75,14 +75,40 @@ OpenCV aggregate and modular builds must be handled as distinct cases:
 - Modular OpenCV builds should be represented as modular manifest cases.
 - Modular manifests should include only modules actually required by the Native Core build.
 
-Likely direct OpenCV modules for the current Native Core use may include:
+The Windows x64 Release manifest (`native/tracker-core/manifests/opencv-runtime-windows-x64-release.json`) now includes the full verified static transitive OpenCV module set from the 2026-06-27 dependency inspection report:
 
-- `opencv_core`
-- `opencv_imgproc`
-- `opencv_videoio`
-- `opencv_objdetect`
+- `opencv_core4.dll` — direct dependency
+- `opencv_imgproc4.dll` — direct dependency
+- `opencv_videoio4.dll` — direct dependency
+- `opencv_objdetect4.dll` — direct dependency
+- `opencv_imgcodecs4.dll` — transitive via `videoio`
+- `opencv_dnn4.dll` — transitive via `objdetect`
+- `opencv_calib3d4.dll` — transitive via `objdetect`
+- `opencv_features2d4.dll` — transitive via `objdetect`/`calib3d`
+- `opencv_flann4.dll` — transitive via `objdetect`/`features2d`
 
-That list is a planning hint, not final runtime dependency evidence. Broader modules such as `opencv_dnn`, `opencv_highgui`, `opencv_features2d`, `opencv_flann`, and `opencv_calib3d` must not be treated as required unless dependency inspection or equivalent local verification proves they are required for the current build.
+## Non-OpenCV vcpkg runtime DLL policy
+
+The Windows x64 Release manifest also includes non-OpenCV vcpkg runtime DLLs required by the OpenCV modules. These are allowed only by a narrow exact filename allow-list verified via `dumpbin /dependents` static import inspection (2026-06-27 report). Arbitrary non-OpenCV DLL names are rejected by the helper validation.
+
+The verified set for the current Windows x64 Release OpenCV-enabled Native Core build:
+
+- `z.dll` — zlib; required by `core`, `imgcodecs`, `libpng16`, `tiff`
+- `jpeg62.dll` — libjpeg-turbo; required by `imgcodecs`, `tiff`
+- `libpng16.dll` — PNG codec; required by `imgcodecs`
+- `tiff.dll` — TIFF codec; required by `imgcodecs`
+- `liblzma.dll` — LZMA; required by `tiff`
+- `libwebp.dll` — WebP; required by `imgcodecs`
+- `libwebpdecoder.dll` — WebP; required by `imgcodecs`
+- `libwebpdemux.dll` — WebP; required by `imgcodecs`
+- `libwebpmux.dll` — WebP; required by `imgcodecs`
+- `libsharpyuv.dll` — WebP color; required by `libwebp`
+- `libprotobuf.dll` — protobuf; required by `dnn`
+- `abseil_dll.dll` — Abseil; required by `dnn`, `libprotobuf`
+
+These DLLs are app-owned vcpkg runtime dependencies and must not be confused with Windows platform DLLs or VC++ runtime redistributable DLLs. Windows platform DLLs must not be bundled. VC++ redistributable handling (`MSVCP140.dll`, `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `CONCRT140.dll`) remains a separate packaging decision.
+
+Clean-machine independence (a machine without the VC++ redistributable preinstalled) is not yet proven. Do not claim it until explicitly validated.
 
 ## Transitive dependency policy
 
@@ -90,6 +116,7 @@ Future implementation must verify transitive runtime dependencies rather than in
 
 - Inspect the built Native Core executable and selected OpenCV DLLs with a local dependency-inspection method or equivalent verification.
 - Include required transitive DLLs in the target manifest when redistribution and packaging policy allow them.
+- For non-OpenCV DLLs, add them only to the exact verified allow-list in the helper (`ALLOWED_VCPKG_RUNTIME_DLLS`); do not use broad patterns.
 - Report missing files with sanitized messages that do not expose local absolute paths.
 - Do not require packaged app users to install vcpkg, OpenCV, or other native dependencies globally.
 - Do not introduce a global installer or global `PATH` requirement for packaged app users.

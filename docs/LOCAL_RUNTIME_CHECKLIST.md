@@ -131,7 +131,7 @@ Alternatively, run the raw smoke command directly:
 
 This stages the required Windows x64 **release** OpenCV runtime DLLs into the git-ignored `.lvk-native-runtime/bin/` directory so that Electron packaging (`extraResources`) and the later packaged runtime smoke PR have a verified set of DLLs to copy and check. It is local prep only and does not perform packaged runtime smoke.
 
-The authoritative release manifest lives at `native/tracker-core/manifests/opencv-runtime-windows-x64-release.json` and lists only the directly required OpenCV modules (`core`, `imgproc`, `videoio`, `objdetect`) for the current OpenCV-enabled Native Core build.
+The authoritative release manifest lives at `native/tracker-core/manifests/opencv-runtime-windows-x64-release.json` and lists the verified static transitive runtime DLL set for the current Windows x64 Release OpenCV-enabled Native Core build: the 4 direct OpenCV modules (`core`, `imgproc`, `videoio`, `objdetect`), 5 additional OpenCV transitive modules (`imgcodecs`, `dnn`, `calib3d`, `features2d`, `flann`), and 12 non-OpenCV vcpkg runtime DLLs (`z`, `jpeg62`, `libpng16`, `tiff`, `liblzma`, `libwebp`, `libwebpdecoder`, `libwebpdemux`, `libwebpmux`, `libsharpyuv`, `libprotobuf`, `abseil_dll`). Windows platform DLLs are not included. VC++ redistributable DLLs remain a separate packaging decision.
 
 - [ ] Copy the manifest-listed release DLLs from the local vcpkg OpenCV bin into the staging directory. Use the `<vcpkg-root>` placeholder; do not commit a local absolute path.
 
@@ -149,7 +149,7 @@ pnpm prep:native-runtime:verify:local
 ```
 
 - [ ] Confirm `.lvk-native-runtime/` is **not** committed (it is git-ignored). Do not commit actual DLLs, native binaries, build artifacts, or local absolute paths.
-- [ ] Transitive runtime dependencies (for example the `videoio` ffmpeg backend and image-codec libraries) are intentionally out of scope for this manifest. A later dependency-inspection PR (or the packaged runtime smoke PR) must cover them honestly before packaged runtime startup is claimed. The 2026-06-27 packaged runtime smoke confirmed this gap: the Electron `extraResources` wiring placed the staged runtime into `<resources>/native-runtime/`, but the Native Core executable could not start from the staged/packaged directory using only the four manifest DLLs (`STATUS_DLL_NOT_FOUND` / `0xC0000135`) because of uncovered transitive dependencies. See [`docs/reports/packaged-native-runtime-smoke-2026-06-27.md`](./reports/packaged-native-runtime-smoke-2026-06-27.md). The follow-up dependency inspection that enumerates and verifies the transitive set (5 additional OpenCV modules plus 12 non-OpenCV vcpkg runtime DLLs) is recorded in [`docs/reports/opencv-runtime-transitive-dependencies-2026-06-27.md`](./reports/opencv-runtime-transitive-dependencies-2026-06-27.md).
+- [ ] The manifest now covers the full verified static transitive runtime DLL set from the 2026-06-27 dependency inspection report. Re-run packaged runtime smoke after staging to confirm the expanded manifest resolves the `STATUS_DLL_NOT_FOUND` failure recorded in [`docs/reports/packaged-native-runtime-smoke-2026-06-27.md`](./reports/packaged-native-runtime-smoke-2026-06-27.md). Clean-machine VC++ redistributable independence is not yet proven. Do not claim packaged runtime smoke or clean-machine independence until those are explicitly validated.
 
 ### 7. OBS Browser Source preview URL
 
