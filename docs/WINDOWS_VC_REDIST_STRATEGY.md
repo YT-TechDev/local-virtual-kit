@@ -182,6 +182,7 @@ its version is insufficient:
 - [`docs/ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md`](./ELECTRON_PACKAGED_NATIVE_RUNTIME_DIRECTORY.md) — packaged native runtime directory layout
 - [`docs/LOCAL_RUNTIME_CHECKLIST.md`](./LOCAL_RUNTIME_CHECKLIST.md) — local validation checklist
 - [`docs/reports/packaged-native-runtime-smoke-rerun-2026-06-28.md`](./reports/packaged-native-runtime-smoke-rerun-2026-06-28.md) — PR #371 smoke report confirming vcpkg PATH independence and noting unproven clean-machine VC++ independence
+- [`docs/reports/clean-windows-vc-redist-validation-2026-06-28.md`](./reports/clean-windows-vc-redist-validation-2026-06-28.md) — Windows Sandbox validation confirming the packaged Native Core starts with only VC++ Redistributable x64 installed
 
 ## Out of scope for this strategy document
 
