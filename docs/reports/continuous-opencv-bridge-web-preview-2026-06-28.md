@@ -18,7 +18,7 @@ packaged Native Core runtime through `motion-ws-bridge` into Web Preview.
   Preview JavaScript connected to `ws://127.0.0.1:45731/motion` and received
   live MotionFrame data.
 - **MANUAL / not independently captured:** Visual avatar rendering in the
-  browser was not screenshot-verified by the agent session. The WebSocket
+  browser was not screenshot-verified in this validation pass. The WebSocket
   connection and live frame receive are confirmed. The rendered output was not
   independently captured.
 
@@ -262,9 +262,10 @@ subsequent live frames:
 }
 ```
 
-**Visual avatar rendering in the browser was not screenshot-verified by the
-agent session.** The WebSocket connection and live MotionFrame data receive are
-confirmed. The rendered output requires local manual observation.
+**Visual avatar rendering in the browser was not screenshot-verified in this
+validation pass.** The browser connected to the bridge WebSocket while live
+MotionFrame data was available. Visual avatar rendering requires local manual
+observation and was not independently captured in this validation pass.
 
 ### 6.7 OBS / Browser Source validation
 
@@ -272,31 +273,31 @@ SKIP / not performed. Out of scope for this report.
 
 ## 7. PASS / FAIL / SKIP / MANUAL roll-up
 
-| Check                                                                  | Result                                                     |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `pnpm format:check`                                                    | PASS                                                       |
-| `pnpm prep:native-runtime:verify:local` (21 DLLs)                      | PASS                                                       |
-| `.lvk-native-runtime/` not committed                                   | PASS                                                       |
-| Packaged `bin/` file presence (`lvk-tracker-core.exe` + 21 DLLs)       | PASS                                                       |
-| `pnpm test:motion-ws-bridge`                                           | PASS                                                       |
-| Capability preflight from packaged resources (no vcpkg PATH)           | PASS                                                       |
-| `opencvCameraSupport=true` from packaged location                      | PASS                                                       |
-| `localOnly=true` from packaged location                                | PASS                                                       |
-| Web Preview HTTP server (`pnpm dev:web`)                               | PASS                                                       |
-| Camera opened (MSMF backend, index 0, 640×480) from packaged resources | PASS                                                       |
-| Continuous MotionFrame JSON streamed from packaged resources           | PASS — 60+ frames / ~10 s run                              |
-| `motion-ws-bridge` started and received MotionFrame input              | PASS                                                       |
-| WebSocket client connected and received frames from bridge             | PASS — 60 frames confirmed                                 |
-| Web Preview browser connected to bridge WebSocket (`?source=native`)   | PASS — `client connected (2)` confirmed                    |
-| Live MotionFrame data received by browser WebSocket                    | PASS — confirmed via bridge log and second WS client probe |
-| **Visual avatar rendering in browser**                                 | **MANUAL** — not screenshot-verified by agent session      |
-| No raw camera frames printed / written / uploaded / persisted / sent   | PASS                                                       |
-| Bounded run (not indefinite)                                           | PASS — ~10–12 s, then stopped                              |
-| Process-local PATH excluded vcpkg                                      | PASS                                                       |
-| `.lvk-native-runtime/` and `win-unpacked/` not committed               | PASS — not tracked                                         |
-| No local absolute paths committed                                      | PASS                                                       |
-| OBS / Browser Source                                                   | SKIP                                                       |
-| `build:win` (installer)                                                | SKIP                                                       |
+| Check                                                                  | Result                                                          |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `pnpm format:check`                                                    | PASS                                                            |
+| `pnpm prep:native-runtime:verify:local` (21 DLLs)                      | PASS                                                            |
+| `.lvk-native-runtime/` not committed                                   | PASS                                                            |
+| Packaged `bin/` file presence (`lvk-tracker-core.exe` + 21 DLLs)       | PASS                                                            |
+| `pnpm test:motion-ws-bridge`                                           | PASS                                                            |
+| Capability preflight from packaged resources (no vcpkg PATH)           | PASS                                                            |
+| `opencvCameraSupport=true` from packaged location                      | PASS                                                            |
+| `localOnly=true` from packaged location                                | PASS                                                            |
+| Web Preview HTTP server (`pnpm dev:web`)                               | PASS                                                            |
+| Camera opened (MSMF backend, index 0, 640×480) from packaged resources | PASS                                                            |
+| Continuous MotionFrame JSON streamed from packaged resources           | PASS — 60+ frames / ~10 s run                                   |
+| `motion-ws-bridge` started and received MotionFrame input              | PASS                                                            |
+| WebSocket client connected and received frames from bridge             | PASS — 60 frames confirmed                                      |
+| Web Preview browser connected to bridge WebSocket (`?source=native`)   | PASS — `client connected (2)` confirmed                         |
+| Live MotionFrame data received by browser WebSocket                    | PASS — confirmed via bridge log and second WS client probe      |
+| **Visual avatar rendering in browser**                                 | **MANUAL** — not independently captured in this validation pass |
+| No raw camera frames printed / written / uploaded / persisted / sent   | PASS                                                            |
+| Bounded run (not indefinite)                                           | PASS — ~10–12 s, then stopped                                   |
+| Process-local PATH excluded vcpkg                                      | PASS                                                            |
+| `.lvk-native-runtime/` and `win-unpacked/` not committed               | PASS — not tracked                                              |
+| No local absolute paths committed                                      | PASS                                                            |
+| OBS / Browser Source                                                   | SKIP                                                            |
+| `build:win` (installer)                                                | SKIP                                                            |
 
 ## 8. Limitations / honesty notes
 
