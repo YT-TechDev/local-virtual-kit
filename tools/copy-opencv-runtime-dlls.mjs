@@ -43,8 +43,30 @@ const ALLOWED_DLL_PATTERNS = [
   /^opencv_dnn\d+d?\.dll$/i,
 ];
 
+// Exact verified filenames for non-OpenCV vcpkg runtime DLLs required by the
+// Windows x64 Release OpenCV-enabled Native Core build. Verified via
+// dumpbin /dependents static import inspection (2026-06-27).
+// Only these exact names are accepted; arbitrary non-OpenCV DLL names are rejected.
+const ALLOWED_VCPKG_RUNTIME_DLLS = new Set([
+  "z.dll",
+  "jpeg62.dll",
+  "libpng16.dll",
+  "tiff.dll",
+  "liblzma.dll",
+  "libwebp.dll",
+  "libwebpdecoder.dll",
+  "libwebpdemux.dll",
+  "libwebpmux.dll",
+  "libsharpyuv.dll",
+  "libprotobuf.dll",
+  "abseil_dll.dll",
+]);
+
 function isAllowedDll(filename) {
-  return ALLOWED_DLL_PATTERNS.some((pattern) => pattern.test(filename));
+  return (
+    ALLOWED_DLL_PATTERNS.some((pattern) => pattern.test(filename)) ||
+    ALLOWED_VCPKG_RUNTIME_DLLS.has(filename.toLowerCase())
+  );
 }
 
 function isDebugDll(filename) {
@@ -109,6 +131,11 @@ Allowed DLL patterns (case-insensitive):
   opencv_flann<version>[d].dll
   opencv_objdetect<version>[d].dll
   opencv_dnn<version>[d].dll
+
+Allowed non-OpenCV vcpkg runtime DLL filenames (exact, verified Windows x64 Release):
+  z.dll, jpeg62.dll, libpng16.dll, tiff.dll, liblzma.dll,
+  libwebp.dll, libwebpdecoder.dll, libwebpdemux.dll, libwebpmux.dll,
+  libsharpyuv.dll, libprotobuf.dll, abseil_dll.dll
 
 Use placeholder paths in docs and reports, for example:
   --source-dir <vcpkg-root>/installed/x64-windows/bin
@@ -529,20 +556,47 @@ function runSelfTest() {
     "opencv_dnn4100.dll",
     "opencv_objdetect490.dll",
   ];
+  const allowedVcpkgDlls = [
+    "z.dll",
+    "jpeg62.dll",
+    "libpng16.dll",
+    "tiff.dll",
+    "liblzma.dll",
+    "libwebp.dll",
+    "libwebpdecoder.dll",
+    "libwebpdemux.dll",
+    "libwebpmux.dll",
+    "libsharpyuv.dll",
+    "libprotobuf.dll",
+    "abseil_dll.dll",
+  ];
   const nonAllowedFiles = [
     "some_other_library.dll",
     "zlib1.dll",
     "readme.txt",
     "opencv_world.dll",
+    "unknown_native_lib.dll",
   ];
 
   for (const f of [...allowedFakeDlls, ...nonAllowedFiles]) {
     writeFileSync(join(srcDir, f), "");
   }
 
-  // Test 1: pattern matching — allowed DLLs.
-  console.log("[test 1] DLL pattern matching — allowed filenames");
+  // Test 1: pattern matching — allowed OpenCV DLLs.
+  console.log("[test 1] DLL pattern matching — allowed OpenCV filenames");
   for (const f of allowedFakeDlls) {
+    if (isAllowedDll(f)) {
+      pass(`${f} matched`);
+    } else {
+      fail(`${f} should match but did not`);
+    }
+  }
+
+  // Test 1b: pattern matching — allowed vcpkg runtime DLL filenames.
+  console.log(
+    "\n[test 1b] DLL pattern matching — allowed vcpkg runtime filenames",
+  );
+  for (const f of allowedVcpkgDlls) {
     if (isAllowedDll(f)) {
       pass(`${f} matched`);
     } else {
@@ -858,6 +912,149 @@ function runSelfTest() {
     );
   }
 
+  // Test 17: manifest accepts the verified non-OpenCV vcpkg runtime DLL filenames.
+  console.log(
+    "\n[test 17] manifest accepts verified non-OpenCV vcpkg runtime DLL filenames",
+  );
+  const vcpkgManifestPath = join(manifestDir, "vcpkg-runtime.json");
+  const vcpkgManifestDlls = [
+    "z.dll",
+    "jpeg62.dll",
+    "libpng16.dll",
+    "tiff.dll",
+    "liblzma.dll",
+    "libwebp.dll",
+    "libwebpdecoder.dll",
+    "libwebpdemux.dll",
+    "libwebpmux.dll",
+    "libsharpyuv.dll",
+    "libprotobuf.dll",
+    "abseil_dll.dll",
+  ];
+  writeFileSync(
+    vcpkgManifestPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      configuration: "release",
+      runtimeDlls: vcpkgManifestDlls,
+    }),
+  );
+  const vcpkgManifestErr = tryValidateManifest(vcpkgManifestPath);
+  if (!vcpkgManifestErr) {
+    pass(
+      "manifest accepted all verified non-OpenCV vcpkg runtime DLL filenames",
+    );
+  } else {
+    fail(
+      `manifest should accept verified vcpkg DLL names, got: ${vcpkgManifestErr.message}`,
+    );
+  }
+
+  // Test 18: manifest rejects arbitrary unknown non-OpenCV DLL names.
+  console.log(
+    "\n[test 18] manifest rejects arbitrary unknown non-OpenCV DLL names",
+  );
+  const unknownDllCases = [
+    "unknown_native_lib.dll",
+    "zlib1.dll",
+    "some_codec.dll",
+    "msvcp140.dll",
+    "vcruntime140.dll",
+  ];
+  for (const name of unknownDllCases) {
+    const p = join(manifestDir, `unknown-${name}`);
+    writeFileSync(p, JSON.stringify({ schemaVersion: 1, runtimeDlls: [name] }));
+    const err = tryValidateManifest(p);
+    if (err && err.message.includes("allowed DLL patterns")) {
+      pass(`manifest correctly rejected unknown non-OpenCV DLL: ${name}`);
+    } else {
+      fail(
+        `manifest should reject unknown non-OpenCV DLL "${name}", got: ${err?.message ?? "no error"}`,
+      );
+    }
+  }
+
+  // Test 19: manifest with mixed OpenCV and vcpkg DLLs accepted.
+  console.log(
+    "\n[test 19] manifest accepts mixed OpenCV and non-OpenCV vcpkg DLLs",
+  );
+  const mixedManifestPath = join(manifestDir, "mixed.json");
+  writeFileSync(
+    mixedManifestPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      configuration: "release",
+      runtimeDlls: [
+        "opencv_core4.dll",
+        "opencv_imgproc4.dll",
+        "z.dll",
+        "jpeg62.dll",
+        "libprotobuf.dll",
+      ],
+    }),
+  );
+  const mixedErr = tryValidateManifest(mixedManifestPath);
+  if (!mixedErr) {
+    pass("manifest accepted mixed OpenCV and vcpkg DLL list");
+  } else {
+    fail(`manifest should accept mixed DLL list, got: ${mixedErr.message}`);
+  }
+
+  // Test 20: copy mode copies both OpenCV and vcpkg DLLs from expanded manifest.
+  console.log(
+    "\n[test 20] copy mode copies expanded manifest (OpenCV + vcpkg DLLs)",
+  );
+  const expandedSrcDir = mkdtempSync(join(tmpBase, "lvk-opencv-esrc-"));
+  const expandedDstDir = join(dstBase, "expanded-output");
+  const expandedDlls = [
+    "opencv_core4.dll",
+    "opencv_imgproc4.dll",
+    "z.dll",
+    "jpeg62.dll",
+    "libprotobuf.dll",
+  ];
+  for (const f of expandedDlls) {
+    writeFileSync(join(expandedSrcDir, f), "");
+  }
+  const expandedManifestPath = join(manifestDir, "expanded.json");
+  writeFileSync(
+    expandedManifestPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      configuration: "release",
+      runtimeDlls: expandedDlls,
+    }),
+  );
+  const expandedManifest = loadAndValidateManifest(expandedManifestPath);
+  copyDllsFromManifest({
+    manifest: expandedManifest,
+    sourceDir: expandedSrcDir,
+    destDir: expandedDstDir,
+    dryRun: false,
+  });
+  for (const f of expandedDlls) {
+    if (existsSync(join(expandedDstDir, f))) {
+      pass(`${f} copied via expanded manifest`);
+    } else {
+      fail(`${f} was not copied via expanded manifest`);
+    }
+  }
+
+  // Test 21: --verify works with expanded manifest (OpenCV + vcpkg DLLs).
+  console.log(
+    "\n[test 21] --verify works with expanded manifest (OpenCV + vcpkg DLLs)",
+  );
+  const verifyExpandedOk = verifyDlls({
+    manifest: expandedManifest,
+    sourceDir: expandedSrcDir,
+    destDir: null,
+  });
+  if (verifyExpandedOk) {
+    pass("--verify returned true for expanded manifest DLLs present in source");
+  } else {
+    fail("--verify should return true when all expanded manifest DLLs present");
+  }
+
   // Cleanup.
   try {
     rmSync(srcDir, { recursive: true, force: true });
@@ -867,6 +1064,7 @@ function runSelfTest() {
     rmSync(missingDllSrcDir, { recursive: true, force: true });
     rmSync(verifySrcDir, { recursive: true, force: true });
     rmSync(verifyMissingSrcDir, { recursive: true, force: true });
+    rmSync(expandedSrcDir, { recursive: true, force: true });
   } catch {
     // Non-fatal cleanup failure.
   }
