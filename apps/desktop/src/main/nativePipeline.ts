@@ -541,7 +541,7 @@ export class NativePipelineManager {
           nativeTrackerStatus: 'error',
           lastError: truncateStatusMessage(describeTrackerSpawnError(error))
         }
-        this.terminateBridgeAfterTrackerExit(childProcess)
+        this.terminateBridgeAfterTrackerExit()
       }
     })
 
@@ -556,13 +556,13 @@ export class NativePipelineManager {
             lastMessage: 'Native tracker stopped unexpectedly. Stopping the MotionFrame bridge.',
             lastError: trackerExitMessage
           }
-          this.terminateBridgeAfterTrackerExit(childProcess)
+          this.terminateBridgeAfterTrackerExit()
         }
       }
     })
   }
 
-  private terminateBridgeAfterTrackerExit(_trackerProcess: ChildProcessWithoutNullStreams): void {
+  private terminateBridgeAfterTrackerExit(): void {
     if (this.isStopping) {
       return
     }
