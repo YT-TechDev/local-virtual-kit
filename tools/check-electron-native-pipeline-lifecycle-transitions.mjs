@@ -375,8 +375,8 @@ requireMatch(
 
 // Tracker unexpected exit stops the bridge
 requireMatch(
-  /this\.terminateBridgeAfterTrackerExit\s*\(\s*childProcess\s*\)/u,
-  "tracker unexpected exit must call terminateBridgeAfterTrackerExit",
+  /this\.terminateBridgeAfterTrackerExit\s*\(\s*\)/u,
+  "tracker unexpected exit must call terminateBridgeAfterTrackerExit()",
 );
 
 // terminateBridgeAfterTrackerExit must close readline and stop bridge server
