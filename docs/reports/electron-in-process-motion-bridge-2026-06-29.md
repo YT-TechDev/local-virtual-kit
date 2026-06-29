@@ -16,6 +16,7 @@ In packaged Electron builds, `tools/motion-ws-bridge.mjs` is absent from the bun
 Implement the MotionFrame WebSocket bridge inside Electron main as an in-process Node.js TCP server. Both dev and packaged modes now use the same code path with no external script dependency.
 
 Key decisions:
+
 - Uses only `node:net` and `node:crypto` (Node.js built-ins available in Electron main). No new packages.
 - Conservative JSON validation: parses line, checks non-null object with finite `timestampMs`. Does not import `@lvk/motion-protocol` (not a desktop dependency).
 - Binds exclusively to `127.0.0.1:45731/motion`, not `0.0.0.0`.
@@ -26,16 +27,16 @@ Key decisions:
 
 ## Changed Files
 
-| File | Change |
-|------|--------|
-| `apps/desktop/src/main/motionBridgeServer.ts` | **New.** In-process WebSocket bridge server. Exports `startMotionBridgeServer`, `stopMotionBridgeServer`, `publishMotionFrameLine`. |
-| `apps/desktop/src/main/nativePipeline.ts` | Replaced external bridge subprocess with in-process bridge calls. Added readline interface to pipe tracker stdout to `publishMotionFrameLine`. Removed `bridgeProcess` field and `describeBridgeProcessError`. |
-| `apps/desktop/src/preload/api.ts` | `MotionBridgeStatus`: replaced `'manual_dev_tool'` with `'not_started'`. |
-| `apps/desktop/src/renderer/src/App.tsx` | Updated label map to match new `'not_started'` status value. |
-| `tools/check-electron-native-pipeline-lifecycle-transitions.mjs` | Rewrote sections B–F for in-process bridge architecture. |
-| `tools/check-electron-helper-lifecycle-exit-diagnostic.mjs` | Removed bridge-process exit checks; added in-process bridge error-callback and `stopMotionBridgeServer` checks. |
-| `tools/check-electron-helper-spawn-diagnostic.mjs` | Removed `describeBridgeProcessError` section; added in-process bridge error wording checks. |
-| `tools/check-electron-native-runtime-status-contract.mjs` | Updated initial `motionBridgeStatus` check from `'manual_dev_tool'` to `'not_started'`. |
+| File                                                             | Change                                                                                                                                                                                                         |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/desktop/src/main/motionBridgeServer.ts`                    | **New.** In-process WebSocket bridge server. Exports `startMotionBridgeServer`, `stopMotionBridgeServer`, `publishMotionFrameLine`.                                                                            |
+| `apps/desktop/src/main/nativePipeline.ts`                        | Replaced external bridge subprocess with in-process bridge calls. Added readline interface to pipe tracker stdout to `publishMotionFrameLine`. Removed `bridgeProcess` field and `describeBridgeProcessError`. |
+| `apps/desktop/src/preload/api.ts`                                | `MotionBridgeStatus`: replaced `'manual_dev_tool'` with `'not_started'`.                                                                                                                                       |
+| `apps/desktop/src/renderer/src/App.tsx`                          | Updated label map to match new `'not_started'` status value.                                                                                                                                                   |
+| `tools/check-electron-native-pipeline-lifecycle-transitions.mjs` | Rewrote sections B–F for in-process bridge architecture.                                                                                                                                                       |
+| `tools/check-electron-helper-lifecycle-exit-diagnostic.mjs`      | Removed bridge-process exit checks; added in-process bridge error-callback and `stopMotionBridgeServer` checks.                                                                                                |
+| `tools/check-electron-helper-spawn-diagnostic.mjs`               | Removed `describeBridgeProcessError` section; added in-process bridge error wording checks.                                                                                                                    |
+| `tools/check-electron-native-runtime-status-contract.mjs`        | Updated initial `motionBridgeStatus` check from `'manual_dev_tool'` to `'not_started'`.                                                                                                                        |
 
 ---
 
@@ -66,18 +67,18 @@ WebSocket clients (Web Preview / OBS Browser Source)
 
 ## Checks Run
 
-| Check | Result |
-|-------|--------|
-| `pnpm format:check` | PASS |
-| `pnpm --filter @lvk/desktop typecheck` | PASS |
-| `pnpm --filter @lvk/desktop build` | PASS (main: 30.80 kB) |
-| `pnpm --filter @lvk/desktop build:unpack` | PASS |
-| `node tools/check-electron-helper-spawn-diagnostic.mjs` | PASS |
-| `node tools/check-electron-helper-lifecycle-exit-diagnostic.mjs` | PASS |
-| `node tools/check-electron-native-pipeline-lifecycle-transitions.mjs` | PASS |
-| `node tools/check-electron-native-runtime-status-contract.mjs` | PASS |
-| `pnpm test:motion-ws-bridge` | PASS |
-| `check-native-runtime-capabilities.mjs` | SKIP — pre-existing `STATUS_DLL_NOT_FOUND` (OpenCV vcpkg DLLs not on PATH in this environment; unrelated to bridge changes) |
+| Check                                                                 | Result                                                                                                                      |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format:check`                                                   | PASS                                                                                                                        |
+| `pnpm --filter @lvk/desktop typecheck`                                | PASS                                                                                                                        |
+| `pnpm --filter @lvk/desktop build`                                    | PASS (main: 30.80 kB)                                                                                                       |
+| `pnpm --filter @lvk/desktop build:unpack`                             | PASS                                                                                                                        |
+| `node tools/check-electron-helper-spawn-diagnostic.mjs`               | PASS                                                                                                                        |
+| `node tools/check-electron-helper-lifecycle-exit-diagnostic.mjs`      | PASS                                                                                                                        |
+| `node tools/check-electron-native-pipeline-lifecycle-transitions.mjs` | PASS                                                                                                                        |
+| `node tools/check-electron-native-runtime-status-contract.mjs`        | PASS                                                                                                                        |
+| `pnpm test:motion-ws-bridge`                                          | PASS                                                                                                                        |
+| `check-native-runtime-capabilities.mjs`                               | SKIP — pre-existing `STATUS_DLL_NOT_FOUND` (OpenCV vcpkg DLLs not on PATH in this environment; unrelated to bridge changes) |
 
 ---
 
