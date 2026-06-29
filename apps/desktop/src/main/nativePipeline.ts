@@ -108,6 +108,25 @@ function createInitialStatus(): LvkRuntimeStatus {
   }
 }
 
+function resolvePackagedTrackerExecutable(): string | null {
+  const electronProcess = nodeProcess as NodeJS.Process & { resourcesPath?: string }
+  const resourcesPath = electronProcess.resourcesPath
+  if (!resourcesPath) return null
+  const executableName =
+    nodeProcess.platform === 'win32' ? 'lvk-tracker-core.exe' : 'lvk-tracker-core'
+  const candidatePath = join(resourcesPath, 'native-runtime', 'bin', executableName)
+  return existsSync(candidatePath) ? candidatePath : null
+}
+
+function buildNativeRuntimeEnv(binDir: string): NodeJS.ProcessEnv {
+  const sep = nodeProcess.platform === 'win32' ? ';' : ':'
+  const systemBase =
+    nodeProcess.platform === 'win32'
+      ? `${nodeProcess.env.SystemRoot ?? 'C:\\Windows'}\\System32${sep}${nodeProcess.env.SystemRoot ?? 'C:\\Windows'}`
+      : '/usr/bin:/bin'
+  return { ...nodeProcess.env, PATH: `${binDir}${sep}${systemBase}` }
+}
+
 function findRepoRoot(): string {
   let current = resolve(__dirname)
 
@@ -262,8 +281,9 @@ const CAPABILITIES_SPAWN_FAILED_RESULT: NativeRuntimeCapabilities = {
 }
 
 export async function queryNativeRuntimeCapabilities(): Promise<NativeRuntimeCapabilities> {
+  const packagedPath = resolvePackagedTrackerExecutable()
   const repoRoot = findRepoRoot()
-  const executablePath = resolveTrackerExecutable(repoRoot)
+  const executablePath = packagedPath ?? resolveTrackerExecutable(repoRoot)
 
   if (!executablePath) {
     return {
@@ -279,9 +299,13 @@ export async function queryNativeRuntimeCapabilities(): Promise<NativeRuntimeCap
     }
   }
 
+  const spawnEnv = packagedPath ? buildNativeRuntimeEnv(dirname(packagedPath)) : undefined
+
   return new Promise((resolve) => {
     let stdout = ''
-    const child = spawn(executablePath, ['--print-runtime-capabilities'])
+    const child = spawn(executablePath, ['--print-runtime-capabilities'], {
+      env: spawnEnv
+    })
 
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
@@ -340,7 +364,11 @@ export class NativePipelineManager {
     const faceCascadePath = getConfiguredFaceCascadePath()
     const bridgeScriptPath = join(repoRoot, 'tools', 'motion-ws-bridge.mjs')
     const trackerExecutableCandidates = getTrackerExecutableCandidates(repoRoot)
-    const trackerExecutablePath = resolveTrackerExecutable(repoRoot)
+    const packagedTrackerPath = resolvePackagedTrackerExecutable()
+    const trackerExecutablePath = packagedTrackerPath ?? resolveTrackerExecutable(repoRoot)
+    const trackerEnv = packagedTrackerPath
+      ? buildNativeRuntimeEnv(dirname(packagedTrackerPath))
+      : undefined
 
     if (requestedFaceDetector === 'opencv' && !faceCascadePath) {
       this.status = {
@@ -426,7 +454,8 @@ export class NativePipelineManager {
       this.trackerProcess = spawn(trackerExecutablePath, trackerArgs, {
         cwd: repoRoot,
         shell: false,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        ...(trackerEnv ? { env: trackerEnv } : {})
       })
       this.attachProcessHandlers('tracker', this.trackerProcess)
 
