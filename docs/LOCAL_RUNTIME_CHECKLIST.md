@@ -15,6 +15,8 @@ The completed 2026-06-26 local verification pass is recorded in [`docs/reports/l
 
 OBS Browser Source validation and OpenCV camera validation remain environment-dependent follow-up checks. Do not claim OBS, webcam/OpenCV, or OS camera permission validation unless those checks are performed in an environment that provides the required local tools, hardware, and permissions.
 
+The 2026-06-29 OBS Browser Source validation pass is recorded in [`docs/reports/obs-browser-source-validation-2026-06-29.md`](./reports/obs-browser-source-validation-2026-06-29.md). That pass confirmed packaged resources, capability preflight, Web Preview HTTP (including `?mode=obs&source=native`), and continuous pipeline through `motion-ws-bridge`. OBS Studio 32.1.2 was confirmed installed and running with the browser plugin present. OBS Browser Source scene configuration and visual rendering in OBS canvas remain MANUAL — direct GUI interaction is required to add the Browser Source to an OBS scene and observe the canvas.
+
 For future packaged Electron builds, see [`docs/NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md`](./NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md) for the Windows/vcpkg OpenCV runtime DLL handling strategy. Local/dev validation keeps the explicit `PATH` guidance below; packaged app behavior should be addressed in a separate implementation PR.
 
 ## Automated checks
