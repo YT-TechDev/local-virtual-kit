@@ -363,8 +363,8 @@ requireMatch(
 
 requireMatch(
   pipelineSrc,
-  /motionBridgeStatus:\s*['"]manual_dev_tool['"]/u,
-  "createInitialStatus must set motionBridgeStatus to 'manual_dev_tool'",
+  /motionBridgeStatus:\s*['"]not_started['"]/u,
+  "createInitialStatus must set motionBridgeStatus to 'not_started'",
 );
 
 requireMatch(
@@ -433,6 +433,6 @@ console.log(
     "  D. Initial pipeline status — PREVIEW_DUMMY_URL, PREVIEW_NATIVE_URL, " +
     "PREVIEW_OBS_NATIVE_URL, MOTION_ENDPOINT constants match expected values; " +
     "DEFAULT_CAMERA_FPS=60, DEFAULT_CAMERA_WIDTH=640, DEFAULT_CAMERA_HEIGHT=480; " +
-    "createInitialStatus returns not_started/manual_dev_tool with dummy/noop defaults " +
+    "createInitialStatus returns not_started/not_started with dummy/noop defaults " +
     "and cameraIndex 0; NativePipelineManager.getStatus returns a shallow copy.",
 );

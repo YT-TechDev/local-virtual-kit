@@ -64,55 +64,42 @@ requireMatch(
   "trackerExitMessage must include actionable guidance (stderr or rebuild)",
 );
 
-// --- Motion bridge unexpected-exit diagnostic ---
+// --- In-process bridge server-error diagnostic ---
 
 if (
-  !/kind === 'bridge' && this\.bridgeProcess === childProcess/u.test(source)
+  !/startMotionBridgeServer[\s\S]{0,400}?motionBridgeStatus:\s*['"]error['"]/u.test(
+    source,
+  )
 ) {
-  fail("bridge exit handler not found in nativePipeline.ts");
+  fail(
+    "in-process bridge server error callback must set motionBridgeStatus to 'error' in nativePipeline.ts",
+  );
 }
 
 requireMatch(
   source,
-  /Motion bridge exited unexpectedly/u,
-  "bridge exit diagnostic must use 'exited unexpectedly' wording",
-);
-requireMatch(
-  source,
-  /code\s*\?\?\s*['"]null['"]/u,
-  "bridge exit diagnostic must include the exit code",
-);
-requireMatch(
-  source,
-  /signal\s*\?\?\s*['"]none['"]/u,
-  "bridge exit diagnostic must include signal with 'none' fallback",
-);
-requireMatch(
-  source,
-  /bridge\s+stderr|paired\s+native\s+tracker|native\s+tracker/iu,
-  "bridge exit diagnostic must include actionable guidance about bridge stderr or the paired native tracker",
+  /Motion bridge server error/u,
+  "in-process bridge server error diagnostic must use 'Motion bridge server error' wording",
 );
 
-// --- Motion bridge stderr server-error diagnostic ---
+requireMatch(
+  source,
+  /startMotionBridgeServer[\s\S]{0,600}?!this\.isStopping/u,
+  "in-process bridge server error callback must guard with !this.isStopping",
+);
 
-if (!/kind === 'bridge' && message\.includes\('server error'\)/u.test(source)) {
-  fail("bridge stderr server-error detection not found in nativePipeline.ts");
-}
+// --- terminateBridgeAfterTrackerExit stops the in-process bridge ---
 
 requireMatch(
   source,
-  /Motion bridge reported a server error/u,
-  "bridge stderr server-error diagnostic must use 'Motion bridge reported a server error' wording",
-);
-requireMatch(
-  source,
-  /bridge\s+stderr|motion-ws-bridge/iu,
-  "bridge stderr server-error diagnostic must include actionable guidance (bridge stderr or motion-ws-bridge)",
+  /terminateBridgeAfterTrackerExit[\s\S]{0,600}?stopMotionBridgeServer\s*\(\s*\)/u,
+  "terminateBridgeAfterTrackerExit must call stopMotionBridgeServer() to stop the in-process bridge",
 );
 
 console.log(
-  "Electron helper lifecycle exit diagnostic smoke OK: tracker and bridge " +
-    "unexpected-exit diagnostics each include failure description, exit code, " +
-    "signal, and actionable guidance. Bridge stderr server-error diagnostic " +
-    "includes actionable guidance.",
+  "Electron helper lifecycle exit diagnostic smoke OK: tracker " +
+    "unexpected-exit diagnostic includes failure description, exit code, " +
+    "signal, and actionable guidance. In-process bridge server-error callback " +
+    "guards with !isStopping and sets motionBridgeStatus='error'. " +
+    "terminateBridgeAfterTrackerExit stops the in-process bridge.",
 );

@@ -100,41 +100,24 @@ requireMatch(
   "tracker spawn error handler must use describeTrackerSpawnError(error) inside truncateStatusMessage(...) protection",
 );
 
-// --- Motion bridge process error diagnostic ---
-
-const describeBridgeBody = extractFunctionBody("describeBridgeProcessError");
+// --- In-process bridge server error diagnostic ---
 
 requireMatch(
-  describeBridgeBody,
-  /failed\s+to\s+start/iu,
-  "describeBridgeProcessError() must describe a start failure",
-);
-requireMatch(
-  describeBridgeBody,
-  /ENOENT/u,
-  "describeBridgeProcessError() must handle ENOENT explicitly",
-);
-requireMatch(
-  describeBridgeBody,
-  /EACCES/u,
-  "describeBridgeProcessError() must handle EACCES explicitly",
-);
-requireMatch(
-  describeBridgeBody,
-  /stderr|motion-ws-bridge|bridge\s+script/iu,
-  "describeBridgeProcessError() generic fallback must include actionable guidance (bridge stderr or bridge script)",
+  source,
+  /Motion bridge server error/u,
+  "in-process bridge error callback lastError must use 'Motion bridge server error' wording",
 );
 
 requireMatch(
   source,
-  /lastError:\s*truncateStatusMessage\(\s*describeBridgeProcessError\(error\)\s*\)/u,
-  "bridge process error handler must use describeBridgeProcessError(error) inside truncateStatusMessage(...) protection",
+  /truncateStatusMessage\s*\(\s*error\.message\s*\)/u,
+  "in-process bridge error callback must protect error.message with truncateStatusMessage()",
 );
 
 console.log(
   "Electron helper spawn diagnostic smoke OK: describeTrackerSpawnError() " +
     "keeps explicit ENOENT/EACCES diagnostics and the tracker spawn handler " +
     "keeps truncateStatusMessage(describeTrackerSpawnError(error)). " +
-    "describeBridgeProcessError() keeps start-failure and actionable guidance " +
-    "and the bridge error handler keeps truncateStatusMessage(describeBridgeProcessError(error)).",
+    "In-process bridge error callback uses 'Motion bridge server error' wording " +
+    "and protects error.message with truncateStatusMessage().",
 );
