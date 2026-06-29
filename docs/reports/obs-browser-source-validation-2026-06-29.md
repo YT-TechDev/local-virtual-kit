@@ -2,9 +2,9 @@
 
 ## 1. Summary
 
-This report records the local OBS Browser Source validation attempt following the
-prior validation chain that established continuous packaged OpenCV pipeline
-through `motion-ws-bridge` into Web Preview (PR #376).
+This report records the local OBS Browser Source validation following the prior
+validation chain that established continuous packaged OpenCV pipeline through
+`motion-ws-bridge` into Web Preview (PR #376).
 
 **Key results:**
 
@@ -14,18 +14,28 @@ through `motion-ws-bridge` into Web Preview (PR #376).
 - **PASS:** `pnpm test:motion-ws-bridge` — bridge smoke passed.
 - **PASS:** `pnpm --filter @lvk/desktop build:unpack` — exits 0; packaged
   resources `<unpacked-app>/resources/native-runtime/bin/` confirmed with
-  `lvk-tracker-core.exe` and all 21 manifest DLLs.
+  `lvk-tracker-core.exe` and all 21 manifest DLLs (run in prior session; not
+  re-run in this pass).
 - **PASS:** Capability preflight from packaged resources (no vcpkg PATH) —
   `opencvCameraSupport=true`, `localOnly=true`, exit 0.
-- **PASS:** Web Preview HTTP server started at `http://127.0.0.1:5173/` — HTTP 200.
+- **PASS:** Web Preview HTTP server started at `http://127.0.0.1:5173/` — HTTP 200. OBS-friendly URL `http://localhost:5173/?mode=obs&source=native` also
+  returns HTTP 200.
 - **PASS:** Continuous packaged OpenCV pipeline — camera opened (MSMF, index 0,
-  640×480), 20+ MotionFrame JSON lines emitted in bounded run from packaged
-  resources with no vcpkg PATH.
+  640×480, 30 fps nominal), MotionFrame JSON emitted in bounded run from
+  packaged resources with no vcpkg PATH.
 - **PASS:** `motion-ws-bridge` started and bound to
   `ws://127.0.0.1:45731/motion`.
-- **SKIP:** OBS Browser Source validation — OBS Studio was not found on the
-  test machine. No OBS validation was performed or claimed.
-- **SKIP:** Visual avatar rendering in OBS — OBS not available on test machine.
+- **PASS:** OBS Studio 32.1.2 installed (`obs64.exe` v32.1.2 at standard
+  location).
+- **PASS:** OBS Studio launched (PID confirmed, window title confirmed).
+- **PASS:** Browser Source source type available — `obs-browser.dll` plugin
+  present in OBS installation.
+- **MANUAL:** OBS Browser Source configured with local Web Preview URL —
+  requires GUI interaction; confirmed OBS is running and browser plugin is
+  present; actual Browser Source scene configuration requires local GUI
+  observation.
+- **MANUAL:** Visual avatar rendering in OBS canvas — local manual observation
+  required; not independently captured.
 
 This report is documentation-only. It does not change runtime behavior, Native
 Core C++, CMake behavior, Electron runtime code, the manifest, the `MotionFrame`
@@ -44,8 +54,8 @@ schema, the Motion Protocol, or Web Preview code.
   `native/tracker-core/manifests/opencv-runtime-windows-x64-release.json`
 - Staged runtime directory (git-ignored): `.lvk-native-runtime/`
 - Packaged resources location: `<unpacked-app>/resources/native-runtime/`
-- OBS Browser Source target URL: `http://127.0.0.1:5173/?source=native`
-- OBS-friendly URL (per guide): `http://localhost:5173/?mode=obs&source=native`
+- OBS Browser Source URL (per guide): `http://localhost:5173/?mode=obs&source=native`
+- OBS version: 32.1.2
 
 ## 3. Environment
 
@@ -60,7 +70,7 @@ schema, the Motion Protocol, or Web Preview code.
 - Windows camera permission: granted (camera opened successfully)
 - Webcam available: yes — camera index 0, MSMF backend, 640×480, 30 fps nominal
 - OS camera permission granted: yes — camera opened without error
-- OBS checked: not installed — SKIP
+- OBS Studio: 32.1.2 — installed and running
 
 Local absolute paths are intentionally represented with placeholders such as
 `<vcpkg-root>` and `<unpacked-app>`.
@@ -69,17 +79,15 @@ Local absolute paths are intentionally represented with placeholders such as
 
 - `.lvk-native-runtime/bin/` was confirmed populated with 21-DLL set and
   `lvk-tracker-core.exe` via `pnpm prep:native-runtime:verify:local`.
-- `pnpm --filter @lvk/desktop build:unpack` was re-run in this validation pass
-  and exited 0, confirming `<unpacked-app>/resources/native-runtime/bin/` was
-  freshly rebuilt with all 21 manifest DLLs and the executable.
-- No rebuilding of `.lvk-native-runtime/` was required — the manifest DLL
-  staging directory was already populated from prior passes.
+- `<unpacked-app>/resources/native-runtime/bin/` existed from a prior
+  `build:unpack` pass (exit 0 recorded in prior session); all 21 manifest DLLs
+  and the executable were confirmed present before starting this validation. No
+  rebuild was required for this pass.
 
 ## 5. Packaged resources layout confirmed
 
-`build:unpack` completed with exit 0. The packaged
-`<unpacked-app>/resources/native-runtime/bin/` directory contained
-`lvk-tracker-core.exe` and all 21 manifest DLLs:
+The packaged `<unpacked-app>/resources/native-runtime/bin/` directory contains
+`lvk-tracker-core.exe` and all 21 manifest DLLs (confirmed from prior pass):
 
 ```txt
 <unpacked-app>/resources/native-runtime/bin/
@@ -111,12 +119,11 @@ Local absolute paths are intentionally represented with placeholders such as
 
 ### 6.1 Repository / staging checks
 
-| Check                                              | Command                                   | Result                              |
-| -------------------------------------------------- | ----------------------------------------- | ----------------------------------- |
-| Formatting                                         | `pnpm format:check`                       | PASS                                |
-| Manifest DLL staging verification (21 DLLs)        | `pnpm prep:native-runtime:verify:local`   | PASS — all 21 manifest DLLs present |
-| `.lvk-native-runtime/` not committed (git-ignored) | `git status`                              | PASS — not tracked                  |
-| Full unpack build                                  | `pnpm --filter @lvk/desktop build:unpack` | PASS — exit 0                       |
+| Check                                              | Command                                 | Result                              |
+| -------------------------------------------------- | --------------------------------------- | ----------------------------------- |
+| Formatting                                         | `pnpm format:check`                     | PASS                                |
+| Manifest DLL staging verification (21 DLLs)        | `pnpm prep:native-runtime:verify:local` | PASS — all 21 manifest DLLs present |
+| `.lvk-native-runtime/` not committed (git-ignored) | `git status`                            | PASS — not tracked                  |
 
 `pnpm format:check` output:
 
@@ -130,17 +137,6 @@ All matched files use Prettier code style!
 ```txt
 All 21 required DLL(s) present in destination.
 ```
-
-`pnpm --filter @lvk/desktop build:unpack` — final lines observed:
-
-```txt
-• packaging       platform=win32 arch=x64 electron=39.8.10 appOutDir=dist\win-unpacked
-• updating asar integrity executable resource
-• signing with signtool.exe  path=dist\win-unpacked\resources\native-runtime\bin\lvk-tracker-core.exe
-• signing with signtool.exe  path=dist\win-unpacked\desktoplvk.exe
-```
-
-Exit code: 0
 
 ### 6.2 Motion WebSocket bridge smoke
 
@@ -197,17 +193,18 @@ pnpm dev:web
 # resolves to: pnpm --filter @lvk/web-preview dev
 ```
 
-| Check                                              | Result                                        |
-| -------------------------------------------------- | --------------------------------------------- |
-| Web Preview dev server started                     | PASS — Vite v8.0.16, ready in ~378 ms         |
-| HTTP server accessible at `http://127.0.0.1:5173/` | PASS — HTTP 200, `<title>web-preview</title>` |
-| No external network required                       | PASS — localhost only                         |
+| Check                                                       | Result                |
+| ----------------------------------------------------------- | --------------------- |
+| Web Preview dev server started                              | PASS — Vite v8.0.16   |
+| HTTP 200 at `http://127.0.0.1:5173/`                        | PASS                  |
+| HTTP 200 at `http://localhost:5173/?mode=obs&source=native` | PASS                  |
+| No external network required                                | PASS — localhost only |
 
-### 6.5 Continuous packaged OpenCV pipeline
+### 6.5 Continuous packaged OpenCV pipeline through motion-ws-bridge
 
-Process-local `PATH` was restricted to Windows System32 only. The packaged
-Native Core executable was run from the packaged resources location and its
-stdout was piped to `motion-ws-bridge` stdin:
+Process-local `PATH` was restricted to Windows System32 only. Multiple bounded
+runs were performed across this validation pass (each ~10–25 seconds, then
+stopped by process termination):
 
 ```powershell
 $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
@@ -216,10 +213,7 @@ $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
     | node tools/motion-ws-bridge.mjs
 ```
 
-Run was bounded to approximately 10–12 seconds, then stopped by process
-termination. 20+ MotionFrame JSON lines were emitted during the run.
-
-Camera startup status observed (native exe stderr):
+Camera startup status observed in each run (native exe stderr):
 
 ```txt
 [camera] startup: sourceName=opencv-camera-source, isRunning=true, width=640,
@@ -227,13 +221,13 @@ height=480, nominalFps=30, emittedFrameCount=0, cameraIndex=0, backendName=MSMF,
 failedReadCount=0
 ```
 
-Bridge log observed:
+Bridge log observed in each run:
 
 ```txt
 [motion-ws-bridge] development server listening on ws://127.0.0.1:45731/motion
 ```
 
-Sample MotionFrame JSON line received (first of 20+ lines, stdout only — no raw
+Sample MotionFrame JSON line (first of multiple lines, stdout only — no raw
 pixel data):
 
 ```txt
@@ -244,100 +238,130 @@ pixel data):
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Native Core starts from packaged resources using ONLY adjacent DLLs (no vcpkg PATH) | **PASS** — killed after bounded run                              |
 | Camera opened                                                                       | **PASS** — MSMF backend, camera index 0, 640×480, 30 fps nominal |
-| MotionFrame JSON streamed continuously to stdout                                    | **PASS** — 20+ lines in ~10 s bounded run                        |
+| MotionFrame JSON streamed continuously to stdout                                    | **PASS** — multiple lines emitted in each bounded run            |
 | Bridge started and bound to `ws://127.0.0.1:45731/motion`                           | **PASS** — confirmed in bridge stderr                            |
 | Bridge received MotionFrame input via stdin                                         | **PASS** — lines forwarded from native exe stdout                |
-| Process was stopped cleanly within bounded run                                      | **PASS** — killed after ~10–12 s; no indefinite run              |
+| Process stopped cleanly within bounded run                                          | **PASS** — each run ~10–25 s, then stopped; no indefinite run    |
 | No raw camera frame bytes printed to stdout                                         | **PASS** — only MotionFrame JSON and camera status lines         |
 | No camera frames written to disk                                                    | **PASS** — no file output observed                               |
 | No camera frames uploaded, persisted, or sent                                       | **PASS** — local-first; no network behavior                      |
 | Process-local PATH excluded vcpkg                                                   | **PASS** — System32-only PATH used                               |
 
-### 6.6 OBS availability check
+### 6.6 OBS Studio availability
 
-OBS Studio was searched in standard installation locations and the Windows
-registry. OBS was not found on the test machine.
+OBS Studio was located in the standard installation path. The browser plugin
+was confirmed present. The OBS process was running with the expected window
+title.
 
-| Check                                | Result                                          |
-| ------------------------------------ | ----------------------------------------------- |
-| OBS Studio installed                 | **SKIP** — OBS Studio not found on test machine |
-| OBS launched                         | **SKIP** — OBS not installed                    |
-| OBS version                          | **SKIP** — not determined                       |
-| Browser Source source type available | **SKIP** — OBS not installed                    |
+```txt
+Path: C:\Program Files\obs-studio\bin\64bit\obs64.exe
+FileVersion: 32.1.2
+ProductVersion: 32.1.2
+Process: obs64.exe (PID confirmed)
+Window title: OBS 32.1.2 - プロファイル: 無題 - シーン: 無題
+Browser plugin: obs-browser.dll (64bit plugin directory)
+```
+
+| Check                                | Result                                                         |
+| ------------------------------------ | -------------------------------------------------------------- |
+| OBS Studio installed                 | **PASS** — OBS 32.1.2 found at standard installation path      |
+| OBS Studio launched                  | **PASS** — process running, window title confirmed             |
+| OBS version                          | **32.1.2**                                                     |
+| Browser Source source type available | **PASS** — `obs-browser.dll` present in 64bit plugin directory |
 
 ### 6.7 OBS Browser Source configuration
 
-**SKIP** — OBS Studio was not installed on the test machine. No Browser Source
-was added, no local URL was loaded, and no OBS canvas preview was observed.
+OBS Studio 32.1.2 was running with the browser plugin available. The Web
+Preview HTTP server was confirmed accessible at both:
 
-The following checklist items from `docs/LOCAL_RUNTIME_CHECKLIST.md` section 7
-and `docs/OBS_BROWSER_SOURCE_GUIDE.md` remain unvalidated in this pass:
+- `http://127.0.0.1:5173/` — HTTP 200
+- `http://localhost:5173/?mode=obs&source=native` — HTTP 200
 
-- OBS Browser Source added at `http://localhost:5173/?mode=obs&source=native`
-- Local URL loaded in OBS Browser Source
-- Preview visible in OBS canvas
-- Web Preview connected to `motion-ws-bridge` via OBS Browser Source
-- Live avatar/motion updates manually observed in OBS
+The packaged Native Core continuous OpenCV pipeline was running through
+`motion-ws-bridge` during the validation window, with the bridge listening on
+`ws://127.0.0.1:45731/motion`.
 
-Reason for SKIP: OBS Studio is not installed on the machine used for this
-validation pass. This is an environment-dependent local/manual check that
-requires OBS to be installed and running on a local graphical machine.
+**Browser Source scene configuration requires direct GUI interaction with the
+OBS application.** The OBS native WebSocket server was not enabled (port 4455
+not active), so programmatic scene manipulation was not available.
 
-### 6.8 Visual rendering and avatar observation
+Adding and observing the Browser Source in OBS requires a local operator to:
 
-**SKIP** — OBS not available. Visual rendering observation in OBS canvas was
-not performed.
+1. Open OBS → click the `+` button in the Sources panel.
+2. Select **Browser**.
+3. Enter URL: `http://localhost:5173/?mode=obs&source=native`
+4. Set Width: 1280, Height: 720.
+5. Click OK and observe the OBS canvas.
 
-The Web Preview HTTP server was confirmed accessible at
-`http://127.0.0.1:5173/` (HTTP 200). Browser-based rendering (without OBS)
-was not independently verified in this pass.
+| Check                               | Result                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| OBS Studio launched                 | **PASS** — OBS 32.1.2 running                                             |
+| Browser plugin available            | **PASS** — `obs-browser.dll` present                                      |
+| Web Preview HTTP accessible for OBS | **PASS** — both URLs return HTTP 200                                      |
+| Pipeline running during OBS window  | **PASS** — camera open, bridge listening on `ws://127.0.0.1:45731/motion` |
+| Browser Source added in OBS         | **MANUAL** — requires local GUI interaction                               |
+| Local Web Preview URL loaded in OBS | **MANUAL** — requires local GUI observation                               |
+| OBS canvas shows Web Preview        | **MANUAL** — requires local GUI observation                               |
+| Live motion updates visible in OBS  | **MANUAL** — requires local GUI observation; not independently captured   |
+
+### 6.8 Visual rendering observation
+
+**MANUAL** — Visual rendering in OBS canvas requires a local operator to add
+the Browser Source and observe the canvas. The infrastructure (OBS installed,
+browser plugin present, Web Preview HTTP accessible, pipeline running, bridge
+listening) is confirmed PASS. Visual rendering was not independently captured in
+this validation pass.
 
 ## 7. PASS / FAIL / SKIP / MANUAL roll-up
 
-| Check                                                                  | Result                                          |
-| ---------------------------------------------------------------------- | ----------------------------------------------- |
-| `pnpm format:check`                                                    | PASS                                            |
-| `pnpm prep:native-runtime:verify:local` (21 DLLs)                      | PASS                                            |
-| `.lvk-native-runtime/` not committed (git-ignored)                     | PASS                                            |
-| `pnpm --filter @lvk/desktop build:unpack`                              | PASS — exit 0                                   |
-| Packaged `bin/` file presence (`lvk-tracker-core.exe` + 21 DLLs)       | PASS                                            |
-| `pnpm test:motion-ws-bridge`                                           | PASS                                            |
-| Capability preflight from packaged resources (no vcpkg PATH)           | PASS                                            |
-| `opencvCameraSupport=true` from packaged location                      | PASS                                            |
-| `localOnly=true` from packaged location                                | PASS                                            |
-| Web Preview HTTP server (`pnpm dev:web`)                               | PASS — HTTP 200                                 |
-| Camera opened (MSMF backend, index 0, 640×480) from packaged resources | PASS                                            |
-| Continuous MotionFrame JSON streamed from packaged resources           | PASS — 20+ frames in ~10 s bounded run          |
-| `motion-ws-bridge` started and bound to `ws://127.0.0.1:45731/motion`  | PASS                                            |
-| Bridge received MotionFrame input via stdin                            | PASS — frames forwarded from native exe stdout  |
-| No raw camera frames printed / written / uploaded / persisted / sent   | PASS                                            |
-| Bounded run (not indefinite)                                           | PASS — ~10–12 s, then stopped                   |
-| Process-local PATH excluded vcpkg                                      | PASS                                            |
-| `.lvk-native-runtime/` and `win-unpacked/` not committed               | PASS — not tracked                              |
-| No local absolute paths committed                                      | PASS                                            |
-| OBS installed                                                          | **SKIP** — OBS Studio not found on test machine |
-| OBS launched                                                           | **SKIP** — OBS not installed                    |
-| OBS Browser Source added                                               | **SKIP** — OBS not installed                    |
-| Local Web Preview URL loaded in OBS                                    | **SKIP** — OBS not installed                    |
-| OBS canvas preview visible                                             | **SKIP** — OBS not installed                    |
-| Live motion updates observed in OBS                                    | **SKIP** — OBS not installed                    |
-| `build:win` (installer)                                                | SKIP                                            |
+| Check                                                                  | Result                                                            |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `pnpm format:check`                                                    | PASS                                                              |
+| `pnpm prep:native-runtime:verify:local` (21 DLLs)                      | PASS                                                              |
+| `.lvk-native-runtime/` not committed (git-ignored)                     | PASS                                                              |
+| Packaged `bin/` file presence (`lvk-tracker-core.exe` + 21 DLLs)       | PASS                                                              |
+| `pnpm test:motion-ws-bridge`                                           | PASS                                                              |
+| Capability preflight from packaged resources (no vcpkg PATH)           | PASS                                                              |
+| `opencvCameraSupport=true` from packaged location                      | PASS                                                              |
+| `localOnly=true` from packaged location                                | PASS                                                              |
+| Web Preview HTTP server (`pnpm dev:web`)                               | PASS                                                              |
+| HTTP 200 at `http://localhost:5173/?mode=obs&source=native`            | PASS                                                              |
+| Camera opened (MSMF backend, index 0, 640×480) from packaged resources | PASS                                                              |
+| Continuous MotionFrame JSON streamed from packaged resources           | PASS — multiple frames in bounded runs                            |
+| `motion-ws-bridge` started and bound to `ws://127.0.0.1:45731/motion`  | PASS                                                              |
+| Bridge received MotionFrame input via stdin                            | PASS                                                              |
+| No raw camera frames printed / written / uploaded / persisted / sent   | PASS                                                              |
+| Bounded runs (not indefinite)                                          | PASS — each run ~10–25 s, then stopped                            |
+| Process-local PATH excluded vcpkg                                      | PASS                                                              |
+| `.lvk-native-runtime/` and `win-unpacked/` not committed               | PASS — not tracked                                                |
+| No local absolute paths committed                                      | PASS                                                              |
+| **OBS Studio installed**                                               | **PASS** — OBS 32.1.2 at standard path                            |
+| **OBS Studio launched**                                                | **PASS** — process running, window title confirmed                |
+| **OBS version**                                                        | **32.1.2**                                                        |
+| **Browser Source source type available**                               | **PASS** — `obs-browser.dll` confirmed                            |
+| Browser Source added in OBS scene                                      | **MANUAL** — GUI interaction required                             |
+| Local Web Preview URL loaded in OBS Browser Source                     | **MANUAL** — GUI observation required                             |
+| OBS canvas shows Web Preview                                           | **MANUAL** — GUI observation required                             |
+| Live motion updates observed in OBS canvas                             | **MANUAL** — GUI observation required; not independently captured |
+| OBS scene files / recordings committed                                 | PASS (none committed)                                             |
+| `build:win` (installer)                                                | SKIP                                                              |
 
 ## 8. Limitations / honesty notes
 
-- **OBS Browser Source was not validated in this pass.** OBS Studio was not
-  installed on the test machine. OBS validation requires a local graphical
-  machine with OBS installed. This check remains an open environment-dependent
-  follow-up.
+- **OBS Browser Source scene configuration was not independently verified.**
+  OBS 32.1.2 is installed and running with the browser plugin present. The Web
+  Preview URL is accessible and the pipeline was running during the OBS
+  validation window. Adding the Browser Source to a scene and observing the
+  canvas requires direct GUI interaction that was not performed in this
+  automated pass. Visual rendering in OBS canvas is labeled MANUAL.
+- OBS's built-in WebSocket server (port 4455) was not enabled, so programmatic
+  scene manipulation via the OBS WebSocket API was not available.
 - The continuous pipeline was confirmed to start, open the camera, and emit
-  MotionFrame JSON. Bridge startup was confirmed. WebSocket client connection
-  to the bridge was not verified in this pass beyond the `pnpm test:motion-ws-bridge`
-  smoke (which uses a programmatic client). Browser-connected WebSocket was
-  confirmed in PR #376.
+  MotionFrame JSON across multiple bounded runs. Bridge startup was confirmed.
+  The `pnpm test:motion-ws-bridge` smoke confirms the bridge accepts WebSocket
+  clients and broadcasts frames.
 - Camera smoke was performed on a development machine that already has the VC++
   Redistributable installed. Clean-machine camera smoke remains a separate check.
-- The continuous pipeline throughput was 20+ frames in ~10 s. This reflects
-  async pipe buffering; the actual camera runs at 30 fps nominal.
 - Smoke used camera index 0. Other camera indices were not tested.
 - `build:win` (NSIS installer) was not run.
 - Code signing was not validated.
@@ -354,25 +378,29 @@ was not independently verified in this pass.
   network calls, or new network behavior was introduced.
 - No actual DLLs, Native Core binaries, build artifacts, generated package
   outputs, `.lvk-native-runtime/` contents, `win-unpacked/` directory, raw
-  logs, screenshots, raw camera frames, OBS scene files, or local absolute
-  paths were committed.
+  logs, screenshots, raw camera frames, OBS scene files, OBS recordings, or
+  local absolute paths were committed.
 - No Native Core C++, CMake behavior, Electron runtime code, Electron packaging
   config, `MotionFrame` schema, Motion Protocol, or Web Preview code was
   changed.
-- No OBS scene files, OBS recordings, or OBS screenshots were committed
-  (OBS was not installed).
 
 ## 10. Follow-up items
 
-1. **OBS Browser Source validation:** Install OBS Studio on a local graphical
-   machine, run `pnpm dev:web` and the packaged continuous pipeline through
-   `motion-ws-bridge`, then add a Browser Source pointing to
-   `http://localhost:5173/?mode=obs&source=native`. Confirm the OBS canvas loads
-   the local Web Preview URL and observe whether live motion updates are visible.
-2. **Visual rendering manual check:** Open `http://127.0.0.1:5173/?source=native`
-   in a browser while the pipeline is running and confirm the avatar or 3D
-   preview updates from live MotionFrame data.
-3. **Camera smoke in clean Sandbox:** Confirm finite OpenCV camera smoke in
+1. **OBS Browser Source scene validation (manual):** With OBS 32.1.2 open,
+   `pnpm dev:web` running, and the packaged continuous pipeline piped through
+   `motion-ws-bridge`, manually add a Browser Source in OBS pointing to
+   `http://localhost:5173/?mode=obs&source=native` (Width: 1280, Height: 720)
+   and confirm the Web Preview renders in the OBS canvas. Observe whether live
+   motion updates are visible while the pipeline runs. Record result as
+   PASS/MANUAL in a follow-up commit or note.
+2. **OBS WebSocket server:** Enable OBS's built-in WebSocket server (Tools →
+   obs-websocket Settings → Enable WebSocket server) to allow future automated
+   scene configuration and headless Browser Source testing.
+3. **Visual rendering manual check:** Open
+   `http://localhost:5173/?mode=obs&source=native` in a standard browser while
+   the pipeline is running and confirm the avatar or 3D preview updates from
+   live MotionFrame data.
+4. **Camera smoke in clean Sandbox:** Confirm finite OpenCV camera smoke in
    Windows Sandbox (VC++ Redistributable only, no development toolchain).
-4. **Installer build (`build:win`):** `electron-builder --win` (NSIS installer)
+5. **Installer build (`build:win`):** `electron-builder --win` (NSIS installer)
    has not been validated.
