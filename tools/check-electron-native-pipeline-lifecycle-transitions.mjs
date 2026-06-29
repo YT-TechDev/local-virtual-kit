@@ -3,14 +3,16 @@
 //
 // Covers:
 //   A. Active-status guard — isActiveStatus set and start() early-return contract.
-//   B. Start preflight error transitions — missing bridge, missing tracker, opencv without cascade.
-//   C. Successful start transition — isStopping reset, starting status, spawn order, bridge env,
-//      stdout pipe, running status.
-//   D. Stop transition — early-return guard, isStopping set, stopping status, unpipe,
-//      stdin end, Promise.all termination, null refs, exited status, isStopping reset.
-//   E. Cleanup-on-quit — isStopping set, unpipe, stdin end, kill, null refs.
+//   B. Start preflight error transitions — missing tracker, opencv without cascade.
+//   C. Successful start transition — isStopping reset, starting status, bridge start,
+//      tracker spawn, readline setup, publishMotionFrameLine, running status.
+//   D. Stop transition — early-return guard, isStopping set, stopping status,
+//      readline close, bridge stop, tracker termination, null ref, exited status,
+//      isStopping reset.
+//   E. Cleanup-on-quit — isStopping set, readline close, kill, null ref, bridge stop.
 //   F. Unexpected exit/error transitions — tracker error, tracker unexpected exit,
-//      bridge error, bridge non-zero exit, bridge server-error stderr, stdout not logged.
+//      in-process bridge server error, stdout not logged directly.
+//   G. Termination hardening — settle helper, SIGTERM/SIGKILL, killProcess guard.
 //
 // Source-level only. No Electron, no child_process spawn, no transpilation.
 // Dependency-free: Node built-ins only.
@@ -78,46 +80,18 @@ if (!activeGuardMatch) {
 // B. Start preflight error transitions
 // ---------------------------------------------------------------------------
 
-// B1. Missing bridge script → nativeTrackerStatus: 'not_started', motionBridgeStatus: 'error'
-requireMatch(
-  /existsSync\s*\(\s*bridgeScriptPath\s*\)/u,
-  "start() must check existsSync(bridgeScriptPath) for the bridge script",
-);
-
-requireMatch(
-  /nativeTrackerStatus:\s*['"]not_started['"]/u,
-  "start() must set nativeTrackerStatus to 'not_started' when bridge script is missing",
-);
-
-// The not_started assignment must appear in a block near the bridge error assignment
-const bridgeMissingBlock = src.match(
-  /existsSync\s*\(\s*bridgeScriptPath\s*\)[\s\S]{0,600}?nativeTrackerStatus:\s*['"]not_started['"][\s\S]{0,200}?motionBridgeStatus:\s*['"]error['"]/u,
-);
-if (!bridgeMissingBlock) {
-  fail(
-    "start() must set nativeTrackerStatus='not_started' and motionBridgeStatus='error' when bridge script is missing",
-  );
-}
-
-requireMatch(
-  /lastError:.*[Dd]evelopment\s+MotionFrame\s+bridge/u,
-  "start() lastError must mention the development MotionFrame bridge when bridge script is missing",
-);
-
-// B2. Missing tracker executable → nativeTrackerStatus: 'error', motionBridgeStatus: 'manual_dev_tool'
+// B1. Missing tracker executable → nativeTrackerStatus: 'error', motionBridgeStatus: 'not_started'
 requireMatch(
   /trackerExecutablePath\s*===\s*null/u,
   "start() must check trackerExecutablePath === null for missing tracker executable",
 );
 
-// There must be a block that sets nativeTrackerStatus: 'error' and motionBridgeStatus: 'manual_dev_tool'
-// when the tracker executable is null
 const trackerMissingBlock = src.match(
-  /trackerExecutablePath\s*===\s*null[\s\S]{0,600}?nativeTrackerStatus:\s*['"]error['"][\s\S]{0,200}?motionBridgeStatus:\s*['"]manual_dev_tool['"]/u,
+  /trackerExecutablePath\s*===\s*null[\s\S]{0,600}?nativeTrackerStatus:\s*['"]error['"][\s\S]{0,200}?motionBridgeStatus:\s*['"]not_started['"]/u,
 );
 if (!trackerMissingBlock) {
   fail(
-    "start() must set nativeTrackerStatus='error' and motionBridgeStatus='manual_dev_tool' when tracker executable is missing",
+    "start() must set nativeTrackerStatus='error' and motionBridgeStatus='not_started' when tracker executable is missing",
   );
 }
 
@@ -131,7 +105,7 @@ requireMatch(
   "start() lastError must include candidate locations via trackerExecutableCandidates.join",
 );
 
-// B3. OpenCV face detector requested without LVK_FACE_CASCADE_PATH
+// B2. OpenCV face detector requested without LVK_FACE_CASCADE_PATH
 requireMatch(
   /requestedFaceDetector\s*===\s*['"]opencv['"]\s*&&\s*!\s*faceCascadePath/u,
   "start() must guard against requestedFaceDetector='opencv' without faceCascadePath",
@@ -151,7 +125,7 @@ requireMatch(
   "start() lastError must mention LVK_FACE_CASCADE_PATH when opencv face detector is requested without cascade path",
 );
 
-// Pipeline option fields (cameraSource, faceDetector) must be preserved in preflight error blocks
+// Pipeline option fields must be preserved in preflight error blocks
 requireMatch(
   /pipelineCameraSource:\s*cameraSource/u,
   "start() preflight error status must preserve pipelineCameraSource from the requested options",
@@ -166,50 +140,40 @@ requireMatch(
 // C. Successful start transition
 // ---------------------------------------------------------------------------
 
-// isStopping must be reset to false before spawning
-const isStoppingFalseBeforeSpawn = src.match(
-  /this\.isStopping\s*=\s*false[\s\S]{0,600}?this\.bridgeProcess\s*=\s*spawn/u,
+// isStopping must be reset to false before starting the bridge
+const isStoppingFalseBeforeStart = src.match(
+  /this\.isStopping\s*=\s*false[\s\S]{0,600}?startMotionBridgeServer\s*\(/u,
 );
-if (!isStoppingFalseBeforeSpawn) {
+if (!isStoppingFalseBeforeStart) {
   fail(
-    "start() must set this.isStopping = false before spawning bridge process",
+    "start() must set this.isStopping = false before calling startMotionBridgeServer()",
   );
 }
 
-// Status must transition to starting before spawn
-const startingStatusBeforeSpawn = src.match(
-  /nativeTrackerStatus:\s*['"]starting['"][\s\S]{0,100}?motionBridgeStatus:\s*['"]starting['"][\s\S]{0,600}?this\.bridgeProcess\s*=\s*spawn/u,
+// Status must transition to starting before bridge start
+const startingStatusBeforeStart = src.match(
+  /nativeTrackerStatus:\s*['"]starting['"][\s\S]{0,100}?motionBridgeStatus:\s*['"]starting['"][\s\S]{0,600}?startMotionBridgeServer\s*\(/u,
 );
-if (!startingStatusBeforeSpawn) {
+if (!startingStatusBeforeStart) {
   fail(
-    "start() must set both nativeTrackerStatus and motionBridgeStatus to 'starting' before spawning",
+    "start() must set both nativeTrackerStatus and motionBridgeStatus to 'starting' before calling startMotionBridgeServer()",
   );
 }
 
 requireMatch(
-  /lastMessage:.*Starting development native MotionFrame pipeline/u,
-  "start() must set lastMessage beginning with 'Starting development native MotionFrame pipeline' before spawning",
+  /lastMessage:.*Starting native MotionFrame pipeline/u,
+  "start() must set lastMessage beginning with 'Starting native MotionFrame pipeline' before starting",
 );
 
-// Bridge must be spawned before tracker
+// startMotionBridgeServer must be called before tracker spawn
 const bridgeBeforeTracker = src.match(
-  /this\.bridgeProcess\s*=\s*spawn[\s\S]{0,400}?this\.trackerProcess\s*=\s*spawn/u,
+  /startMotionBridgeServer\s*\([\s\S]{0,600}?\)\s*[\s\S]{0,400}?this\.trackerProcess\s*=\s*spawn/u,
 );
 if (!bridgeBeforeTracker) {
-  fail("start() must spawn bridge process before tracker process");
+  fail(
+    "start() must call startMotionBridgeServer() before spawning tracker process",
+  );
 }
-
-// Bridge must run nodeProcess.execPath with bridgeScriptPath
-requireMatch(
-  /spawn\s*\(\s*nodeProcess\.execPath\s*,\s*\[\s*bridgeScriptPath\s*\]/u,
-  "start() must spawn bridge using nodeProcess.execPath with [bridgeScriptPath]",
-);
-
-// Bridge env must include ELECTRON_RUN_AS_NODE: '1'
-requireMatch(
-  /ELECTRON_RUN_AS_NODE:\s*['"]1['"]/u,
-  "start() bridge spawn env must include ELECTRON_RUN_AS_NODE: '1'",
-);
 
 // Tracker must be spawned with trackerExecutablePath and trackerArgs
 requireMatch(
@@ -217,24 +181,34 @@ requireMatch(
   "start() must spawn tracker using trackerExecutablePath and trackerArgs",
 );
 
-// Tracker stdout must be piped into bridge stdin
+// Tracker stdout must be consumed by a readline interface
+const readlineOnTrackerStdout = src.match(
+  /createInterface\s*\(\s*\{[\s\S]{0,200}?input:\s*this\.trackerProcess\.stdout/u,
+);
+if (!readlineOnTrackerStdout) {
+  fail(
+    "start() must create a readline interface with input: this.trackerProcess.stdout",
+  );
+}
+
+// readline lines must be published via publishMotionFrameLine
 requireMatch(
-  /this\.trackerProcess\.stdout\.pipe\s*\(\s*this\.bridgeProcess\.stdin/u,
-  "start() must pipe trackerProcess.stdout into bridgeProcess.stdin",
+  /publishMotionFrameLine\s*\(\s*line\s*\)/u,
+  "start() must call publishMotionFrameLine(line) for each readline line",
 );
 
-// After successful spawn, status must transition to running
-const runningStatusAfterSpawn = src.match(
-  /this\.trackerProcess\.stdout\.pipe[\s\S]{0,1000}?nativeTrackerStatus:\s*['"]running['"][\s\S]{0,100}?motionBridgeStatus:\s*['"]running['"]/u,
+// After successful start, status must transition to running
+const runningStatusAfterStart = src.match(
+  /publishMotionFrameLine[\s\S]{0,600}?nativeTrackerStatus:\s*['"]running['"][\s\S]{0,100}?motionBridgeStatus:\s*['"]running['"]/u,
 );
-if (!runningStatusAfterSpawn) {
+if (!runningStatusAfterStart) {
   fail(
-    "start() must set both nativeTrackerStatus and motionBridgeStatus to 'running' after successful spawn",
+    "start() must set both nativeTrackerStatus and motionBridgeStatus to 'running' after successful start",
   );
 }
 
 requireMatch(
-  /lastMessage:.*[Dd]evelopment native pipeline started[\s\S]{0,200}?PREVIEW_NATIVE_URL/u,
+  /lastMessage:.*[Nn]ative pipeline started[\s\S]{0,200}?PREVIEW_NATIVE_URL/u,
   "start() running status lastMessage must mention the native pipeline and reference PREVIEW_NATIVE_URL",
 );
 
@@ -242,13 +216,13 @@ requireMatch(
 // D. Stop transition
 // ---------------------------------------------------------------------------
 
-// Early return when no processes and no active statuses
+// Early return when no tracker process and no active statuses
 const stopEarlyReturn = src.match(
-  /async\s+stop\s*\(\s*\)[\s\S]{0,200}?!\s*this\.trackerProcess[\s\S]{0,100}?!\s*this\.bridgeProcess[\s\S]{0,200}?!\s*isActiveStatus[\s\S]{0,200}?!\s*isActiveStatus[\s\S]{0,200}?return\s+this\.getStatus\s*\(\s*\)/u,
+  /async\s+stop\s*\(\s*\)[\s\S]{0,200}?!\s*this\.trackerProcess[\s\S]{0,200}?!\s*isActiveStatus[\s\S]{0,200}?!\s*isActiveStatus[\s\S]{0,200}?return\s+this\.getStatus\s*\(\s*\)/u,
 );
 if (!stopEarlyReturn) {
   fail(
-    "stop() must return this.getStatus() without changes when there are no processes and no active statuses",
+    "stop() must return this.getStatus() without changes when there is no tracker process and no active statuses",
   );
 }
 
@@ -266,43 +240,43 @@ requireMatch(
   "stop() must set nativeTrackerStatus to 'stopping' when trackerProcess exists",
 );
 
-// stop() must set bridge status to 'stopping' when bridgeProcess exists
+// stop() must set bridge status to 'stopping'
 requireMatch(
-  /motionBridgeStatus:\s*this\.bridgeProcess\s*\?\s*['"]stopping['"]/u,
-  "stop() must set motionBridgeStatus to 'stopping' when bridgeProcess exists",
+  /motionBridgeStatus:\s*['"]stopping['"]/u,
+  "stop() must set motionBridgeStatus to 'stopping'",
 );
 
 requireMatch(
-  /lastMessage:\s*['"]Stopping development native MotionFrame pipeline\.['"]/u,
-  "stop() must set lastMessage to 'Stopping development native MotionFrame pipeline.'",
+  /lastMessage:\s*['"]Stopping native MotionFrame pipeline\.['"]/u,
+  "stop() must set lastMessage to 'Stopping native MotionFrame pipeline.'",
 );
 
-// Unpipe when both tracker and bridge exist
-requireMatch(
-  /this\.trackerProcess\s*&&\s*this\.bridgeProcess[\s\S]{0,200}?this\.trackerProcess\.stdout\.unpipe\s*\(\s*this\.bridgeProcess\.stdin\s*\)/u,
-  "stop() must unpipe trackerProcess.stdout from bridgeProcess.stdin when both processes exist",
+// stop() must close the readline interface before terminating tracker
+const readlineCloseBeforeTerminate = src.match(
+  /async\s+stop[\s\S]{0,600}?trackerStdoutReader\?\.close\s*\(\s*\)[\s\S]{0,400}?terminateProcess\s*\(\s*this\.trackerProcess\s*\)/u,
 );
-
-// End writable bridge stdin
-requireMatch(
-  /this\.bridgeProcess\?\.stdin\.writable[\s\S]{0,100}?this\.bridgeProcess\.stdin\.end\s*\(\s*\)/u,
-  "stop() must end bridgeProcess.stdin when it is writable",
-);
-
-// Terminate both via Promise.all
-requireMatch(
-  /Promise\.all\s*\(\s*\[\s*\n?\s*this\.terminateProcess\s*\(\s*this\.trackerProcess\s*\)\s*,\s*\n?\s*this\.terminateProcess\s*\(\s*this\.bridgeProcess\s*\)/u,
-  "stop() must terminate tracker and bridge via Promise.all",
-);
-
-// After termination, both refs must become null
-const nullRefsAfterStop = src.match(
-  /await\s+Promise\.all[\s\S]{0,200}?this\.trackerProcess\s*=\s*null[\s\S]{0,100}?this\.bridgeProcess\s*=\s*null/u,
-);
-if (!nullRefsAfterStop) {
+if (!readlineCloseBeforeTerminate) {
   fail(
-    "stop() must set both trackerProcess and bridgeProcess to null after Promise.all termination",
+    "stop() must close trackerStdoutReader before terminating the tracker process",
   );
+}
+
+// stop() must call stopMotionBridgeServer() after terminating tracker
+const stopBridgeAfterTerminate = src.match(
+  /await\s+this\.terminateProcess\s*\(\s*this\.trackerProcess\s*\)[\s\S]{0,200}?stopMotionBridgeServer\s*\(\s*\)/u,
+);
+if (!stopBridgeAfterTerminate) {
+  fail(
+    "stop() must call stopMotionBridgeServer() after awaiting terminateProcess(this.trackerProcess)",
+  );
+}
+
+// After termination, tracker ref must become null
+const nullRefAfterStop = src.match(
+  /await\s+this\.terminateProcess[\s\S]{0,200}?this\.trackerProcess\s*=\s*null/u,
+);
+if (!nullRefAfterStop) {
+  fail("stop() must set trackerProcess to null after terminateProcess");
 }
 
 // Final exited status
@@ -311,13 +285,13 @@ const exitedStatusAfterStop = src.match(
 );
 if (!exitedStatusAfterStop) {
   fail(
-    "stop() must set nativeTrackerStatus and motionBridgeStatus to 'exited' after nulling process refs",
+    "stop() must set nativeTrackerStatus and motionBridgeStatus to 'exited' after nulling tracker ref",
   );
 }
 
 requireMatch(
-  /lastMessage:\s*['"]Development native MotionFrame pipeline stopped\.['"]/u,
-  "stop() must set lastMessage to 'Development native MotionFrame pipeline stopped.'",
+  /lastMessage:\s*['"]Native MotionFrame pipeline stopped\.['"]/u,
+  "stop() must set lastMessage to 'Native MotionFrame pipeline stopped.'",
 );
 
 // isStopping must be reset to false after stopping
@@ -345,25 +319,15 @@ if (!cleanupSetsIsStopping) {
   fail("cleanupOnQuit() must set this.isStopping = true");
 }
 
-// cleanupOnQuit must unpipe when both processes exist
-const cleanupUnpipe = src.match(
-  /cleanupOnQuit\s*\(\s*\)[\s\S]{0,400}?this\.trackerProcess\s*&&\s*this\.bridgeProcess[\s\S]{0,200}?this\.trackerProcess\.stdout\.unpipe\s*\(\s*this\.bridgeProcess\.stdin\s*\)/u,
+// cleanupOnQuit must close readline interface
+const cleanupClosesReader = src.match(
+  /cleanupOnQuit\s*\(\s*\)[\s\S]{0,400}?trackerStdoutReader\?\.close\s*\(\s*\)/u,
 );
-if (!cleanupUnpipe) {
-  fail(
-    "cleanupOnQuit() must unpipe trackerProcess.stdout from bridgeProcess.stdin when both exist",
-  );
+if (!cleanupClosesReader) {
+  fail("cleanupOnQuit() must close trackerStdoutReader");
 }
 
-// cleanupOnQuit must end writable bridge stdin
-const cleanupEndStdin = src.match(
-  /cleanupOnQuit\s*\(\s*\)[\s\S]{0,600}?this\.bridgeProcess\?\.stdin\.writable[\s\S]{0,100}?this\.bridgeProcess\.stdin\.end\s*\(\s*\)/u,
-);
-if (!cleanupEndStdin) {
-  fail("cleanupOnQuit() must end bridgeProcess.stdin when it is writable");
-}
-
-// cleanupOnQuit must kill both processes
+// cleanupOnQuit must kill tracker
 const cleanupKillTracker = src.match(
   /cleanupOnQuit\s*\(\s*\)[\s\S]{0,600}?this\.killProcess\s*\(\s*this\.trackerProcess\s*\)/u,
 );
@@ -371,14 +335,7 @@ if (!cleanupKillTracker) {
   fail("cleanupOnQuit() must call killProcess for trackerProcess");
 }
 
-const cleanupKillBridge = src.match(
-  /cleanupOnQuit\s*\(\s*\)[\s\S]{0,800}?this\.killProcess\s*\(\s*this\.bridgeProcess\s*\)/u,
-);
-if (!cleanupKillBridge) {
-  fail("cleanupOnQuit() must call killProcess for bridgeProcess");
-}
-
-// cleanupOnQuit must null both refs
+// cleanupOnQuit must null tracker ref
 const cleanupNullTracker = src.match(
   /cleanupOnQuit\s*\(\s*\)[\s\S]{0,800}?this\.trackerProcess\s*=\s*null/u,
 );
@@ -386,11 +343,12 @@ if (!cleanupNullTracker) {
   fail("cleanupOnQuit() must set trackerProcess to null");
 }
 
-const cleanupNullBridge = src.match(
-  /cleanupOnQuit\s*\(\s*\)[\s\S]{0,1000}?this\.bridgeProcess\s*=\s*null/u,
+// cleanupOnQuit must stop the in-process bridge
+const cleanupStopsBridge = src.match(
+  /cleanupOnQuit\s*\(\s*\)[\s\S]{0,800}?stopMotionBridgeServer\s*\(\s*\)/u,
 );
-if (!cleanupNullBridge) {
-  fail("cleanupOnQuit() must set bridgeProcess to null");
+if (!cleanupStopsBridge) {
+  fail("cleanupOnQuit() must call stopMotionBridgeServer()");
 }
 
 // ---------------------------------------------------------------------------
@@ -415,66 +373,50 @@ requireMatch(
   "tracker 'exit' handler must set nativeTrackerStatus to 'exited' when code===0 and 'error' otherwise",
 );
 
-// Tracker unexpected exit stops the paired bridge
+// Tracker unexpected exit stops the bridge
 requireMatch(
   /this\.terminateBridgeAfterTrackerExit\s*\(\s*childProcess\s*\)/u,
   "tracker unexpected exit must call terminateBridgeAfterTrackerExit",
 );
 
-// Bridge error handler → motionBridgeStatus: 'error'
-requireMatch(
-  /kind\s*===\s*['"]bridge['"][\s\S]{0,200}?motionBridgeStatus:\s*['"]error['"]/u,
-  "bridge 'error' handler must set motionBridgeStatus to 'error'",
+// terminateBridgeAfterTrackerExit must close readline and stop bridge server
+const bridgeStopOnTrackerExit = src.match(
+  /terminateBridgeAfterTrackerExit[\s\S]{0,600}?trackerStdoutReader\?\.close[\s\S]{0,400}?stopMotionBridgeServer\s*\(\s*\)/u,
 );
-
-// Bridge error lastError must use truncated description (in the else branch of the error handler)
-requireMatch(
-  /describeBridgeProcessError\s*\(\s*error\s*\)/u,
-  "bridge 'error' handler must set lastError using describeBridgeProcessError(error)",
-);
-
-requireMatch(
-  /truncateStatusMessage\s*\(\s*describeBridgeProcessError/u,
-  "bridge 'error' handler must wrap describeBridgeProcessError with truncateStatusMessage",
-);
-
-// Bridge unexpected non-zero exit → motionBridgeStatus: 'error'
-requireMatch(
-  /motionBridgeStatus:\s*code\s*===\s*0[\s\S]{0,50}?\|\|\s*bridgeWasStopping\s*\?\s*['"]exited['"]\s*:\s*['"]error['"]/u,
-  "bridge 'exit' handler must set motionBridgeStatus to 'exited' on clean exit and 'error' on non-zero exit",
-);
-
-// Bridge non-zero exit terminates tracker if running
-requireMatch(
-  /code\s*!==\s*0\s*&&\s*!bridgeWasStopping\s*&&\s*this\.trackerProcess[\s\S]{0,100}?void\s+this\.terminateProcess\s*\(\s*this\.trackerProcess\s*\)/u,
-  "bridge unexpected non-zero exit must terminate trackerProcess when it is still running",
-);
-
-// Bridge stderr 'server error' → motionBridgeStatus: 'error', terminates both processes
-requireMatch(
-  /message\.includes\s*\(\s*['"]server error['"]\s*\)\s*&&\s*!this\.isStopping/u,
-  "bridge stderr handler must check for 'server error' in message and guard with !this.isStopping",
-);
-
-requireMatch(
-  /message\.includes\s*\(\s*['"]server error['"]\s*\)[\s\S]{0,300}?motionBridgeStatus:\s*['"]error['"]/u,
-  "bridge stderr 'server error' must set motionBridgeStatus to 'error'",
-);
-
-// Bridge server error must terminate both processes
-const serverErrorTerminates = src.match(
-  /message\.includes\s*\(\s*['"]server error['"]\s*\)[\s\S]{0,500}?void\s+this\.terminateProcess\s*\(\s*this\.trackerProcess\s*\)[\s\S]{0,200}?void\s+this\.terminateProcess\s*\(\s*this\.bridgeProcess\s*\)/u,
-);
-if (!serverErrorTerminates) {
+if (!bridgeStopOnTrackerExit) {
   fail(
-    "bridge 'server error' stderr must terminate both trackerProcess and bridgeProcess",
+    "terminateBridgeAfterTrackerExit must close trackerStdoutReader and call stopMotionBridgeServer()",
   );
 }
 
-// Electron main must not log raw native MotionFrame stdout from either process
+// In-process bridge server error must guard with !this.isStopping
 requireMatch(
-  /childProcess\.stdout\.on\s*\(\s*['"]data['"]\s*,\s*\(\s*\)\s*=>\s*\{[\s\S]{0,100}?\/\//u,
-  "attachProcessHandlers must attach a stdout 'data' handler that intentionally does not log (empty handler with comment)",
+  /startMotionBridgeServer[\s\S]{0,400}?!this\.isStopping/u,
+  "startMotionBridgeServer error callback must guard with !this.isStopping",
+);
+
+// In-process bridge server error must set motionBridgeStatus: 'error'
+const bridgeServerErrorSetsStatus = src.match(
+  /startMotionBridgeServer[\s\S]{0,400}?motionBridgeStatus:\s*['"]error['"]/u,
+);
+if (!bridgeServerErrorSetsStatus) {
+  fail(
+    "startMotionBridgeServer error callback must set motionBridgeStatus to 'error'",
+  );
+}
+
+// In-process bridge server error must terminate tracker
+const bridgeServerErrorTerminatesTracker = src.match(
+  /startMotionBridgeServer[\s\S]{0,600}?void\s+this\.terminateProcess\s*\(\s*this\.trackerProcess\s*\)/u,
+);
+if (!bridgeServerErrorTerminatesTracker) {
+  fail("startMotionBridgeServer error callback must terminate trackerProcess");
+}
+
+// tracker stdout must NOT be logged directly (consumed via readline instead)
+requireMatch(
+  /tracker\s+stdout\s+is\s+consumed\s+by\s+the\s+readline/u,
+  "attachProcessHandlers must document that tracker stdout is consumed by the readline interface",
 );
 
 // ---------------------------------------------------------------------------
@@ -489,17 +431,14 @@ if (!isStoppingResetInFinally) {
   fail("stop() must reset this.isStopping = false inside a finally block");
 }
 
-// stop() must null both process refs before the finally block closes
-const nullRefsInsideTry = src.match(
-  /async\s+stop\s*\(\s*\)[\s\S]{0,2000}?this\.trackerProcess\s*=\s*null[\s\S]{0,100}?this\.bridgeProcess\s*=\s*null[\s\S]{0,300}?finally/u,
+// stop() must null tracker ref and set exited status before the finally block
+const nullRefInsideTry = src.match(
+  /async\s+stop\s*\(\s*\)[\s\S]{0,2000}?this\.trackerProcess\s*=\s*null[\s\S]{0,300}?finally/u,
 );
-if (!nullRefsInsideTry) {
-  fail(
-    "stop() must null both trackerProcess and bridgeProcess before the finally block",
-  );
+if (!nullRefInsideTry) {
+  fail("stop() must null trackerProcess before the finally block");
 }
 
-// stop() must set exited status for both processes before the finally block
 const exitedStatusInsideTry = src.match(
   /async\s+stop\s*\(\s*\)[\s\S]{0,2000}?nativeTrackerStatus:\s*['"]exited['"][\s\S]{0,100}?motionBridgeStatus:\s*['"]exited['"][\s\S]{0,300}?finally/u,
 );
@@ -581,28 +520,27 @@ console.log(
   "Electron native pipeline lifecycle transitions OK:\n" +
     "  A. Active-status guard — isActiveStatus checks 'starting'|'running'|'stopping'; " +
     "start() returns getStatus() without modification when either status is active.\n" +
-    "  B. Start preflight error transitions — missing bridge sets not_started/error with bridge mention; " +
-    "missing tracker sets error/manual_dev_tool with candidate locations; " +
+    "  B. Start preflight error transitions — missing tracker sets error/not_started with candidate locations; " +
     "opencv without cascade sets error with LVK_FACE_CASCADE_PATH mention; " +
     "pipeline option fields preserved in all preflight error blocks.\n" +
-    "  C. Successful start transition — isStopping reset to false; starting status set before spawn; " +
-    "bridge spawned before tracker via nodeProcess.execPath with ELECTRON_RUN_AS_NODE=1; " +
+    "  C. Successful start transition — isStopping reset to false; starting status set before bridge start; " +
+    "startMotionBridgeServer() called before tracker spawn; " +
     "tracker spawned with trackerExecutablePath and trackerArgs; " +
-    "tracker stdout piped to bridge stdin; running status set with native preview URL.\n" +
-    "  D. Stop transition — early return when no processes and no active statuses; " +
-    "isStopping set to true; stopping status and message set; tracker stdout unpiped from bridge stdin; " +
-    "bridge stdin ended when writable; both terminated via Promise.all; " +
-    "refs nulled; exited status and stopped message set; isStopping reset to false in finally block.\n" +
-    "  E. Cleanup-on-quit — isStopping set; tracker stdout unpiped; bridge stdin ended; " +
-    "both processes killed; both refs nulled.\n" +
+    "readline interface reads tracker stdout and calls publishMotionFrameLine(line); " +
+    "running status set with native preview URL.\n" +
+    "  D. Stop transition — early return when no tracker process and no active statuses; " +
+    "isStopping set to true; stopping status and message set; readline closed before terminate; " +
+    "tracker terminated via terminateProcess; stopMotionBridgeServer() called after; " +
+    "tracker ref nulled; exited status and stopped message set; isStopping reset in finally.\n" +
+    "  E. Cleanup-on-quit — isStopping set; readline closed; tracker killed; " +
+    "tracker ref nulled; stopMotionBridgeServer() called.\n" +
     "  F. Unexpected exit/error — tracker error sets nativeTrackerStatus='error' with truncated description; " +
-    "tracker unexpected exit maps code===0 to 'exited' and non-zero to 'error', stops bridge; " +
-    "bridge error sets motionBridgeStatus='error' with truncated description; " +
-    "bridge non-zero exit sets 'error' and terminates tracker; " +
-    "bridge server-error stderr sets 'error' and terminates both processes; " +
-    "stdout handler intentionally empty (native frames not logged from Electron main).\n" +
+    "tracker unexpected exit maps code===0 to 'exited' and non-zero to 'error', calls terminateBridgeAfterTrackerExit; " +
+    "terminateBridgeAfterTrackerExit closes readline and calls stopMotionBridgeServer(); " +
+    "startMotionBridgeServer error callback guards !isStopping, sets motionBridgeStatus='error', terminates tracker; " +
+    "tracker stdout documented as consumed by readline (not logged directly).\n" +
     "  G. Termination hardening — stop() resets isStopping in finally block; " +
-    "process refs nulled and exited status set before finally; " +
+    "tracker ref nulled and exited status set before finally; " +
     "terminateProcess() uses local settle() helper; settle() clears timeout and removes exit listener; " +
     "SIGTERM sent first; FORCE_KILL_TIMEOUT_MS setTimeout calls killProcess(SIGKILL); " +
     "killProcess() guards null/already-exited before calling kill.",

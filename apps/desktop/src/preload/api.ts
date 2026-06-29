@@ -6,7 +6,7 @@ export type NativeTrackerStatus =
   | 'exited'
   | 'error'
 export type MotionBridgeStatus =
-  | 'manual_dev_tool'
+  | 'not_started'
   | 'starting'
   | 'running'
   | 'stopping'

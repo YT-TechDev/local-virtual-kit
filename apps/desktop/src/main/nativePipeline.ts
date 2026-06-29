@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import nodeProcess from 'node:process'
+import { createInterface, type Interface as RlInterface } from 'node:readline'
 import type {
   LvkRuntimeStatus,
   MotionBridgeStatus,
@@ -10,6 +11,11 @@ import type {
   NativePipelineFaceDetector,
   NativeTrackerStatus
 } from '../preload/api'
+import {
+  startMotionBridgeServer,
+  stopMotionBridgeServer,
+  publishMotionFrameLine
+} from './motionBridgeServer'
 
 const PREVIEW_DUMMY_URL = 'http://localhost:5173/?source=dummy'
 const PREVIEW_NATIVE_URL = 'http://localhost:5173/?source=native'
@@ -98,7 +104,7 @@ function createInitialStatus(): LvkRuntimeStatus {
     previewObsNativeUrl: PREVIEW_OBS_NATIVE_URL,
     motionEndpoint: MOTION_ENDPOINT,
     nativeTrackerStatus: 'not_started',
-    motionBridgeStatus: 'manual_dev_tool',
+    motionBridgeStatus: 'not_started',
     pipelineCameraSource: 'dummy',
     pipelineFaceDetector: 'noop',
     pipelineCameraIndex: 0,
@@ -131,10 +137,7 @@ function findRepoRoot(): string {
   let current = resolve(__dirname)
 
   for (let depth = 0; depth < 8; depth += 1) {
-    if (
-      existsSync(join(current, 'package.json')) &&
-      existsSync(join(current, 'tools', 'motion-ws-bridge.mjs'))
-    ) {
+    if (existsSync(join(current, 'package.json'))) {
       return current
     }
 
@@ -163,23 +166,6 @@ function describeTrackerSpawnError(error: Error): string {
     )
   }
   return `Native tracker failed to start: ${error.message}`
-}
-
-function describeBridgeProcessError(error: Error): string {
-  const errno = error as NodeJS.ErrnoException
-  if (errno.code === 'ENOENT') {
-    return (
-      `Motion bridge failed to start (ENOENT): check that Node.js is accessible and the bridge script exists. ` +
-      `Detail: ${error.message}`
-    )
-  }
-  if (errno.code === 'EACCES') {
-    return (
-      `Motion bridge failed to start (EACCES): check Node.js executable permissions. ` +
-      `Detail: ${error.message}`
-    )
-  }
-  return `Motion bridge failed to start: check bridge stderr or run tools/motion-ws-bridge.mjs manually. Detail: ${error.message}`
 }
 
 function truncateStatusMessage(message: string): string {
@@ -328,7 +314,7 @@ export async function queryNativeRuntimeCapabilities(): Promise<NativeRuntimeCap
 export class NativePipelineManager {
   private status = createInitialStatus()
   private trackerProcess: ChildProcessWithoutNullStreams | null = null
-  private bridgeProcess: ChildProcessWithoutNullStreams | null = null
+  private trackerStdoutReader: RlInterface | null = null
   private isStopping = false
 
   getStatus(): LvkRuntimeStatus {
@@ -362,7 +348,6 @@ export class NativePipelineManager {
     const faceDetectorLabel = getFaceDetectorLabel(faceDetector)
     const repoRoot = findRepoRoot()
     const faceCascadePath = getConfiguredFaceCascadePath()
-    const bridgeScriptPath = join(repoRoot, 'tools', 'motion-ws-bridge.mjs')
     const trackerExecutableCandidates = getTrackerExecutableCandidates(repoRoot)
     const packagedTrackerPath = resolvePackagedTrackerExecutable()
     const trackerExecutablePath = packagedTrackerPath ?? resolveTrackerExecutable(repoRoot)
@@ -374,7 +359,7 @@ export class NativePipelineManager {
       this.status = {
         ...this.status,
         nativeTrackerStatus: 'error',
-        motionBridgeStatus: 'manual_dev_tool',
+        motionBridgeStatus: 'not_started',
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
@@ -396,27 +381,11 @@ export class NativePipelineManager {
       cameraHeight
     )
 
-    if (!existsSync(bridgeScriptPath)) {
-      this.status = {
-        ...this.status,
-        nativeTrackerStatus: 'not_started',
-        motionBridgeStatus: 'error',
-        pipelineCameraSource: cameraSource,
-        pipelineFaceDetector: faceDetector,
-        pipelineCameraIndex: cameraIndex,
-        pipelineCameraFps: cameraFps,
-        pipelineCameraWidth: cameraWidth,
-        pipelineCameraHeight: cameraHeight,
-        lastError: `Development MotionFrame bridge was not found at ${bridgeScriptPath}. Run this from the LVK repository checkout.`
-      }
-      return this.getStatus()
-    }
-
     if (trackerExecutablePath === null) {
       this.status = {
         ...this.status,
         nativeTrackerStatus: 'error',
-        motionBridgeStatus: 'manual_dev_tool',
+        motionBridgeStatus: 'not_started',
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
@@ -439,17 +408,21 @@ export class NativePipelineManager {
       pipelineCameraFps: cameraFps,
       pipelineCameraWidth: cameraWidth,
       pipelineCameraHeight: cameraHeight,
-      lastMessage: `Starting development native MotionFrame pipeline with ${cameraSourceLabel} source and ${faceDetectorLabel}.`
+      lastMessage: `Starting native MotionFrame pipeline with ${cameraSourceLabel} source and ${faceDetectorLabel}.`
     }
 
     try {
-      this.bridgeProcess = spawn(nodeProcess.execPath, [bridgeScriptPath], {
-        cwd: repoRoot,
-        env: { ...nodeProcess.env, ELECTRON_RUN_AS_NODE: '1' },
-        shell: false,
-        stdio: ['pipe', 'pipe', 'pipe']
+      startMotionBridgeServer((error) => {
+        if (!this.isStopping) {
+          this.status = {
+            ...this.status,
+            motionBridgeStatus: 'error',
+            lastError: `Motion bridge server error: ${truncateStatusMessage(error.message)}`
+          }
+          void this.terminateProcess(this.trackerProcess)
+          stopMotionBridgeServer()
+        }
       })
-      this.attachProcessHandlers('bridge', this.bridgeProcess)
 
       this.trackerProcess = spawn(trackerExecutablePath, trackerArgs, {
         cwd: repoRoot,
@@ -459,15 +432,13 @@ export class NativePipelineManager {
       })
       this.attachProcessHandlers('tracker', this.trackerProcess)
 
-      this.trackerProcess.stdout.pipe(this.bridgeProcess.stdin, { end: true })
-      this.bridgeProcess.stdin.on('error', (error: NodeJS.ErrnoException) => {
-        if (!this.isStopping && error.code !== 'EPIPE') {
-          this.status = {
-            ...this.status,
-            motionBridgeStatus: 'error',
-            lastError: `Motion bridge stdin error: ${truncateStatusMessage(error.message)}`
-          }
-        }
+      this.trackerStdoutReader = createInterface({
+        input: this.trackerProcess.stdout,
+        crlfDelay: Infinity,
+        terminal: false
+      })
+      this.trackerStdoutReader.on('line', (line: string) => {
+        publishMotionFrameLine(line)
       })
 
       this.status = {
@@ -480,7 +451,7 @@ export class NativePipelineManager {
         pipelineCameraFps: cameraFps,
         pipelineCameraWidth: cameraWidth,
         pipelineCameraHeight: cameraHeight,
-        lastMessage: `Development native pipeline started with ${cameraSourceLabel} source and ${faceDetectorLabel}. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
+        lastMessage: `Native pipeline started with ${cameraSourceLabel} source and ${faceDetectorLabel}. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
       }
     } catch (error) {
       this.status = {
@@ -498,7 +469,6 @@ export class NativePipelineManager {
   async stop(): Promise<LvkRuntimeStatus> {
     if (
       !this.trackerProcess &&
-      !this.bridgeProcess &&
       !isActiveStatus(this.status.nativeTrackerStatus) &&
       !isActiveStatus(this.status.motionBridgeStatus)
     ) {
@@ -510,30 +480,22 @@ export class NativePipelineManager {
       this.status = {
         ...this.status,
         nativeTrackerStatus: this.trackerProcess ? 'stopping' : this.status.nativeTrackerStatus,
-        motionBridgeStatus: this.bridgeProcess ? 'stopping' : this.status.motionBridgeStatus,
-        lastMessage: 'Stopping development native MotionFrame pipeline.'
+        motionBridgeStatus: 'stopping',
+        lastMessage: 'Stopping native MotionFrame pipeline.'
       }
 
-      if (this.trackerProcess && this.bridgeProcess) {
-        this.trackerProcess.stdout.unpipe(this.bridgeProcess.stdin)
-      }
+      this.trackerStdoutReader?.close()
+      this.trackerStdoutReader = null
 
-      if (this.bridgeProcess?.stdin.writable) {
-        this.bridgeProcess.stdin.end()
-      }
-
-      await Promise.all([
-        this.terminateProcess(this.trackerProcess),
-        this.terminateProcess(this.bridgeProcess)
-      ])
+      await this.terminateProcess(this.trackerProcess)
+      stopMotionBridgeServer()
 
       this.trackerProcess = null
-      this.bridgeProcess = null
       this.status = {
         ...this.status,
         nativeTrackerStatus: 'exited',
         motionBridgeStatus: 'exited',
-        lastMessage: 'Development native MotionFrame pipeline stopped.'
+        lastMessage: 'Native MotionFrame pipeline stopped.'
       }
     } finally {
       this.isStopping = false
@@ -545,27 +507,20 @@ export class NativePipelineManager {
   cleanupOnQuit(): void {
     this.isStopping = true
 
-    if (this.trackerProcess && this.bridgeProcess) {
-      this.trackerProcess.stdout.unpipe(this.bridgeProcess.stdin)
-    }
-
-    if (this.bridgeProcess?.stdin.writable) {
-      this.bridgeProcess.stdin.end()
-    }
+    this.trackerStdoutReader?.close()
+    this.trackerStdoutReader = null
 
     this.killProcess(this.trackerProcess)
-    this.killProcess(this.bridgeProcess)
     this.trackerProcess = null
-    this.bridgeProcess = null
+
+    stopMotionBridgeServer()
   }
 
   private attachProcessHandlers(
-    kind: 'tracker' | 'bridge',
+    kind: 'tracker',
     childProcess: ChildProcessWithoutNullStreams
   ): void {
-    childProcess.stdout.on('data', () => {
-      // Native MotionFrames are intentionally not logged from Electron main.
-    })
+    // tracker stdout is consumed by the readline interface created in start()
 
     childProcess.stderr.on('data', (data: Buffer) => {
       const message = truncateStatusMessage(data.toString('utf8'))
@@ -577,17 +532,6 @@ export class NativePipelineManager {
         ...this.status,
         lastMessage: `${kind === 'tracker' ? 'Native tracker' : 'Motion bridge'}: ${message}`
       }
-
-      if (kind === 'bridge' && message.includes('server error') && !this.isStopping) {
-        this.status = {
-          ...this.status,
-          motionBridgeStatus: 'error',
-          lastError: `Motion bridge reported a server error: check bridge stderr output or run tools/motion-ws-bridge.mjs manually.`
-        }
-
-        void this.terminateProcess(this.trackerProcess)
-        void this.terminateProcess(this.bridgeProcess)
-      }
     })
 
     childProcess.once('error', (error) => {
@@ -598,12 +542,6 @@ export class NativePipelineManager {
           lastError: truncateStatusMessage(describeTrackerSpawnError(error))
         }
         this.terminateBridgeAfterTrackerExit(childProcess)
-      } else {
-        this.status = {
-          ...this.status,
-          motionBridgeStatus: 'error',
-          lastError: truncateStatusMessage(describeBridgeProcessError(error))
-        }
       }
     })
 
@@ -615,53 +553,37 @@ export class NativePipelineManager {
           this.status = {
             ...this.status,
             nativeTrackerStatus: code === 0 ? 'exited' : 'error',
-            lastMessage:
-              'Native tracker stopped unexpectedly. Stopping the paired MotionFrame bridge.',
+            lastMessage: 'Native tracker stopped unexpectedly. Stopping the MotionFrame bridge.',
             lastError: trackerExitMessage
           }
           this.terminateBridgeAfterTrackerExit(childProcess)
         }
       }
-
-      if (kind === 'bridge' && this.bridgeProcess === childProcess) {
-        this.bridgeProcess = null
-        if (!this.isStopping) {
-          const bridgeWasStopping = this.status.motionBridgeStatus === 'stopping'
-          this.status = {
-            ...this.status,
-            motionBridgeStatus: code === 0 || bridgeWasStopping ? 'exited' : 'error',
-            lastError:
-              code === 0 || bridgeWasStopping
-                ? this.status.lastError
-                : `Motion bridge exited unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'none'}). Check bridge stderr and the paired native tracker.`
-          }
-
-          if (code !== 0 && !bridgeWasStopping && this.trackerProcess) {
-            void this.terminateProcess(this.trackerProcess)
-          }
-        }
-      }
     })
   }
 
-  private terminateBridgeAfterTrackerExit(trackerProcess: ChildProcessWithoutNullStreams): void {
-    if (!this.bridgeProcess || this.isStopping) {
+  private terminateBridgeAfterTrackerExit(_trackerProcess: ChildProcessWithoutNullStreams): void {
+    if (this.isStopping) {
       return
     }
 
-    trackerProcess.stdout.unpipe(this.bridgeProcess.stdin)
-
-    if (this.bridgeProcess.stdin.writable) {
-      this.bridgeProcess.stdin.end()
-    }
+    this.trackerStdoutReader?.close()
+    this.trackerStdoutReader = null
 
     this.status = {
       ...this.status,
       motionBridgeStatus: 'stopping',
-      lastMessage: 'Native tracker stopped unexpectedly. Stopping the paired MotionFrame bridge.'
+      lastMessage: 'Native tracker stopped unexpectedly. Stopping the MotionFrame bridge.'
     }
 
-    void this.terminateProcess(this.bridgeProcess)
+    stopMotionBridgeServer()
+
+    if (!this.isStopping) {
+      this.status = {
+        ...this.status,
+        motionBridgeStatus: 'exited'
+      }
+    }
   }
 
   private async terminateProcess(

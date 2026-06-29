@@ -155,7 +155,7 @@ const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
 }
 
 const bridgeLabels: Record<RuntimeStatus['motionBridgeStatus'], string> = {
-  manual_dev_tool: 'Manual dev tool',
+  not_started: 'Not started',
   starting: 'Starting',
   running: 'Running',
   stopping: 'Stopping',
