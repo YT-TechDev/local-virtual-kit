@@ -110,7 +110,8 @@ function createInitialStatus(): LvkRuntimeStatus {
     pipelineCameraIndex: 0,
     pipelineCameraFps: DEFAULT_CAMERA_FPS,
     pipelineCameraWidth: DEFAULT_CAMERA_WIDTH,
-    pipelineCameraHeight: DEFAULT_CAMERA_HEIGHT
+    pipelineCameraHeight: DEFAULT_CAMERA_HEIGHT,
+    faceCascadePathConfigured: getConfiguredFaceCascadePath() !== null
   }
 }
 
