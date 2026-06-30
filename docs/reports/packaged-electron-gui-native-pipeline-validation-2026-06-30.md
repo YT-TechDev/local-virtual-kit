@@ -43,13 +43,14 @@ OBS Browser Source frame reception and browser-visible avatar animation remain M
 **File:** `apps/desktop/src/main/nativePipeline.ts`
 
 **Original code (line 427–432):**
+
 ```typescript
 this.trackerProcess = spawn(trackerExecutablePath, trackerArgs, {
-  cwd: repoRoot,           // BUG: non-existent in packaged mode
+  cwd: repoRoot, // BUG: non-existent in packaged mode
   shell: false,
-  stdio: ['pipe', 'pipe', 'pipe'],
-  ...(trackerEnv ? { env: trackerEnv } : {})
-})
+  stdio: ["pipe", "pipe", "pipe"],
+  ...(trackerEnv ? { env: trackerEnv } : {}),
+});
 ```
 
 **Root cause:** `findRepoRoot()` walks up from `__dirname` looking for `package.json`.
@@ -60,6 +61,7 @@ when `options.cwd` is a non-existent path. The error message reports the executa
 path as missing (misleading), not the cwd.
 
 **Symptom:** First pipeline start attempt produced:
+
 ```
 Native tracker status: Error
 Motion bridge status: Exited
@@ -67,17 +69,19 @@ Latest status: Native tracker stopped unexpectedly. Stopping the MotionFrame bri
 Latest error: Missing/inaccessible helper binary (ENOENT): spawn
   <app>/resources/native-runtime/bin/lvk-tracker-core.exe ENOENT
 ```
+
 The binary itself is present and executable (verified: direct `Start-Process` succeeds,
 `--print-runtime-capabilities` outputs correctly).
 
 **Fix applied:**
+
 ```typescript
 this.trackerProcess = spawn(trackerExecutablePath, trackerArgs, {
   cwd: packagedTrackerPath ? dirname(packagedTrackerPath) : repoRoot,
   shell: false,
-  stdio: ['pipe', 'pipe', 'pipe'],
-  ...(trackerEnv ? { env: trackerEnv } : {})
-})
+  stdio: ["pipe", "pipe", "pipe"],
+  ...(trackerEnv ? { env: trackerEnv } : {}),
+});
 ```
 
 In packaged mode the tracker runs from its own `bin/` directory. Tracker args contain
@@ -91,21 +95,21 @@ no relative paths, so no relative-path resolution depends on `repoRoot`.
 
 Confirmed before rebuild:
 
-| Item | Result |
-| --- | --- |
-| `desktoplvk.exe` present in `dist/win-unpacked/` | PASS |
-| `lvk-tracker-core.exe` in `resources/native-runtime/bin/` (102,912 bytes, signed) | PASS |
-| 21 OpenCV vcpkg DLLs in `resources/native-runtime/bin/` | PASS |
-| Direct spawn of tracker (`--print-runtime-capabilities`) | PASS — `opencvCameraSupport=true`, `opencvFaceDetectorSupport=true` |
+| Item                                                                              | Result                                                              |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `desktoplvk.exe` present in `dist/win-unpacked/`                                  | PASS                                                                |
+| `lvk-tracker-core.exe` in `resources/native-runtime/bin/` (102,912 bytes, signed) | PASS                                                                |
+| 21 OpenCV vcpkg DLLs in `resources/native-runtime/bin/`                           | PASS                                                                |
+| Direct spawn of tracker (`--print-runtime-capabilities`)                          | PASS — `opencvCameraSupport=true`, `opencvFaceDetectorSupport=true` |
 
 ### 4.2 Rebuild with bug fix
 
 After applying the `cwd` fix:
 
-| Check | Result |
-| --- | --- |
-| `pnpm --filter @lvk/desktop typecheck` | PASS |
-| `pnpm --filter @lvk/desktop build:unpack` | PASS |
+| Check                                     | Result |
+| ----------------------------------------- | ------ |
+| `pnpm --filter @lvk/desktop typecheck`    | PASS   |
+| `pnpm --filter @lvk/desktop build:unpack` | PASS   |
 
 ### 4.3 Packaged Electron app launch
 
@@ -123,29 +127,30 @@ After applying the `cwd` fix:
 
 Observations immediately after start:
 
-| Observation | Result |
-| --- | --- |
-| `lvk-tracker-core.exe` process spawned | PASS — PID 13220 |
-| Tracker parent PID = Electron PID 12900 | PASS — confirmed via WMI `ParentProcessId` |
-| Port 45731 listening | PASS — `TCP 127.0.0.1:45731 0.0.0.0:0 LISTENING` |
-| Bridge binds to `127.0.0.1` only (not `0.0.0.0`) | PASS — netstat confirms loopback-only |
+| Observation                                      | Result                                           |
+| ------------------------------------------------ | ------------------------------------------------ |
+| `lvk-tracker-core.exe` process spawned           | PASS — PID 13220                                 |
+| Tracker parent PID = Electron PID 12900          | PASS — confirmed via WMI `ParentProcessId`       |
+| Port 45731 listening                             | PASS — `TCP 127.0.0.1:45731 0.0.0.0:0 LISTENING` |
+| Bridge binds to `127.0.0.1` only (not `0.0.0.0`) | PASS — netstat confirms loopback-only            |
 
 ### 4.5 In-process MotionFrame bridge connectivity
 
 Connected via raw TCP WebSocket handshake to `ws://127.0.0.1:45731/motion`:
 
-| Observation | Result |
-| --- | --- |
-| TCP connection to `127.0.0.1:45731` | PASS — connected |
-| WebSocket HTTP 101 upgrade received | PASS |
-| `Sec-WebSocket-Accept` header verified | PASS |
-| MotionFrame frames received | PASS — 3 frames received |
-| Frame fields | `schemaVersion`, `timestampMs`, `source`, `tracking`, `face`, `eyes`, `mouth` |
-| `source` field | `"native"` |
-| `tracking.status` | `"tracking"` |
-| Frame interval | ~33 ms (~30 fps) |
+| Observation                            | Result                                                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| TCP connection to `127.0.0.1:45731`    | PASS — connected                                                              |
+| WebSocket HTTP 101 upgrade received    | PASS                                                                          |
+| `Sec-WebSocket-Accept` header verified | PASS                                                                          |
+| MotionFrame frames received            | PASS — 3 frames received                                                      |
+| Frame fields                           | `schemaVersion`, `timestampMs`, `source`, `tracking`, `face`, `eyes`, `mouth` |
+| `source` field                         | `"native"`                                                                    |
+| `tracking.status`                      | `"tracking"`                                                                  |
+| Frame interval                         | ~33 ms (~30 fps)                                                              |
 
 Sample frame (fields only, no raw values):
+
 ```
 timestampMs=198900 source=native tracking=tracking
 keys=[schemaVersion,timestampMs,source,tracking,face,eyes,mouth]
@@ -153,10 +158,10 @@ keys=[schemaVersion,timestampMs,source,tracking,face,eyes,mouth]
 
 ### 4.6 Web Preview server
 
-| Observation | Result |
-| --- | --- |
-| `http://localhost:5173/?source=native` HTTP status | PASS — 200 OK, `text/html` |
-| Web Preview page content loads | PASS |
+| Observation                                           | Result                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `http://localhost:5173/?source=native` HTTP status    | PASS — 200 OK, `text/html`                                                                                           |
+| Web Preview page content loads                        | PASS                                                                                                                 |
 | Browser-visible avatar animation from packaged bridge | SKIP — interactive browser not available in this session; WebSocket frame delivery verified programmatically via 4.5 |
 
 ### 4.7 Native pipeline stop from Electron UI
@@ -166,15 +171,15 @@ keys=[schemaVersion,timestampMs,source,tracking,face,eyes,mouth]
 
 Post-stop observations:
 
-| Observation | Result |
-| --- | --- |
-| `lvk-tracker-core.exe` process terminated | PASS — no process found |
-| Port 45731 not listening | PASS — no `LISTENING` entry (TIME_WAIT connections normal OS cleanup) |
-| `nativeTrackerStatus` in diagnostics | `Exited` |
-| `motionBridgeStatus` in diagnostics | `Exited` |
-| Latest status in diagnostics | `"Native MotionFrame pipeline stopped."` |
-| "Start native pipeline" button re-enabled in UI | PASS — visible as enabled |
-| "Stop native pipeline" button disabled in UI | PASS — visible as grayed |
+| Observation                                     | Result                                                                |
+| ----------------------------------------------- | --------------------------------------------------------------------- |
+| `lvk-tracker-core.exe` process terminated       | PASS — no process found                                               |
+| Port 45731 not listening                        | PASS — no `LISTENING` entry (TIME_WAIT connections normal OS cleanup) |
+| `nativeTrackerStatus` in diagnostics            | `Exited`                                                              |
+| `motionBridgeStatus` in diagnostics             | `Exited`                                                              |
+| Latest status in diagnostics                    | `"Native MotionFrame pipeline stopped."`                              |
+| "Start native pipeline" button re-enabled in UI | PASS — visible as enabled                                             |
+| "Stop native pipeline" button disabled in UI    | PASS — visible as grayed                                              |
 
 ### 4.8 Loopback / local-first confirmation
 
