@@ -160,3 +160,94 @@
   color: #94a3b8;
   font-size: 0.6875rem;
 }
+
+.motion-debug-overlay {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2;
+  box-sizing: border-box;
+  width: min(22rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(125 211 252 / 0.36);
+  border-radius: 0.75rem;
+  background: rgb(2 6 23 / 0.82);
+  color: #e0f2fe;
+  box-shadow: 0 0.75rem 1.75rem rgb(2 6 23 / 0.28);
+  backdrop-filter: blur(12px);
+  font-family:
+    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.motion-debug-overlay__title {
+  color: #bae6fd;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.motion-debug-overlay__values {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.motion-debug-overlay__values div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.motion-debug-overlay__values dt {
+  color: #93c5fd;
+}
+
+.motion-debug-overlay__values dd {
+  margin: 0;
+  color: #f8fafc;
+  font-weight: 700;
+  text-align: right;
+}
+
+.motion-debug-overlay__marker-box {
+  position: relative;
+  height: 7rem;
+  border: 1px solid rgb(147 197 253 / 0.34);
+  border-radius: 0.5rem;
+  background: rgb(15 23 42 / 0.72);
+  overflow: hidden;
+}
+
+.motion-debug-overlay__axis {
+  position: absolute;
+  background: rgb(125 211 252 / 0.32);
+}
+
+.motion-debug-overlay__axis--x {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+}
+
+.motion-debug-overlay__axis--y {
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 100%;
+}
+
+.motion-debug-overlay__marker {
+  position: absolute;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid #0f172a;
+  border-radius: 50%;
+  background: #facc15;
+  box-shadow: 0 0 0.75rem rgb(250 204 21 / 0.75);
+  transform: translate(-50%, -50%);
+}

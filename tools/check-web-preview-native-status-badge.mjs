@@ -192,7 +192,7 @@ const runSmokeCheck = async () => {
   }
 
   const badgeTagMatch = source.match(
-    /<aside\b(?=[\s\S]*?className=["']preview-source-badge["'])[\s\S]*?>/,
+    /<aside\b(?=[^>]*className=["']preview-source-badge["'])[^>]*>/,
   );
 
   if (badgeTagMatch === null) {
