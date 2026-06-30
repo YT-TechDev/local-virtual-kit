@@ -59,6 +59,7 @@ export interface LvkRuntimeStatus {
   pipelineCameraFps?: number
   pipelineCameraWidth?: number
   pipelineCameraHeight?: number
+  faceCascadePathConfigured?: boolean
   lastError?: string
   lastMessage?: string
 }

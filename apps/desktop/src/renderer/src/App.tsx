@@ -840,6 +840,9 @@ function App(): React.JSX.Element {
     hasSuccessfulNativeCapabilities &&
     nativeCapabilities?.opencvFaceDetectorSupport === false
       ? 'OpenCV face detection support appears disabled or unavailable based on the latest Native runtime capabilities preflight.'
+      : null,
+    selectedFaceDetector === 'opencv' && runtimeStatus?.faceCascadePathConfigured === false
+      ? 'OpenCV face detection requires LVK_FACE_CASCADE_PATH to be set to a Haar cascade XML path before starting Electron.'
       : null
   ].filter(
     (message, index, messages): message is string =>
