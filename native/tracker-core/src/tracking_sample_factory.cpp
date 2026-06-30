@@ -42,10 +42,15 @@ Vector3 createFacePositionFromBounds(
   const double normalizedY =
       -(((centerY / static_cast<double>(frame.height)) * 2.0) - 1.0);
 
+  const double faceWidthRatio =
+      static_cast<double>(bounds.width) / static_cast<double>(frame.width);
+  const double normalizedZ =
+      std::clamp((faceWidthRatio * 2.0) - 1.0, -1.0, 1.0);
+
   return Vector3{
       std::clamp(normalizedX, -1.0, 1.0),
       std::clamp(normalizedY, -1.0, 1.0),
-      0.0,
+      normalizedZ,
   };
 }
 
