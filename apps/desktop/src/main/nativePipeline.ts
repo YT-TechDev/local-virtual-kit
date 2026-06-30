@@ -425,7 +425,7 @@ export class NativePipelineManager {
       })
 
       this.trackerProcess = spawn(trackerExecutablePath, trackerArgs, {
-        cwd: repoRoot,
+        cwd: packagedTrackerPath ? dirname(packagedTrackerPath) : repoRoot,
         shell: false,
         stdio: ['pipe', 'pipe', 'pipe'],
         ...(trackerEnv ? { env: trackerEnv } : {})
