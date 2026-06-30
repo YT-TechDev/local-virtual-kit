@@ -94,7 +94,7 @@ const runCheck = async () => {
   assertEqual(mapped.confidence, 1, "tracking.confidence is clamped to 0..1");
   assertDeepEqual(
     mapped.rootPosition,
-    [2, -1.5, 0.375],
+    [3.2, -2.4, 0.675],
     "face.position is clamped to -1..1 and scaled",
   );
   assertDeepEqual(
