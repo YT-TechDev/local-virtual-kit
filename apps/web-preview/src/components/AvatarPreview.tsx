@@ -15,10 +15,12 @@ import {
   mapMotionFrameToAvatar,
   type AvatarMotionState,
 } from "../motion/mapMotionFrameToAvatar";
+import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
 
 type AvatarPreviewProps = {
+  debugMode: PreviewDebugMode;
   mode: PreviewMode;
   source: PreviewSource;
 };
@@ -28,9 +30,119 @@ type AvatarSceneProps = {
   source: PreviewSource;
 };
 
+type MotionDebugOverlayProps = {
+  connectionStatus: NativeMotionConnectionStatus;
+  currentTimeMs: number;
+  frame: MotionFrame | null;
+  lastFrameReceivedAtMs: number | null;
+  receivedFrameCount: number;
+  source: PreviewSource;
+};
+
 const LOST_TRACKING_HOLD_MS = 300;
 const LOST_TRACKING_RETURN_TO_NEUTRAL_AMOUNT = 0.12;
 const LOST_TRACKING_FEATURE_RESET_AMOUNT = 0.35;
+
+const clampMotionDebugMarker = (value: number) => {
+  return Math.min(1, Math.max(-1, value));
+};
+
+const formatMotionDebugNumber = (value: number) => value.toFixed(4);
+
+const getMotionDebugFrameAgeText = (
+  lastFrameReceivedAtMs: number | null,
+  currentTimeMs: number,
+) => {
+  if (lastFrameReceivedAtMs === null) {
+    return "no frame yet";
+  }
+
+  const elapsedMs = Math.max(0, currentTimeMs - lastFrameReceivedAtMs);
+
+  return `${elapsedMs.toFixed(0)} ms`;
+};
+
+function MotionDebugOverlay({
+  connectionStatus,
+  currentTimeMs,
+  frame,
+  lastFrameReceivedAtMs,
+  receivedFrameCount,
+  source,
+}: MotionDebugOverlayProps) {
+  const position = frame?.face.position ?? null;
+  const markerXPercent =
+    ((position === null ? 0 : clampMotionDebugMarker(position.x)) + 1) * 50;
+  const markerYPercent =
+    (1 - (position === null ? 0 : clampMotionDebugMarker(position.y))) * 50;
+
+  return (
+    <aside
+      className="motion-debug-overlay"
+      aria-label="MotionFrame debug values"
+    >
+      <div className="motion-debug-overlay__title">MotionFrame debug</div>
+      <dl className="motion-debug-overlay__values">
+        <div>
+          <dt>source</dt>
+          <dd>{frame?.source ?? source}</dd>
+        </div>
+        <div>
+          <dt>connection</dt>
+          <dd>{connectionStatus}</dd>
+        </div>
+        <div>
+          <dt>frames received</dt>
+          <dd>{receivedFrameCount}</dd>
+        </div>
+        <div>
+          <dt>tracking.status</dt>
+          <dd>{frame?.tracking.status ?? "no_frame"}</dd>
+        </div>
+        <div>
+          <dt>tracking.confidence</dt>
+          <dd>
+            {frame === null
+              ? "—"
+              : formatMotionDebugNumber(frame.tracking.confidence)}
+          </dd>
+        </div>
+        <div>
+          <dt>face.position.x</dt>
+          <dd>
+            {position === null ? "—" : formatMotionDebugNumber(position.x)}
+          </dd>
+        </div>
+        <div>
+          <dt>face.position.y</dt>
+          <dd>
+            {position === null ? "—" : formatMotionDebugNumber(position.y)}
+          </dd>
+        </div>
+        <div>
+          <dt>face.position.z</dt>
+          <dd>
+            {position === null ? "—" : formatMotionDebugNumber(position.z)}
+          </dd>
+        </div>
+        <div>
+          <dt>latest frame age</dt>
+          <dd>
+            {getMotionDebugFrameAgeText(lastFrameReceivedAtMs, currentTimeMs)}
+          </dd>
+        </div>
+      </dl>
+      <div className="motion-debug-overlay__marker-box" aria-hidden="true">
+        <span className="motion-debug-overlay__axis motion-debug-overlay__axis--x" />
+        <span className="motion-debug-overlay__axis motion-debug-overlay__axis--y" />
+        <span
+          className="motion-debug-overlay__marker"
+          style={{ left: `${markerXPercent}%`, top: `${markerYPercent}%` }}
+        />
+      </div>
+    </aside>
+  );
+}
 
 type TrackingFallbackState = {
   lastTrackingMotion: AvatarMotionState | null;
@@ -256,7 +368,7 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
   );
 }
 
-export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
+export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const {
     latestFrame: nativeFrame,
     connectionStatus: nativeStatus,
@@ -418,6 +530,16 @@ export function AvatarPreview({ mode, source }: AvatarPreviewProps) {
             {PREVIEW_LOCAL_PRIVACY_NOTE}
           </span>
         </aside>
+      )}
+      {debugMode === "motion" && (
+        <MotionDebugOverlay
+          connectionStatus={nativeStatus}
+          currentTimeMs={nativeFrameAgeCurrentTimeMs}
+          frame={nativeFrame}
+          lastFrameReceivedAtMs={lastFrameReceivedAtMs}
+          receivedFrameCount={receivedFrameCount}
+          source={source}
+        />
       )}
       <section className={panelClassName} aria-label={avatarPreviewLabel}>
         <Canvas
