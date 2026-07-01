@@ -271,5 +271,3 @@ Any option must preserve LVK's hard constraints (`docs/AGENTS.md` §4,
   `native/tracker-core/CMakeLists.txt`,
   `packages/motion-protocol/src/motion-frame.ts` (per `docs/MOTION_PROTOCOL.md`),
   and `apps/web-preview/src/motion/mapMotionFrameToAvatar.ts`.
-  </content>
-  </invoke>
