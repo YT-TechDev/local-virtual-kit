@@ -101,6 +101,128 @@ export const lerpAvatarMotionState = (
   };
 };
 
+// --- Renderer-side idle approximation ---------------------------------------
+//
+// Cosmetic, renderer-only idle animation. This does NOT represent real eye,
+// gaze, mouth, or expression tracking. The native OpenCV path currently emits
+// neutral/static values for these channels (only face.position varies per
+// frame), so this adds subtle liveliness while true tracking remains future
+// work. It never changes MotionFrame, Native Core, or the protocol schema, and
+// it never overrides non-neutral values: if a channel ever arrives with real
+// (non-neutral) data, that channel is preserved untouched.
+
+const IDLE_NEUTRAL_EPSILON = 1e-3;
+
+const NEUTRAL_EYE_OPEN = 1;
+const NEUTRAL_GAZE = 0;
+const NEUTRAL_MOUTH = 0;
+
+// Blink: a short, deterministic dip in eye openness on a slow repeating cycle.
+const IDLE_BLINK_INTERVAL_MS = 4200;
+const IDLE_BLINK_DURATION_MS = 160;
+const IDLE_BLINK_DEPTH = 0.85;
+
+// Gaze: a slow, small-amplitude sinusoidal drift on each axis.
+const IDLE_GAZE_DRIFT_AMPLITUDE = 0.12;
+const IDLE_GAZE_DRIFT_SPEED_X = 0.00042;
+const IDLE_GAZE_DRIFT_SPEED_Y = 0.00027;
+const IDLE_GAZE_DRIFT_PHASE_Y = Math.PI / 2;
+
+// Mouth: a very subtle breathing-like idle opening. Intentionally tiny so it is
+// never mistaken for real mouth/viseme tracking.
+const IDLE_MOUTH_OPEN_AMPLITUDE = 0.035;
+const IDLE_MOUTH_OPEN_SPEED = 0.0016;
+
+const isNearNeutral = (value: number, neutral: number): boolean => {
+  return Math.abs(value - neutral) <= IDLE_NEUTRAL_EPSILON;
+};
+
+const computeIdleBlinkOpenness = (timestampMs: number): number => {
+  const phaseMs =
+    ((timestampMs % IDLE_BLINK_INTERVAL_MS) + IDLE_BLINK_INTERVAL_MS) %
+    IDLE_BLINK_INTERVAL_MS;
+
+  if (phaseMs >= IDLE_BLINK_DURATION_MS) {
+    return NEUTRAL_EYE_OPEN;
+  }
+
+  const blinkProgress = phaseMs / IDLE_BLINK_DURATION_MS;
+  const closedAmount = Math.sin(blinkProgress * Math.PI) * IDLE_BLINK_DEPTH;
+
+  return clamp01(NEUTRAL_EYE_OPEN - closedAmount);
+};
+
+const computeIdleEyeOpen = (
+  timestampMs: number,
+): { left: number; right: number } => {
+  const openness = computeIdleBlinkOpenness(timestampMs);
+
+  return { left: openness, right: openness };
+};
+
+const computeIdleGazeDrift = (timestampMs: number): [number, number] => {
+  const x =
+    Math.sin(timestampMs * IDLE_GAZE_DRIFT_SPEED_X) * IDLE_GAZE_DRIFT_AMPLITUDE;
+  const y =
+    Math.sin(timestampMs * IDLE_GAZE_DRIFT_SPEED_Y + IDLE_GAZE_DRIFT_PHASE_Y) *
+    IDLE_GAZE_DRIFT_AMPLITUDE;
+
+  return [clamp(x, -1, 1), clamp(y, -1, 1)];
+};
+
+const computeIdleMouthOpen = (timestampMs: number): number => {
+  const oscillation = (Math.sin(timestampMs * IDLE_MOUTH_OPEN_SPEED) + 1) / 2;
+
+  return clamp01(oscillation * IDLE_MOUTH_OPEN_AMPLITUDE);
+};
+
+/**
+ * Renderer-side cosmetic idle approximation. Given a mapped AvatarMotionState
+ * and a timestamp, it adds subtle blink / gaze drift / mouth idle motion for
+ * channels that are still neutral, so the avatar feels less static.
+ *
+ * This is deterministic for a given timestamp, applies only while
+ * `trackingStatus` is "tracking", never touches `rootPosition`, `headRotation`,
+ * or `confidence`, and preserves any non-neutral (real) eye/gaze/mouth values
+ * instead of overriding them. It is an approximation, not real eye/mouth/
+ * expression tracking, and does not change MotionFrame or the protocol.
+ */
+export const applyRendererIdleApproximation = (
+  motion: AvatarMotionState,
+  timestampMs: number,
+): AvatarMotionState => {
+  if (motion.trackingStatus !== "tracking") {
+    return motion;
+  }
+
+  const eyesAreNeutral =
+    isNearNeutral(motion.eyeOpen.left, NEUTRAL_EYE_OPEN) &&
+    isNearNeutral(motion.eyeOpen.right, NEUTRAL_EYE_OPEN);
+  const gazeIsNeutral =
+    isNearNeutral(motion.gaze[0], NEUTRAL_GAZE) &&
+    isNearNeutral(motion.gaze[1], NEUTRAL_GAZE);
+  const mouthIsNeutral =
+    isNearNeutral(motion.mouth.open, NEUTRAL_MOUTH) &&
+    isNearNeutral(motion.mouth.smile, NEUTRAL_MOUTH);
+
+  const eyeOpen = eyesAreNeutral
+    ? computeIdleEyeOpen(timestampMs)
+    : motion.eyeOpen;
+  const gaze: [number, number] = gazeIsNeutral
+    ? computeIdleGazeDrift(timestampMs)
+    : motion.gaze;
+  const mouth = mouthIsNeutral
+    ? { open: computeIdleMouthOpen(timestampMs), smile: motion.mouth.smile }
+    : motion.mouth;
+
+  return {
+    ...motion,
+    eyeOpen,
+    gaze,
+    mouth,
+  };
+};
+
 export const mapMotionFrameToAvatar = (
   frame: MotionFrame,
 ): AvatarMotionState => {
