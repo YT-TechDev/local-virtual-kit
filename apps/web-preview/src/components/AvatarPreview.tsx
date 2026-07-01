@@ -12,10 +12,10 @@ import {
 import {
   applyRendererIdleApproximation,
   createNeutralAvatarMotionState,
-  lerpAvatarMotionState,
   mapMotionFrameToAvatar,
   type AvatarMotionState,
 } from "../motion/mapMotionFrameToAvatar";
+import { computeLostTrackingFallbackMotion } from "../motion/lostTrackingFallback";
 import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
@@ -39,10 +39,6 @@ type MotionDebugOverlayProps = {
   receivedFrameCount: number;
   source: PreviewSource;
 };
-
-const LOST_TRACKING_HOLD_MS = 300;
-const LOST_TRACKING_RETURN_TO_NEUTRAL_AMOUNT = 0.12;
-const LOST_TRACKING_FEATURE_RESET_AMOUNT = 0.35;
 
 const clampMotionDebugMarker = (value: number) => {
   return Math.min(1, Math.max(-1, value));
@@ -333,25 +329,15 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
       }
 
       if (mappedMotion.trackingStatus === "lost") {
-        const neutralLostMotion = createNeutralAvatarMotionState("lost");
-        const lastTrackingMotion = previousState.lastTrackingMotion;
-        const lastTrackingTimestampMs = previousState.lastTrackingTimestampMs;
-        const hasRecentTrackingPose =
-          lastTrackingMotion !== null &&
-          lastTrackingTimestampMs !== null &&
-          timestampMs - lastTrackingTimestampMs <= LOST_TRACKING_HOLD_MS;
-
-        const renderedMotion = hasRecentTrackingPose
-          ? lerpAvatarMotionState(
-              lastTrackingMotion,
-              neutralLostMotion,
-              LOST_TRACKING_FEATURE_RESET_AMOUNT,
-            )
-          : lerpAvatarMotionState(
-              previousState.lostFallbackMotion ?? neutralLostMotion,
-              neutralLostMotion,
-              LOST_TRACKING_RETURN_TO_NEUTRAL_AMOUNT,
-            );
+        // Stabilize short tracking/lost flicker: hold the last valid root pose
+        // during a brief window while features relax toward neutral, then return
+        // the root to neutral gradually. See computeLostTrackingFallbackMotion.
+        const renderedMotion = computeLostTrackingFallbackMotion({
+          lastTrackingMotion: previousState.lastTrackingMotion,
+          lastTrackingTimestampMs: previousState.lastTrackingTimestampMs,
+          previousLostFallbackMotion: previousState.lostFallbackMotion,
+          currentTimestampMs: timestampMs,
+        });
 
         return {
           ...previousState,
