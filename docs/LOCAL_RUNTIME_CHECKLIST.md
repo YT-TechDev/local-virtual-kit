@@ -23,6 +23,8 @@ The 2026-06-30 packaged Electron native visual output validation pass is recorde
 
 The 2026-07-01 Web Preview face tracking sensitivity local smoke is recorded in [`docs/reports/web-preview-face-tracking-sensitivity-local-smoke-2026-07-01.md`](./reports/web-preview-face-tracking-sensitivity-local-smoke-2026-07-01.md). That owner-performed local manual validation confirmed that Web Preview received native frames from the packaged Electron / OpenCV path and that avatar movement followed face/person position after PR #385; Codex did not perform this local GUI/webcam validation. The follow-up analysis of why eye/mouth/expression movement remains weak, and the local-only options for improving it, is recorded in [`docs/reports/local-only-landmark-expression-tracking-investigation-2026-07-01.md`](./reports/local-only-landmark-expression-tracking-investigation-2026-07-01.md).
 
+The 2026-07-01 Web Preview renderer approximation local smoke after PR #388 is recorded in [`docs/reports/web-preview-renderer-approximation-local-smoke-2026-07-01.md`](./reports/web-preview-renderer-approximation-local-smoke-2026-07-01.md). It records owner-performed local manual validation of the packaged Electron / OpenCV / Web Preview native-frame path and the expected limitation that the renderer-side idle approximation is not real eye, mouth, expression, or landmark tracking.
+
 For future packaged Electron builds, see [`docs/NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md`](./NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md) for the Windows/vcpkg OpenCV runtime DLL handling strategy. Local/dev validation keeps the explicit `PATH` guidance below; packaged app behavior should be addressed in a separate implementation PR.
 
 ## Automated checks
