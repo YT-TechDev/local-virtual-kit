@@ -10,6 +10,7 @@ import {
   type NativeMotionConnectionStatus,
 } from "../hooks/useNativeMotionFrame";
 import {
+  applyRendererIdleApproximation,
   createNeutralAvatarMotionState,
   lerpAvatarMotionState,
   mapMotionFrameToAvatar,
@@ -314,11 +315,20 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
 
     setFallbackState((previousState) => {
       if (mappedMotion.trackingStatus === "tracking") {
+        // Cosmetic renderer-side idle approximation only: adds subtle blink /
+        // gaze drift / mouth idle for still-neutral channels. It does not
+        // represent real eye/mouth/expression tracking and never overrides
+        // non-neutral MotionFrame values.
+        const idleApproximatedMotion = applyRendererIdleApproximation(
+          mappedMotion,
+          timestampMs,
+        );
+
         return {
-          lastTrackingMotion: mappedMotion,
+          lastTrackingMotion: idleApproximatedMotion,
           lastTrackingTimestampMs: timestampMs,
-          lostFallbackMotion: mappedMotion,
-          renderedMotion: mappedMotion,
+          lostFallbackMotion: idleApproximatedMotion,
+          renderedMotion: idleApproximatedMotion,
         };
       }
 
