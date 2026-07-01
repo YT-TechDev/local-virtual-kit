@@ -22,6 +22,12 @@ const clamp = (value: number, min: number, max: number): number => {
 
 const clamp01 = (value: number): number => clamp(value, 0, 1);
 
+const FACE_POSITION_INPUT_MIN = -1;
+const FACE_POSITION_INPUT_MAX = 1;
+const FACE_POSITION_X_SENSITIVITY = 3.2;
+const FACE_POSITION_Y_SENSITIVITY = 2.4;
+const FACE_POSITION_Z_SENSITIVITY = 0.9;
+
 export const createNeutralAvatarMotionState = (
   status: TrackingStatus = "not_started",
 ): AvatarMotionState => {
@@ -102,9 +108,21 @@ export const mapMotionFrameToAvatar = (
     trackingStatus: frame.tracking.status,
     confidence: clamp01(frame.tracking.confidence),
     rootPosition: [
-      clamp(frame.face.position.x, -1, 1) * 2,
-      clamp(frame.face.position.y, -1, 1) * 1.5,
-      clamp(frame.face.position.z, -1, 1) * 0.5,
+      clamp(
+        frame.face.position.x,
+        FACE_POSITION_INPUT_MIN,
+        FACE_POSITION_INPUT_MAX,
+      ) * FACE_POSITION_X_SENSITIVITY,
+      clamp(
+        frame.face.position.y,
+        FACE_POSITION_INPUT_MIN,
+        FACE_POSITION_INPUT_MAX,
+      ) * FACE_POSITION_Y_SENSITIVITY,
+      clamp(
+        frame.face.position.z,
+        FACE_POSITION_INPUT_MIN,
+        FACE_POSITION_INPUT_MAX,
+      ) * FACE_POSITION_Z_SENSITIVITY,
     ],
     headRotation: [
       clamp(frame.face.rotation.pitch, -1, 1),
