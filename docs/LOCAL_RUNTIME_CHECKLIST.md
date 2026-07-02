@@ -25,6 +25,8 @@ The 2026-07-01 Web Preview face tracking sensitivity local smoke is recorded in 
 
 The 2026-07-01 Web Preview renderer approximation local smoke after PR #388 is recorded in [`docs/reports/web-preview-renderer-approximation-local-smoke-2026-07-01.md`](./reports/web-preview-renderer-approximation-local-smoke-2026-07-01.md). It records owner-performed local manual validation of the packaged Electron / OpenCV / Web Preview native-frame path and the expected limitation that the renderer-side idle approximation is not real eye, mouth, expression, or landmark tracking.
 
+The 2026-07-02 Native OpenCV stability and Electron dev root local smoke is recorded in [`docs/reports/native-opencv-stability-and-electron-dev-root-local-smoke-2026-07-02.md`](./reports/native-opencv-stability-and-electron-dev-root-local-smoke-2026-07-02.md). That owner-performed local validation recorded Native Core OpenCV stabilization and `resultSource=fresh|held|none` diagnostics after PR #391 and PR #392, plus Electron dev native runtime root-resolution validation after PR #393. It also records that the mouth-open position jump was improved/fixed in Web Preview behavior while movement remains angular/blocky.
+
 For future packaged Electron builds, see [`docs/NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md`](./NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md) for the Windows/vcpkg OpenCV runtime DLL handling strategy. Local/dev validation keeps the explicit `PATH` guidance below; packaged app behavior should be addressed in a separate implementation PR.
 
 ## Automated checks
