@@ -321,24 +321,29 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
           timestampMs,
         );
 
-        // Ease the rendered root/head pose toward the mapped native target so
-        // discrete OpenCV face-position updates read as gliding motion instead
-        // of angular/blocky stepping. Start from the previous rendered tracking
-        // pose; on the first tracking frame there is none, so we snap to the
-        // target. Eye/gaze/mouth pass through untouched to keep idle blink crisp.
-        const previousRenderedMotion =
-          previousState.lastTrackingMotion ?? idleApproximatedMotion;
-        const smoothedMotion = smoothTrackingMotion(
-          previousRenderedMotion,
-          idleApproximatedMotion,
-          delta,
-        );
+        // Smoothing targets the discrete native OpenCV face-following path. The
+        // local demo (dummy) source already produces continuous motion, so it
+        // keeps its previous behavior and uses the idle-approximated motion
+        // directly. Ease the rendered root/head pose toward the mapped native
+        // target so discrete OpenCV face-position updates read as gliding motion
+        // instead of angular/blocky stepping. Start from the previous rendered
+        // tracking pose; on the first tracking frame there is none, so we snap
+        // to the target. Eye/gaze/mouth pass through untouched to keep idle
+        // blink crisp.
+        const trackingMotion =
+          source === "native"
+            ? smoothTrackingMotion(
+                previousState.lastTrackingMotion ?? idleApproximatedMotion,
+                idleApproximatedMotion,
+                delta,
+              )
+            : idleApproximatedMotion;
 
         return {
-          lastTrackingMotion: smoothedMotion,
+          lastTrackingMotion: trackingMotion,
           lastTrackingTimestampMs: timestampMs,
-          lostFallbackMotion: smoothedMotion,
-          renderedMotion: smoothedMotion,
+          lostFallbackMotion: trackingMotion,
+          renderedMotion: trackingMotion,
         };
       }
 
