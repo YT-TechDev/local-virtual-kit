@@ -16,6 +16,7 @@ import {
   type AvatarMotionState,
 } from "../motion/mapMotionFrameToAvatar";
 import { computeLostTrackingFallbackMotion } from "../motion/lostTrackingFallback";
+import { smoothTrackingMotion } from "../motion/trackingSmoothing";
 import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
@@ -301,7 +302,7 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
     [],
   );
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const timestampMs = clock.elapsedTime * 1000;
     const frame =
       source === "native"
@@ -320,11 +321,24 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
           timestampMs,
         );
 
+        // Ease the rendered root/head pose toward the mapped native target so
+        // discrete OpenCV face-position updates read as gliding motion instead
+        // of angular/blocky stepping. Start from the previous rendered tracking
+        // pose; on the first tracking frame there is none, so we snap to the
+        // target. Eye/gaze/mouth pass through untouched to keep idle blink crisp.
+        const previousRenderedMotion =
+          previousState.lastTrackingMotion ?? idleApproximatedMotion;
+        const smoothedMotion = smoothTrackingMotion(
+          previousRenderedMotion,
+          idleApproximatedMotion,
+          delta,
+        );
+
         return {
-          lastTrackingMotion: idleApproximatedMotion,
+          lastTrackingMotion: smoothedMotion,
           lastTrackingTimestampMs: timestampMs,
-          lostFallbackMotion: idleApproximatedMotion,
-          renderedMotion: idleApproximatedMotion,
+          lostFallbackMotion: smoothedMotion,
+          renderedMotion: smoothedMotion,
         };
       }
 
