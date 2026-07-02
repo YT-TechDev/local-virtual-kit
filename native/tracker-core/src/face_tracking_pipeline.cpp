@@ -21,6 +21,7 @@ FaceTrackingPipeline::FaceTrackingPipeline(
           FaceBounds{0, 0, 0, 0},
           0.0,
           false,
+          FaceDetectionResultSource::None,
       } {}
 
 TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
@@ -39,6 +40,7 @@ TrackingSample FaceTrackingPipeline::track(const PreprocessedFrame& frame) {
       faceDetection.bounds,
       detectionDuration.count(),
       shouldUseFallbackTracking,
+      faceDetection.resultSource,
   };
 
   if (faceDetection.hasFace) {

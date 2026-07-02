@@ -29,6 +29,7 @@ FaceDetectionResult noFaceResult() {
       false,
       0.0,
       FaceBounds{0, 0, 0, 0},
+      FaceDetectionResultSource::None,
   };
 }
 
@@ -124,6 +125,7 @@ FaceDetectionResult OpenCvFaceDetector::detect(const PreprocessedFrame& frame) {
             true,
             kHeldFaceConfidence,
             toFaceBounds(lastAcceptedFace_),
+            FaceDetectionResultSource::Held,
         };
       }
     }
@@ -154,6 +156,7 @@ FaceDetectionResult OpenCvFaceDetector::detect(const PreprocessedFrame& frame) {
       true,
       1.0,
       toFaceBounds(selectedFace),
+      FaceDetectionResultSource::Fresh,
   };
 }
 
