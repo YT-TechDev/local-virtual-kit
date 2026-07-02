@@ -13,10 +13,27 @@ struct FaceBounds {
   int height;
 };
 
+// Safe internal diagnostic classification for how a face detection result was
+// produced. This is observability only: it never changes MotionFrame output.
+// - None:  no face was reported.
+// - Fresh: a face was reported directly from a fresh detector detection.
+// - Held:  a face was reported from a bounded short-hold of the last accepted
+//          bounds while the detector briefly missed. This is not real tracking.
+enum class FaceDetectionResultSource {
+  None,
+  Fresh,
+  Held,
+};
+
+// Renders a compact, safe log label ("none", "fresh", "held") for a result
+// source. Used only in local diagnostic output.
+const char* faceDetectionResultSourceLabel(FaceDetectionResultSource source);
+
 struct FaceDetectionResult {
   bool hasFace;
   double confidence;
   FaceBounds bounds;
+  FaceDetectionResultSource resultSource;
 };
 
 struct FaceDetectionDiagnostics {
@@ -26,6 +43,7 @@ struct FaceDetectionDiagnostics {
   FaceBounds bounds;
   double detectionDurationMs;
   bool usedFallbackTracking;
+  FaceDetectionResultSource resultSource;
 };
 
 class FaceDetector {

@@ -245,7 +245,11 @@ void writeFaceStatus(
          << "height=" << diagnostics.bounds.height << "}, "
          << "detectionDurationMs=" << diagnostics.detectionDurationMs << ", "
          << "usedFallbackTracking="
-         << (diagnostics.usedFallbackTracking ? "true" : "false") << "\n";
+         << (diagnostics.usedFallbackTracking ? "true" : "false") << ", "
+         << "resultSource="
+         << lvk::tracker::faceDetectionResultSourceLabel(
+                diagnostics.resultSource)
+         << "\n";
 }
 
 struct PipelineTimingDiagnostics {
