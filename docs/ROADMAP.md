@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current v0.2.0-era work, prefer small PRs that validate local camera / OBS workflows, improve Web Preview native-source status behavior, and collect evidence for the first real local tracking backend direction without changing the `MotionFrame` schema unless explicitly planned.
+For current release-prep work, v0.2.0 is the Local OpenCV Face-Following MVP target. Keep changes small, preserve local camera / OBS validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.3+ work should continue toward higher-quality local tracking while keeping Web Preview and Electron runtime boundaries clear.
 
 ---
 
@@ -109,7 +109,7 @@ Goal:
 
 ---
 
-## Phase 6.5 - Tracking Backend Evaluation / v0.2.0 Direction
+## Phase 6.5 - Tracking Backend Evaluation / v0.2.0 Local OpenCV MVP
 
 Goal:
 
@@ -166,6 +166,14 @@ Goal:
 - keep the plain R3F preview as the stable baseline
 
 ---
+
+## v0.2.0 Release-Prep Target
+
+v0.2.0 is the Local OpenCV Face-Following MVP release-prep target. It covers local OpenCV Haar-style face detection, Native Core diagnostics and stabilization, native `MotionFrame.face.position.x/y/z` output from face bounds, Electron development native runtime root-resolution fixes, Web Preview native MotionFrame consumption, status/fallback improvements, and renderer-side smoothing.
+
+Known v0.2.0 limits remain explicit: no real eye, mouth, expression, or landmark tracking; no GLB/VRM/custom avatar loader; no bone or morph target mapping; no MotionFrame schema change; and no packaged Electron validation claim unless owner-performed smoke explicitly records it.
+
+Future v0.3/v0.4 direction should focus on a better local tracking backend, calibration/smoothing polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
 
 ## v0.2.0 Entry Points
 
