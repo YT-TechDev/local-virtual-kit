@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import nodeProcess from 'node:process'
 import { createInterface, type Interface as RlInterface } from 'node:readline'
@@ -134,11 +134,37 @@ function buildNativeRuntimeEnv(binDir: string): NodeJS.ProcessEnv {
   return { ...nodeProcess.env, PATH: `${binDir}${sep}${systemBase}` }
 }
 
+// Stable, repo-level markers that identify the LVK monorepo root. A nested
+// workspace package (for example apps/desktop) also contains a package.json, so
+// the presence of package.json alone is not enough: in Electron dev the walk
+// would otherwise stop at apps/desktop and resolve native build outputs under
+// apps/desktop/native/... instead of the real repository root.
+function isLvkRepoRoot(candidatePath: string): boolean {
+  const packageJsonPath = join(candidatePath, 'package.json')
+  if (!existsSync(packageJsonPath)) {
+    return false
+  }
+
+  // The monorepo root owns the Native Core source tree; nested workspace
+  // packages do not. Require it so apps/desktop is never mistaken for the root.
+  if (!existsSync(join(candidatePath, 'native', 'tracker-core'))) {
+    return false
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { name?: unknown }
+    return parsed.name === 'local-virtual-kit'
+  } catch {
+    // A missing/unreadable/malformed package.json cannot confirm the repo root.
+    return false
+  }
+}
+
 function findRepoRoot(): string {
   let current = resolve(__dirname)
 
   for (let depth = 0; depth < 8; depth += 1) {
-    if (existsSync(join(current, 'package.json'))) {
+    if (isLvkRepoRoot(current)) {
       return current
     }
 
@@ -149,6 +175,9 @@ function findRepoRoot(): string {
     current = parent
   }
 
+  // Fallback when no LVK monorepo root marker is found within the bounded walk.
+  // Derived relative to this module's location so resolution stays deterministic
+  // and dependency-free; packaged builds resolve the tracker separately.
   return resolve(__dirname, '../../../..')
 }
 
