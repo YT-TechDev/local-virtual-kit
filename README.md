@@ -2,15 +2,17 @@
 
 Local Virtual Kit is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
 
-LVK is currently in early development. The first milestone is a small, clear foundation where a local native tracking core emits normalized motion data and a web-based React Three Fiber preview renders an avatar from that data.
+LVK is currently in early development. The current public baseline is **v0.2.0: the Local OpenCV Face-Following MVP**, where the local Native Core can produce MotionFrame face-position output from OpenCV face bounds and the web preview can consume that localhost MotionFrame stream.
+
+The next v0.3.0 implementation work focuses on improving local tracking quality, calibration and sensitivity polish, and evidence-based evaluation of the next local backend while preserving LVK's local-first boundaries.
 
 ## Core principles
 
 - Keep camera frames local.
-- Do not send camera frames to external servers in v0.1.
+- Do not send camera frames to external servers.
 - Keep tracking, protocol, desktop, and renderer responsibilities separate.
-- Use `MotionFrame` as the contract between the native core and renderer.
-- Keep the baseline renderer in plain React Three Fiber for v0.1.
+- Use `MotionFrame` as the stable contract between the native core and renderer.
+- Keep the baseline renderer in plain React Three Fiber.
 
 ## Current architecture
 
@@ -115,7 +117,7 @@ Renderer-specific values such as avatar bones, morph target weights, smoothing, 
 
 ## Privacy model
 
-LVK is local-first. Raw camera frames must remain local in v0.1. Cloud upload, telemetry, analytics, and remote camera processing are out of scope unless explicitly approved for a future version.
+LVK is local-first. Raw camera frames must remain local. Cloud upload, telemetry, analytics, remote camera processing, external frame processing, runtime downloads, and hidden network behavior are out of scope unless explicitly approved for a future version.
 
 ## Documentation
 
@@ -123,12 +125,14 @@ Start with `docs/AGENTS.md` for contributor and agent guidance, then read only t
 
 Useful focused docs:
 
-- `docs/ARCHITECTURE.md`
-- `docs/TECH_STACK.md`
-- `docs/MOTION_PROTOCOL.md`
-- `docs/MOTION_MAPPING.md`
-- `docs/ROADMAP.md`
-- `docs/DEVELOPMENT_POLICY.md`
+- `docs/releases/v0.2.0.md` - current Local OpenCV Face-Following MVP baseline and known limitations.
+- `docs/ROADMAP.md` - implementation sequence and v0.3+ direction.
+- `docs/LOCAL_RUNTIME_CHECKLIST.md` - local/manual validation boundaries and runtime checklist.
+- `docs/ARCHITECTURE.md` - Native Core, Motion Protocol, Web Preview, and Electron boundaries.
+- `docs/TECH_STACK.md` - workspace packages, dependencies, and commands.
+- `docs/MOTION_PROTOCOL.md` - stable `MotionFrame` schema and compatibility rules.
+- `docs/MOTION_MAPPING.md` - renderer-side mapping from `MotionFrame` values.
+- `docs/DEVELOPMENT_POLICY.md` - workflow, checks, PR, and validation-claim rules.
 
 ## Git policy
 
