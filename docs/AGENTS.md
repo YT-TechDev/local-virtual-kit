@@ -20,6 +20,13 @@ Before making any change, inspect the target branch, current source code, and re
 
 Do not load every `docs/*.md` file by default. After reading this file, read only the documents directly required for the current task.
 
+### Reading Budget / Historical Docs
+
+- Do not read broad historical H2/Gate documents by default.
+- `docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md` is reference-only unless the task explicitly names H2 helper-process history, H2 Gate/Closeout/Decision docs, or that exact file.
+- Prefer exact current source files, the current issue/PR body, and one focused task document over broad docs scans.
+- If more documentation is needed, identify the exact file and the reason before expanding context.
+
 Use this map:
 
 | Task type                                 | Read next                                                             |

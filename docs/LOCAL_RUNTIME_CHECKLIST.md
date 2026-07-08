@@ -1,15 +1,15 @@
 # Local Runtime Verification Checklist
 
-This checklist verifies the LVK v0.1 local runtime paths without changing runtime behavior, dependencies, or the `MotionFrame` schema. Use it for local release smoke testing and PR validation when runtime paths are affected.
+This checklist verifies the current post-v0.2 LVK local runtime validation scope without changing runtime behavior, dependencies, or the `MotionFrame` schema. Use it for local release smoke testing and PR validation when runtime paths are affected.
 
 ## Scope and privacy rule
 
 - Verify only local runtime behavior: Web Preview, Electron startup, Native Core startup/build, localhost MotionFrame transport, OBS Browser Source preview, and optional local camera access.
-- Preserve LVK's local-first rule: raw camera frames must stay on the local machine and must not be sent to external servers in v0.1.
+- Preserve LVK's local-first rule: raw camera frames must stay on the local machine and must not be sent to external servers during local-first releases.
 - Do not claim real webcam/OpenCV validation unless it was performed on a local machine with a camera, OS camera permission, and an OpenCV-enabled native build.
 - Electron, webcam, OBS, and OS camera permission checks are local/manual checks. They are not expected to pass in headless CI, Codex, cloud runners, or machines without camera forwarding.
 
-## Current v0.1 verification status
+## Current local runtime verification status
 
 The completed 2026-06-26 local verification pass is recorded in [`docs/reports/local-runtime-verification-2026-06-26.md`](./reports/local-runtime-verification-2026-06-26.md). That pass confirmed automated checks, native dummy output, MotionFrame bridge smoke, Web Preview dummy/native modes, and Electron native pipeline start/stop for the current local-first dummy/native-dummy runtime paths.
 
