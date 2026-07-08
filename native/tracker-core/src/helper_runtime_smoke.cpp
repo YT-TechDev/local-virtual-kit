@@ -259,6 +259,12 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-oversized-line"};
   }
+  if (options.smokeCase == HelperRuntimeSmokeCase::SyntheticAdapter) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-adapter-values"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 

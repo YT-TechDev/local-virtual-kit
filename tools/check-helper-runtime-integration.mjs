@@ -2011,3 +2011,190 @@ console.log(
     "safe parent diagnostics only, and keeps helper stdout/stderr private to " +
     "Native Core.",
 );
+
+// --- H2 synthetic helper/adapter smoke: value-mapping guard ------------------
+// The new explicit --helper-runtime-smoke-case synthetic-adapter proves the
+// synthetic helper/adapter boundary at the VALUE level. The synthetic helper
+// emits its normal ready line, then, for each result frame, one of three
+// deterministic adapter-style value patterns cycling by frame index
+// (in-range, out-of-range, exact-boundary), via --emit-adapter-values, then
+// its normal stopped line, and exits 0. Unlike the existing
+// lvk-helper-result-mapping-smoke (which calls createTrackingSampleFromHelperResult
+// directly on hand-built structs), this guard exercises the FULL live path:
+// real subprocess stdout text is parsed by the normal helper-runtime parser
+// and mapped/clamped by the same mapper. This guard asserts that public
+// stdout is MotionFrame JSON only (same shape as the Normal case) and that
+// each mapped frame's numeric fields match the expected clamped value for its
+// pattern -- proving the parse-and-clamp mapping is exact, not merely
+// present. Helper stdout/stderr stay private to Native Core. This does not
+// approve a real backend, model, or runtime; it is smoke-local adapter/value
+// mapping observation only.
+
+const kAdapterPatterns = [
+  // In-range: values already inside the mapper's accepted ranges pass through
+  // unchanged.
+  {
+    confidence: 0.82,
+    pitch: 0.3,
+    yaw: -0.25,
+    roll: 0.1,
+    leftOpen: 0.75,
+    rightOpen: 0.65,
+    mouthOpen: 0.4,
+    mouthSmile: 0.55,
+  },
+  // Out-of-range: every value lies outside its accepted range and must be
+  // clamped by createTrackingSampleFromHelperResult.
+  {
+    confidence: 1.0,
+    pitch: 1.0,
+    yaw: -1.0,
+    roll: 1.0,
+    leftOpen: 1.0,
+    rightOpen: 0.0,
+    mouthOpen: 1.0,
+    mouthSmile: 0.0,
+  },
+  // Exact-boundary: values already sit exactly at the clamp boundary and must
+  // be preserved unchanged.
+  {
+    confidence: 1.0,
+    pitch: -1.0,
+    yaw: 1.0,
+    roll: 0.0,
+    leftOpen: 0.0,
+    rightOpen: 1.0,
+    mouthOpen: 1.0,
+    mouthSmile: 0.0,
+  },
+];
+
+const assertSyntheticAdapterCaseMapping = () => {
+  const adapterResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperPath,
+      "--frames",
+      "3",
+      "--helper-runtime-smoke-case",
+      "synthetic-adapter",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (adapterResult.error) {
+    fail(
+      `could not run synthetic-adapter ${trackerPath}: ${adapterResult.error.message}`,
+      adapterResult,
+    );
+  }
+
+  if (adapterResult.status !== 0) {
+    fail("expected exit status 0 for synthetic-adapter case", adapterResult);
+  }
+
+  const adapterStdout = adapterResult.stdout ?? "";
+  const adapterStdoutLines = adapterStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (adapterStdoutLines.length !== kAdapterPatterns.length) {
+    fail(
+      `expected exactly ${kAdapterPatterns.length} public stdout lines for synthetic-adapter, got ${adapterStdoutLines.length}`,
+      adapterResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, or unsafe
+  // child markers may appear on public stdout.
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (adapterStdout.includes(marker)) {
+      fail(
+        `synthetic-adapter public stdout leaked marker ${JSON.stringify(marker)}`,
+        adapterResult,
+      );
+    }
+  }
+
+  const closeEnough = (actual, expected) => Math.abs(actual - expected) < 1e-6;
+
+  adapterStdoutLines.forEach((line, index) => {
+    const frame = parseNativeMotionFrameJson(line);
+    if (frame === null) {
+      fail(
+        `synthetic-adapter public stdout line ${index + 1} is not valid native MotionFrame JSON: ${line}`,
+        adapterResult,
+      );
+    }
+
+    const expected = kAdapterPatterns[index];
+    const checks = [
+      ["tracking.confidence", frame.tracking?.confidence, expected.confidence],
+      ["face.rotation.pitch", frame.face?.rotation?.pitch, expected.pitch],
+      ["face.rotation.yaw", frame.face?.rotation?.yaw, expected.yaw],
+      ["face.rotation.roll", frame.face?.rotation?.roll, expected.roll],
+      ["eyes.leftOpen", frame.eyes?.leftOpen, expected.leftOpen],
+      ["eyes.rightOpen", frame.eyes?.rightOpen, expected.rightOpen],
+      ["mouth.open", frame.mouth?.open, expected.mouthOpen],
+      ["mouth.smile", frame.mouth?.smile, expected.mouthSmile],
+    ];
+
+    for (const [fieldName, actual, expectedValue] of checks) {
+      if (typeof actual !== "number" || !closeEnough(actual, expectedValue)) {
+        fail(
+          `synthetic-adapter public stdout line ${index + 1} field ${fieldName} expected ${expectedValue}, got ${actual}`,
+          adapterResult,
+        );
+      }
+    }
+  });
+
+  // Public stderr, if non-empty, must be only safe parent
+  // [helper-runtime-smoke] diagnostics; no raw child stderr or helper child
+  // output forwarded.
+  const adapterStderr = adapterResult.stderr ?? "";
+  const adapterStderrLines = adapterStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  adapterStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `synthetic-adapter public stderr line without safe prefix: ${line}`,
+        adapterResult,
+      );
+    }
+  });
+
+  const adapterForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of adapterForbiddenStderrMarkers) {
+    if (adapterStderr.includes(marker)) {
+      fail(
+        `synthetic-adapter public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        adapterResult,
+      );
+    }
+  }
+};
+
+assertSyntheticAdapterCaseMapping();
+
+console.log(
+  "Synthetic-adapter guard OK: deterministic in-range, out-of-range, and " +
+    "exact-boundary adapter-style values parsed from live helper stdout are " +
+    "mapped and clamped exactly as expected, public stdout stays " +
+    "MotionFrame-JSON-only, and helper stdout/stderr stay private to Native Core.",
+);

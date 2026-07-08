@@ -52,6 +52,7 @@ struct HelperOptions {
   bool emitMalformedReady = false;
   bool emitMalformedResultSchema = false;
   bool emitMalformedStoppedSchema = false;
+  bool emitAdapterValues = false;
 };
 
 bool parseIntInRange(
@@ -81,7 +82,7 @@ void printUsage(std::ostream &output) {
             "[--emit-timeout-forced-shutdown] [--fail-after N] "
             "[--skip-ready] [--skip-stopped] [--emit-malformed-ready] "
             "[--emit-malformed-result-schema] "
-            "[--emit-malformed-stopped-schema]\n";
+            "[--emit-malformed-stopped-schema] [--emit-adapter-values]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -175,6 +176,19 @@ void printUsage(std::ostream &output) {
             "failure vector so Native Core can confirm the normal parse path fails "
             "closed when the stopped line carries an invalid schema version. It "
             "stays synthetic only and is not a MotionFrame.\n";
+  output << "--emit-adapter-values is a test-only mode that replaces each normal "
+            "\"result\" line's fixed values with one of three deterministic "
+            "per-frame adapter-style patterns (cycling by frame index): an "
+            "in-range pattern, an out-of-range pattern (values outside the "
+            "confidence/eye/mouth [0,1] and rotation [-1,1] ranges), and an "
+            "exact-boundary pattern. It models a synthetic backend/adapter "
+            "emitting varying values so Native Core's helper-runtime parse and "
+            "clamp mapping can be exercised end-to-end through live captured "
+            "stdout, not just direct in-process struct construction. The helper "
+            "otherwise completes normally (emits the ready line, the "
+            "\"stopped\" line, and exits 0). It stays synthetic only, carries no "
+            "raw data, paths, secrets, pixels, tensors, or model contents, and "
+            "is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -302,6 +316,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       continue;
     }
 
+    if (argument == "--emit-adapter-values") {
+      options.emitAdapterValues = true;
+      continue;
+    }
+
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --fail-after.\n";
@@ -413,6 +432,65 @@ void writeResultLine(std::ostream &output, long long timestampMs) {
          << "\"mouth\":{"
          << "\"open\":" << 0.0 << ","
          << "\"smile\":" << 0.0 << "},"
+         << "\"diag\":{\"inferenceMs\":" << 0.0 << "}}\n";
+}
+
+// Emits a synthetic internal helper "result" line using one of three
+// deterministic adapter-style value patterns, cycling by frameIndex % 3:
+//   0 = in-range: plausible tracking values already inside the mapper's
+//       accepted ranges.
+//   1 = out-of-range: values deliberately outside confidence/eye/mouth [0,1]
+//       and rotation [-1,1] so Native Core's clamp mapping must engage.
+//   2 = exact-boundary: values sitting exactly at the clamp boundaries.
+// This models a synthetic backend/adapter emitting varying values so the
+// existing parse-and-clamp mapping is exercised through live captured stdout
+// text (not just direct in-process struct construction, which
+// lvk-helper-result-mapping-smoke already covers). It is intentionally NOT a
+// MotionFrame and contains no raw data, paths, secrets, pixels, tensors, or
+// model contents. Smoke-local / test-only.
+void writeAdapterResultLine(
+    std::ostream &output,
+    int frameIndex,
+    long long timestampMs) {
+  struct AdapterPattern {
+    double confidence;
+    double pitch;
+    double yaw;
+    double roll;
+    double leftOpen;
+    double rightOpen;
+    double mouthOpen;
+    double mouthSmile;
+  };
+
+  static const AdapterPattern kPatterns[3] = {
+      // In-range.
+      {0.82, 0.30, -0.25, 0.10, 0.75, 0.65, 0.40, 0.55},
+      // Out-of-range (must be clamped by createTrackingSampleFromHelperResult).
+      {1.75, 4.20, -3.50, 2.00, 1.50, -0.50, 2.00, -1.00},
+      // Exact boundary values.
+      {1.00, -1.00, 1.00, 0.00, 0.00, 1.00, 1.00, 0.00},
+  };
+
+  const AdapterPattern &pattern = kPatterns[frameIndex % 3];
+
+  output << std::fixed << std::setprecision(6);
+  output << "{"
+         << "\"type\":\"result\","
+         << "\"schemaVersion\":" << kHelperSchemaVersion << ","
+         << "\"timestampMs\":" << timestampMs << ","
+         << "\"status\":\"tracking\","
+         << "\"confidence\":" << pattern.confidence << ","
+         << "\"faceRotation\":{"
+         << "\"pitch\":" << pattern.pitch << ","
+         << "\"yaw\":" << pattern.yaw << ","
+         << "\"roll\":" << pattern.roll << "},"
+         << "\"eyes\":{"
+         << "\"leftOpen\":" << pattern.leftOpen << ","
+         << "\"rightOpen\":" << pattern.rightOpen << "},"
+         << "\"mouth\":{"
+         << "\"open\":" << pattern.mouthOpen << ","
+         << "\"smile\":" << pattern.mouthSmile << "},"
          << "\"diag\":{\"inferenceMs\":" << 0.0 << "}}\n";
 }
 
@@ -595,7 +673,11 @@ int main(int argc, char *argv[]) {
 
     const long long timestampMs =
         static_cast<long long>(frameIndex) * kSyntheticTimestampStepMs;
-    writeResultLine(std::cout, timestampMs);
+    if (options.emitAdapterValues) {
+      writeAdapterResultLine(std::cout, frameIndex, timestampMs);
+    } else {
+      writeResultLine(std::cout, timestampMs);
+    }
     ++emittedResultCount;
 
     if (options.intervalMs > 0) {
