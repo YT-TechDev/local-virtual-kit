@@ -9,6 +9,9 @@
 // + H2 helper lifecycle handshake failure guards (launch-failure, nonzero-exit,
 //   timeout, missing-ready, missing-stopped, malformed-ready: fail closed with
 //   zero public stdout, safe parent stderr only).
+// + H2 helper-runtime-smoke case-without-path isolation guard (selecting
+//   --helper-runtime-smoke-case without --helper-runtime-smoke PATH fails closed
+//   and does not fall through to the default camera runtime).
 //
 // Positive control: runs lvk-tracker-core with the explicit --helper-runtime-smoke
 // path and validates that stdout contains only existing MotionFrame JSON while
@@ -1061,4 +1064,105 @@ console.log(
     "missing-ready, missing-stopped, and malformed-ready each fail closed with " +
     "non-zero exit, zero public stdout lines, safe parent-prefixed stderr only, " +
     "and helper stdout/stderr kept private to Native Core.",
+);
+
+// --- H2 helper-runtime-smoke case-without-path isolation guard ---------------
+// Selecting a helper runtime smoke case via --helper-runtime-smoke-case WITHOUT
+// providing --helper-runtime-smoke PATH must FAIL CLOSED. The Native Core CLI
+// rejects the invocation (see main.cpp) rather than silently discarding the
+// requested helper runtime state and falling through to the DEFAULT camera
+// runtime. This protects the smoke-path isolation boundary from the opposite
+// direction of the Gate 2 default-runtime guard: Gate 2 proves that omitting the
+// smoke flags leaves the default path untouched; this guard proves that asking
+// for a smoke case without the explicit helper path does not accidentally emit
+// default-runtime MotionFrames on public stdout. The run must exit non-zero,
+// produce ZERO public stdout lines (no MotionFrame, no fallback frame, no helper
+// output), and report the safe fail-closed reason on public stderr. It needs no
+// helper child and no camera, so it is synthetic/smoke-only and CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md
+// and the narrow implementation gate decision
+// docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_DECISION.md.
+
+const caseWithoutPathReason =
+  "--helper-runtime-smoke-case requires --helper-runtime-smoke PATH.";
+
+const assertCaseWithoutPathIsolationGuard = (caseName) => {
+  // Deliberately pass --helper-runtime-smoke-case WITHOUT --helper-runtime-smoke.
+  // --frames 3 is a valid default-runtime argument; if the CLI wrongly fell
+  // through to the default camera runtime it would emit 3 MotionFrame lines here.
+  const caseResult = spawnSync(
+    trackerPath,
+    ["--frames", "3", "--helper-runtime-smoke-case", caseName],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (caseResult.error) {
+    fail(
+      `could not run case-without-path ${caseName} ${trackerPath}: ${caseResult.error.message}`,
+      caseResult,
+    );
+  }
+
+  // Fail-closed: a smoke case without the explicit helper path must exit non-zero.
+  if (caseResult.status === 0) {
+    fail(
+      `expected non-zero exit for case-without-path ${caseName} (must not fall through to default runtime)`,
+      caseResult,
+    );
+  }
+
+  // Public stdout must be EMPTY: no default-runtime MotionFrames, no fallback
+  // frame, no helper output.
+  const caseStdout = caseResult.stdout ?? "";
+  const caseStdoutLines = caseStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (caseStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for case-without-path ${caseName}, got ${caseStdoutLines.length}`,
+      caseResult,
+    );
+  }
+
+  // No MotionFrame markers, helper smoke-path markers, or unsafe child markers may
+  // appear on public stdout.
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (caseStdout.includes(marker)) {
+      fail(
+        `case-without-path ${caseName} public stdout leaked marker ${JSON.stringify(marker)}`,
+        caseResult,
+      );
+    }
+  }
+
+  // The rejection must report the safe fail-closed reason on public stderr. (The
+  // CLI usage text is also printed here and legitimately mentions the helper flag
+  // names, so this guard asserts the fail-closed reason and stdout cleanliness
+  // rather than a stderr prefix.)
+  const caseStderr = caseResult.stderr ?? "";
+  if (!caseStderr.includes(caseWithoutPathReason)) {
+    fail(
+      `case-without-path ${caseName} public stderr did not report the fail-closed reason ${JSON.stringify(caseWithoutPathReason)}`,
+      caseResult,
+    );
+  }
+};
+
+// Cover a normal case and a fail-closed case name to show the guard is
+// independent of which case was requested: neither may fall through to the
+// default runtime when the explicit helper path is absent.
+assertCaseWithoutPathIsolationGuard("normal");
+assertCaseWithoutPathIsolationGuard("unsafe-diagnostic");
+
+console.log(
+  "Case-without-path isolation guard OK: --helper-runtime-smoke-case without " +
+    "--helper-runtime-smoke PATH fails closed with non-zero exit, zero public " +
+    "stdout lines, and the safe fail-closed reason on stderr; it does not fall " +
+    "through to the default camera runtime.",
 );
