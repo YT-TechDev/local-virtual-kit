@@ -1166,3 +1166,133 @@ console.log(
     "stdout lines, and the safe fail-closed reason on stderr; it does not fall " +
     "through to the default camera runtime.",
 );
+
+// --- H2 helper runtime normal-path malformed result schemaVersion guard -------
+// The NORMAL helper-runtime smoke parse path must accept schemaVersion exactly
+// equal to 1 and reject prefix cases such as schemaVersion:10. The new explicit
+// --helper-runtime-smoke-case malformed-result-schema makes the synthetic helper
+// emit one otherwise well-formed "result" line with schemaVersion:10 before its
+// normal result frames. Before the exact-boundary fix a bare "schemaVersion":1
+// substring match would have wrongly accepted that line and mapped it to a public
+// MotionFrame; the fixed parser rejects it and FAILS CLOSED. This guard asserts
+// the fail-closed public boundary: non-zero exit, EMPTY public stdout (no
+// MotionFrame, no fallback frame), public stderr limited to safe parent
+// [helper-runtime-smoke] diagnostics reporting the parse error, and no helper
+// lifecycle marker, raw child stderr, child stdout JSON, unsafe child output, or
+// policy/error text on any public stream. Helper stdout/stderr stay private to
+// Native Core. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md.
+
+const assertNormalPathMalformedResultSchemaRejected = () => {
+  const malformedResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperPath,
+      "--frames",
+      "3",
+      "--helper-runtime-smoke-case",
+      "malformed-result-schema",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (malformedResult.error) {
+    fail(
+      `could not run malformed-result-schema ${trackerPath}: ${malformedResult.error.message}`,
+      malformedResult,
+    );
+  }
+
+  // Fail-closed: the normal parse path must reject the malformed result line and
+  // exit non-zero.
+  if (malformedResult.status === 0) {
+    fail(
+      "expected non-zero exit for malformed-result-schema fail-closed case",
+      malformedResult,
+    );
+  }
+
+  // Public stdout must be EMPTY (no MotionFrame, no fallback frame): the parser
+  // rejects the malformed result line before mapping any MotionFrame.
+  const malformedStdout = malformedResult.stdout ?? "";
+  const malformedStdoutLines = malformedStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (malformedStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for malformed-result-schema, got ${malformedStdoutLines.length}`,
+      malformedResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, or unsafe child
+  // markers may appear on public stdout.
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (malformedStdout.includes(marker)) {
+      fail(
+        `malformed-result-schema public stdout leaked marker ${JSON.stringify(marker)}`,
+        malformedResult,
+      );
+    }
+  }
+
+  // Public stderr must be only safe parent [helper-runtime-smoke] diagnostics.
+  const malformedStderr = malformedResult.stderr ?? "";
+  const malformedStderrLines = malformedStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  malformedStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `malformed-result-schema public stderr line without safe prefix: ${line}`,
+        malformedResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output, or
+  // other forbidden child JSON / policy / error text.
+  const malformedForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of malformedForbiddenStderrMarkers) {
+    if (malformedStderr.includes(marker)) {
+      fail(
+        `malformed-result-schema public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        malformedResult,
+      );
+    }
+  }
+
+  // The parser must report the expected safe parse-error diagnostic for the
+  // rejected result line.
+  if (!malformedStderr.includes("missing result/schema marker")) {
+    fail(
+      "malformed-result-schema public stderr did not report the expected parse-error diagnostic",
+      malformedResult,
+    );
+  }
+};
+
+assertNormalPathMalformedResultSchemaRejected();
+
+console.log(
+  "Normal-path malformed-result-schema guard OK: a result line with " +
+    "schemaVersion:10 is rejected by exact-boundary parsing, fails closed with " +
+    "non-zero exit and zero public stdout lines, keeps public stderr to safe " +
+    "parent diagnostics only, and keeps helper stdout/stderr private to Native Core.",
+);

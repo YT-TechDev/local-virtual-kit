@@ -19,6 +19,18 @@ bool containsToken(const std::string& line, const std::string& token) {
   return line.find(token) != std::string::npos;
 }
 
+// Smoke-only: accept schemaVersion exactly equal to 1. In the compact helper JSON
+// contract the value is immediately followed by "," (more fields follow) or "}"
+// (end of object), so an exact match requires one of those boundaries. A bare
+// "schemaVersion":1 substring would also match "schemaVersion":10,
+// "schemaVersion":12, etc.; this boundary check rejects those prefix cases. Kept
+// file-local on purpose to mirror the equivalent local checks in the other H2
+// smokes (no new shared module).
+bool hasExactSchemaVersionOne(const std::string& line) {
+  return containsToken(line, "\"schemaVersion\":1,") ||
+         containsToken(line, "\"schemaVersion\":1}");
+}
+
 bool extractNumberAfter(
     const std::string& line,
     const std::string& key,
@@ -70,7 +82,7 @@ bool parseResultLine(
     HelperTrackingResult& result,
     std::string& reason) {
   if (!containsToken(line, "\"type\":\"result\"") ||
-      !containsToken(line, "\"schemaVersion\":1")) {
+      !hasExactSchemaVersionOne(line)) {
     reason = "missing result/schema marker";
     return false;
   }
@@ -196,6 +208,12 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-malformed-ready"};
   }
+  if (options.smokeCase == HelperRuntimeSmokeCase::MalformedResultSchema) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-malformed-result-schema"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 
@@ -283,13 +301,7 @@ int handleLifecycleHandshake(
   std::string line;
   while (std::getline(lines, line)) {
     if (containsToken(line, "\"type\":\"ready\"")) {
-      // Accept schemaVersion exactly equal to 1: in compact JSON the value is
-      // followed by "," or "}". A bare "schemaVersion":1 substring would also
-      // match "schemaVersion":10, "schemaVersion":12, etc.
-      const bool hasExactSchema =
-          containsToken(line, "\"schemaVersion\":1,") ||
-          containsToken(line, "\"schemaVersion\":1}");
-      if (hasExactSchema &&
+      if (hasExactSchemaVersionOne(line) &&
           containsToken(line, "\"source\":\"synthetic-helper\"")) {
         sawReady = true;
       } else {
@@ -297,8 +309,7 @@ int handleLifecycleHandshake(
       }
     } else if (
         containsToken(line, "\"type\":\"stopped\"") &&
-        (containsToken(line, "\"schemaVersion\":1,") ||
-         containsToken(line, "\"schemaVersion\":1}"))) {
+        hasExactSchemaVersionOne(line)) {
       sawStopped = true;
     }
   }
@@ -392,7 +403,7 @@ int runHelperRuntimeSmoke(
     }
 
     if (containsToken(line, "\"type\":\"ready\"")) {
-      if (!containsToken(line, "\"schemaVersion\":1") ||
+      if (!hasExactSchemaVersionOne(line) ||
           !containsToken(line, "\"source\":\"synthetic-helper\"")) {
         writeDiagnostic(
             diagnosticsOutput,
@@ -405,7 +416,7 @@ int runHelperRuntimeSmoke(
     }
 
     if (containsToken(line, "\"type\":\"stopped\"")) {
-      if (!containsToken(line, "\"schemaVersion\":1")) {
+      if (!hasExactSchemaVersionOne(line)) {
         writeDiagnostic(
             diagnosticsOutput,
             "parse error at helper stdout line " + std::to_string(lineIndex) +

@@ -50,6 +50,7 @@ struct HelperOptions {
   bool skipReady = false;
   bool skipStopped = false;
   bool emitMalformedReady = false;
+  bool emitMalformedResultSchema = false;
 };
 
 bool parseIntInRange(
@@ -77,7 +78,8 @@ void printUsage(std::ostream &output) {
             "[--delay-ready-ms N] [--emit-unknown-type] [--emit-malformed-line] "
             "[--emit-oversized-line] [--emit-graceful-shutdown] "
             "[--emit-timeout-forced-shutdown] [--fail-after N] "
-            "[--skip-ready] [--skip-stopped] [--emit-malformed-ready]\n";
+            "[--skip-ready] [--skip-stopped] [--emit-malformed-ready] "
+            "[--emit-malformed-result-schema]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -146,6 +148,18 @@ void printUsage(std::ostream &output) {
             "vector so Native Core can confirm it fails closed when the ready "
             "line is present but carries an invalid schema version. It stays "
             "synthetic only and is not a MotionFrame.\n";
+  output << "--emit-malformed-result-schema is a test-only mode that emits one "
+            "\"result\" line with an invalid schema version (schemaVersion:10 "
+            "instead of 1) before the normal result frames; the helper otherwise "
+            "completes normally (emits the ready line, valid result frames, the "
+            "\"stopped\" line, and exits 0). The value 10 is chosen to directly "
+            "test that the normal helper-runtime smoke parser does not accept "
+            "schemaVersion via a bare substring match of \"schemaVersion\":1 "
+            "(which would match schemaVersion:10). It is smoke-local / test-only "
+            "and models a malformed-result failure vector so Native Core can "
+            "confirm the normal parse path fails closed when a result line "
+            "carries an invalid schema version. It stays synthetic only and is "
+            "not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -263,6 +277,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       continue;
     }
 
+    if (argument == "--emit-malformed-result-schema") {
+      options.emitMalformedResultSchema = true;
+      continue;
+    }
+
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
         std::cerr << "Missing value for --fail-after.\n";
@@ -361,6 +380,36 @@ void writeResultLine(std::ostream &output, long long timestampMs) {
   output << "{"
          << "\"type\":\"result\","
          << "\"schemaVersion\":" << kHelperSchemaVersion << ","
+         << "\"timestampMs\":" << timestampMs << ","
+         << "\"status\":\"tracking\","
+         << "\"confidence\":" << 1.0 << ","
+         << "\"faceRotation\":{"
+         << "\"pitch\":" << 0.0 << ","
+         << "\"yaw\":" << 0.0 << ","
+         << "\"roll\":" << 0.0 << "},"
+         << "\"eyes\":{"
+         << "\"leftOpen\":" << 1.0 << ","
+         << "\"rightOpen\":" << 1.0 << "},"
+         << "\"mouth\":{"
+         << "\"open\":" << 0.0 << ","
+         << "\"smile\":" << 0.0 << "},"
+         << "\"diag\":{\"inferenceMs\":" << 0.0 << "}}\n";
+}
+
+// Emits a single synthetic internal helper "result" line with an INVALID schema
+// version (10 instead of 1). The value 10 is chosen deliberately: it shares the
+// digit "1" with the valid version, so the normal helper-runtime smoke parser must
+// NOT rely on a bare "schemaVersion":1 substring match (which would also match
+// "schemaVersion":10) and must instead match the exact boundary "schemaVersion":1,
+// or "schemaVersion":1}. The line is otherwise a well-formed result shape so that,
+// before the exact-boundary fix, a prefix match would wrongly accept it and map it
+// to a MotionFrame. It is intentionally NOT a MotionFrame and contains no raw data,
+// paths, secrets, pixels, tensors, or model contents. Smoke-local / test-only.
+void writeMalformedResultSchemaLine(std::ostream &output, long long timestampMs) {
+  output << std::fixed << std::setprecision(6);
+  output << "{"
+         << "\"type\":\"result\","
+         << "\"schemaVersion\":10,"
          << "\"timestampMs\":" << timestampMs << ","
          << "\"status\":\"tracking\","
          << "\"confidence\":" << 1.0 << ","
@@ -481,6 +530,18 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] emitting synthetic oversized line "
                  "(reason=synthetic-oversized-line)\n";
     writeOversizedLine(std::cout);
+  }
+
+  // Test-only: emit one synthetic "result" line carrying an INVALID schema
+  // version (schemaVersion:10) before the normal result frames. The normal
+  // helper-runtime smoke parser must reject it via exact-boundary schemaVersion
+  // matching and fail closed before writing any MotionFrame; a bare
+  // "schemaVersion":1 substring match would wrongly accept it. The helper
+  // otherwise continues normally.
+  if (options.emitMalformedResultSchema) {
+    std::cerr << "[helper] emitting synthetic malformed result schema line "
+                 "(reason=synthetic-malformed-result-schema)\n";
+    writeMalformedResultSchemaLine(std::cout, 0);
   }
 
   long long emittedResultCount = 0;
