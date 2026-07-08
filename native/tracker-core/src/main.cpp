@@ -147,7 +147,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
-            "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|malformed-result-schema|malformed-stopped-schema|malformed-ready-schema|unknown-stdout-line|malformed-stdout-line|bounded-oversized-stdout-line]]\n";
+            "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|helper-lifecycle-handshake-ready-timeout|malformed-result-schema|malformed-stopped-schema|malformed-ready-schema|unknown-stdout-line|malformed-stdout-line|bounded-oversized-stdout-line]]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -176,7 +176,7 @@ void printUsage(std::ostream &output) {
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
-  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, malformed-result-schema, malformed-stopped-schema, malformed-ready-schema, unknown-stdout-line, malformed-stdout-line, and bounded-oversized-stdout-line. Defaults to normal.\n";
+  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, helper-lifecycle-handshake-ready-timeout, malformed-result-schema, malformed-stopped-schema, malformed-ready-schema, unknown-stdout-line, malformed-stdout-line, and bounded-oversized-stdout-line. Defaults to normal.\n";
   output << "--print-runtime-capabilities prints compile-time and local capability information to stdout and exits without opening a camera or emitting MotionFrame data.\n";
 }
 
@@ -553,6 +553,9 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       } else if (smokeCase == "helper-lifecycle-handshake-malformed-ready") {
         options.helperRuntimeSmokeCase = lvk::tracker::HelperRuntimeSmokeCase::
             HelperLifecycleHandshakeMalformedReady;
+      } else if (smokeCase == "helper-lifecycle-handshake-ready-timeout") {
+        options.helperRuntimeSmokeCase = lvk::tracker::HelperRuntimeSmokeCase::
+            HelperLifecycleHandshakeReadyTimeout;
       } else if (smokeCase == "malformed-result-schema") {
         options.helperRuntimeSmokeCase =
             lvk::tracker::HelperRuntimeSmokeCase::MalformedResultSchema;
@@ -581,6 +584,7 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
                   << "helper-lifecycle-handshake-missing-ready, "
                   << "helper-lifecycle-handshake-missing-stopped, "
                   << "helper-lifecycle-handshake-malformed-ready, "
+                  << "helper-lifecycle-handshake-ready-timeout, "
                   << "malformed-result-schema, "
                   << "malformed-stopped-schema, "
                   << "malformed-ready-schema, "

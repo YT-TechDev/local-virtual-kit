@@ -14,6 +14,12 @@ namespace {
 
 constexpr int kHelperRuntimeSmokeTimeoutMs = 5000;
 constexpr int kHelperRuntimeSmokeHangTimeoutMs = 200;
+// Delay-before-ready used by the ready-timeout lifecycle-handshake case. It is
+// well above kHelperRuntimeSmokeHangTimeoutMs so the bounded supervisor
+// deterministically terminates the helper before it can emit its ready line.
+// The child is killed at the timeout, so the case's wall-clock cost stays near
+// kHelperRuntimeSmokeHangTimeoutMs, not this value.
+constexpr int kHelperLifecycleHandshakeReadyTimeoutDelayMs = 5000;
 
 bool containsToken(const std::string& line, const std::string& token) {
   return line.find(token) != std::string::npos;
@@ -208,6 +214,14 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-malformed-ready"};
   }
+  if (options.smokeCase ==
+      HelperRuntimeSmokeCase::HelperLifecycleHandshakeReadyTimeout) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--delay-ready-ms",
+        std::to_string(kHelperLifecycleHandshakeReadyTimeoutDelayMs)};
+  }
   if (options.smokeCase == HelperRuntimeSmokeCase::MalformedResultSchema) {
     return {
         "--frames",
@@ -368,7 +382,9 @@ int handleLifecycleHandshake(
 int smokeTimeoutMs(HelperRuntimeSmokeCase smokeCase) {
   const bool usesHangTimeout =
       smokeCase == HelperRuntimeSmokeCase::Timeout ||
-      smokeCase == HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout;
+      smokeCase == HelperRuntimeSmokeCase::HelperLifecycleHandshakeTimeout ||
+      smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeReadyTimeout;
   return usesHangTimeout ? kHelperRuntimeSmokeHangTimeoutMs
                          : kHelperRuntimeSmokeTimeoutMs;
 }
@@ -398,7 +414,9 @@ int runHelperRuntimeSmoke(
       options.smokeCase ==
           HelperRuntimeSmokeCase::HelperLifecycleHandshakeMissingStopped ||
       options.smokeCase ==
-          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMalformedReady) {
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeMalformedReady ||
+      options.smokeCase ==
+          HelperRuntimeSmokeCase::HelperLifecycleHandshakeReadyTimeout) {
     return handleLifecycleHandshake(helperRun, diagnosticsOutput);
   }
 

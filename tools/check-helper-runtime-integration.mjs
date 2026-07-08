@@ -7,8 +7,8 @@
 // + H2 Gate 7 helper runtime normal-path zero-frame public stream guard
 // + H2 helper lifecycle handshake explicit-smoke guard (zero public stdout)
 // + H2 helper lifecycle handshake failure guards (launch-failure, nonzero-exit,
-//   timeout, missing-ready, missing-stopped, malformed-ready: fail closed with
-//   zero public stdout, safe parent stderr only).
+//   timeout, missing-ready, missing-stopped, malformed-ready, ready-timeout:
+//   fail closed with zero public stdout, safe parent stderr only).
 // + H2 helper-runtime-smoke case-without-path isolation guard (selecting
 //   --helper-runtime-smoke-case without --helper-runtime-smoke PATH fails closed
 //   and does not fall through to the default camera runtime).
@@ -1059,11 +1059,32 @@ assertLifecycleHandshakeFailureGuard({
   expectedDiagnostic: "helper ready line malformed",
 });
 
+// ready-timeout: the synthetic helper is launched with --delay-ready-ms set well
+// above the bounded lifecycle-handshake smoke timeout, so it never emits the
+// "ready" lifecycle boundary before the supervisor terminates it. This is a
+// genuine helper ready-timeout at the H2 supervisor boundary -- distinct from
+// the existing lifecycle-handshake timeout vector above, whose paced helper
+// already emits "ready" (and a result) before its bounded timeout fires,
+// modeling post-ready silence rather than a missing ready boundary. The parent
+// observation must fail closed: non-zero exit, empty public stdout (no
+// MotionFrame, no fallback frame), and only the safe "[helper-runtime-smoke] "
+// "helper timed out" diagnostic on public stderr -- the same diagnostic the
+// existing lifecycle-handshake timeout vector reports, since both are detected
+// via the same supervised timeout check. Helper stdout/stderr stay private to
+// Native Core. This is explicit-smoke-only and adds no default runtime
+// behavior.
+assertLifecycleHandshakeFailureGuard({
+  vectorLabel: "lifecycle-handshake ready-timeout",
+  caseName: "helper-lifecycle-handshake-ready-timeout",
+  helperArg: helperPath,
+  expectedDiagnostic: "helper timed out",
+});
+
 console.log(
   "Lifecycle-handshake failure guards OK: launch-failure, nonzero-exit, timeout, " +
-    "missing-ready, missing-stopped, and malformed-ready each fail closed with " +
-    "non-zero exit, zero public stdout lines, safe parent-prefixed stderr only, " +
-    "and helper stdout/stderr kept private to Native Core.",
+    "missing-ready, missing-stopped, malformed-ready, and ready-timeout each fail " +
+    "closed with non-zero exit, zero public stdout lines, safe parent-prefixed " +
+    "stderr only, and helper stdout/stderr kept private to Native Core.",
 );
 
 // --- H2 helper-runtime-smoke case-without-path isolation guard ---------------
