@@ -29,6 +29,8 @@ The 2026-07-02 Native OpenCV stability and Electron dev root local smoke is reco
 
 For future packaged Electron builds, see [`docs/NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md`](./NATIVE_OPENCV_RUNTIME_PACKAGING_STRATEGY.md) for the Windows/vcpkg OpenCV runtime DLL handling strategy. Local/dev validation keeps the explicit `PATH` guidance below; packaged app behavior should be addressed in a separate implementation PR.
 
+The 2026-07-08 packaged Electron runtime validation follow-up is recorded in [`docs/reports/packaged-electron-runtime-validation-follow-up-2026-07-08.md`](./reports/packaged-electron-runtime-validation-follow-up-2026-07-08.md). That pass found the local `.lvk-native-runtime/bin/lvk-tracker-core.exe` staging binary was stale relative to the H2 helper-runtime guard work merged through 2026-07-08, refreshed it locally (git-ignored, not committed), and confirmed the packaged build (`apps/desktop` `npm run build:unpack`), the packaged tracker binary's dummy-mode output, and packaged-app process launch/clean-exit all succeed on this machine. It does not claim in-app native-pipeline GUI validation or browser/OBS visual observation against current `main`; the most recent full owner-performed pass for those remains the 2026-06-30 reports above, which predate the H2 helper-runtime guard commits.
+
 ## Automated checks
 
 Run these checks from the repository root when preparing a full local runtime verification pass. For a documentation-only change, `pnpm format:check` is the minimum required check; other runtime checks may be documented as not run when they are outside the change scope.
