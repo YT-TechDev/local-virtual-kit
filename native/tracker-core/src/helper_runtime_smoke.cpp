@@ -220,6 +220,12 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-malformed-stopped-schema"};
   }
+  if (options.smokeCase == HelperRuntimeSmokeCase::MalformedReadySchema) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-malformed-ready"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 
