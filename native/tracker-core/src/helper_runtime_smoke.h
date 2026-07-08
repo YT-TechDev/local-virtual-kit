@@ -73,6 +73,21 @@ enum class HelperRuntimeSmokeCase {
   // smoke-local observation only, NOT a production handshake, control channel,
   // supervisor, or fallback behavior.
   HelperLifecycleHandshakeMalformedReady,
+  // Smoke-only failure guard for the NORMAL helper-runtime smoke parse path:
+  // malformed-result-schema. The synthetic helper emits one "result" line with an
+  // invalid schema version (schemaVersion:10 instead of 1) before its normal
+  // result frames and otherwise completes cleanly (emits ready, valid result
+  // frames, the "stopped" line, and exits 0). The value 10 is chosen to directly
+  // exercise exact-boundary matching: a bare "schemaVersion":1 substring would
+  // incorrectly match "schemaVersion":10, so before the exact-boundary fix the
+  // parser would wrongly accept the malformed result line and map it to a
+  // MotionFrame. The normal parse path must FAIL CLOSED -- reject the malformed
+  // result line, emit NOTHING to public stdout (no MotionFrame, and deliberately
+  // no fallback frame), keep helper stdout/stderr private to Native Core, write
+  // only a safe "[helper-runtime-smoke] " parent diagnostic, and return non-zero.
+  // This is smoke-local parse hardening only, NOT a production parser, backend, or
+  // runtime.
+  MalformedResultSchema,
 };
 
 struct HelperRuntimeSmokeOptions {
