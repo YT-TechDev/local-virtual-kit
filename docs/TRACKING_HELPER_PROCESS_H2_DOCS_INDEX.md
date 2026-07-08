@@ -14,28 +14,17 @@ backend.
 This index is the single place to find the H2 helper-process design documents, their reading
 order, the current design state, and the one authoritative next step.
 
-The current active H2 boundary is the H2 helper lifecycle handshake failure guards closeout:
-[`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md).
-This is the next implementation PR after the helper lifecycle handshake success path (PR #227). It is
-**explicit-smoke-only and Native Core/checker bounded**: it adds fail-closed failure coverage for the
-lifecycle-handshake observation across three deterministic vectors — launch-failure (reuses the
-existing `helper-lifecycle-handshake` case with a non-existent helper path), and two new cases
-`helper-lifecycle-handshake-nonzero-exit` and `helper-lifecycle-handshake-timeout` that reuse existing
-synthetic helper failure modes (`--fail-after`, `--interval-ms`). Each vector routes through the
-**unchanged** `handleLifecycleHandshake` and fails closed: non-zero exit, **zero public stdout lines**
-(no MotionFrame, no fallback frame), public stderr limited to the expected safe parent
-`[helper-runtime-smoke] ` diagnostic, and helper stdout/stderr kept private to Native Core. A
-parametrized `assertLifecycleHandshakeFailureGuard()` was appended to
-`tools/check-helper-runtime-integration.mjs`. It changes no default runtime behavior, adds no fallback
-MotionFrame emission, does not change `synthetic_helper_main.cpp`, and makes **no new production
-runtime guarantee**. Gates 1 through 7, the foundation-boundary consolidation, and the PR #227
-handshake success guard remain closed and intact. Production and default runtime behavior remain
-**unapproved**. The missing-ready, missing-stopped, and malformed lifecycle failure vectors were
-deferred (they need new synthetic helper modes / handler-semantics changes). The recommended next
-direction after this closeout is to return to an owner decision — either draft the next narrow
-foundation implementation gate (optionally including the deferred vectors) or pause H2 for another LVK
-area — before any further implementation. The preceding H2 helper lifecycle handshake success closeout
-remains closed:
+The current active H2 status is a post-malformed-schema-guard refresh after three small
+helper-runtime slices under the #400 umbrella. The narrow helper runtime case-without-path guard
+landed in #409, the exact-boundary `schemaVersion` parsing fix landed in #411, and the malformed
+`stopped` schema guard landed in #413. These slices are complete as narrow Native Core / checker /
+synthetic-helper smoke coverage and do not approve production H2 integration, default helper runtime
+wiring, production supervisor behavior, MotionFrame schema changes, Motion Protocol changes, Electron /
+Web Preview changes, dependencies, telemetry, analytics, cloud upload, hidden network behavior, or any
+readiness claim. #400 remains open for the broader next local tracking backend / Native Core boundary
+prototype work. The recommended next step after this docs-only refresh is implementation-oriented: use
+the existing narrow gate boundaries to choose the next small implementation slice, not another broad
+docs rewrite. The preceding H2 helper lifecycle handshake success closeout remains closed:
 [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_SMOKE_CLOSEOUT.md).
 The preceding H2 Foundation Implementation
 Gate 2 decision remains closed:
@@ -544,6 +533,21 @@ H2 implementation is approved by this index itself.
     diagnostics-safety policy engine behavior, fallback MotionFrame emission, MotionFrame / Motion
     Protocol changes, Electron / Web Preview changes, dependencies, network behavior, camera behavior,
     readiness claims, and any production runtime behavior remain **unapproved**.
+78. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md)
+    — closeout for #409: checker-only coverage proving `--helper-runtime-smoke-case` without an
+    explicit `--helper-runtime-smoke PATH` fails closed instead of falling through to the default
+    camera runtime. Records implementation state only; no default runtime wiring, production H2
+    integration, MotionFrame change, dependency, network behavior, or readiness claim was added.
+79. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md)
+    — closeout for #411 / #410: Native Core helper-runtime smoke parser hardening that requires
+    exact-boundary `schemaVersion` parsing for internal helper `result`, `ready`, and `stopped` lines,
+    rejecting prefix cases such as `schemaVersion:10`. Records implementation state only; MotionFrame
+    schema and Motion Protocol remain unchanged, and #400 remains open.
+80. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STOPPED_SCHEMA_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STOPPED_SCHEMA_GUARD_CLOSEOUT.md)
+    — closeout for #413 / #412: dedicated malformed-`stopped` `schemaVersion:10` guard coverage on
+    the helper-runtime smoke path. Records implementation state only; it adds no parser branch beyond
+    the exact-boundary behavior, no default runtime wiring, no MotionFrame change, and no readiness
+    claim.
 
 Background:
 
@@ -817,6 +821,15 @@ Background:
   behavior, fallback MotionFrame emission, MotionFrame / Motion Protocol change, Electron / Web Preview
   change, dependency, network behavior, camera behavior, or readiness claim is added. See
   [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_LIFECYCLE_HANDSHAKE_FAILURE_GUARDS_CLOSEOUT.md).
+- The post-handshake narrow helper-runtime guard sequence is complete: #409 added the checker-only
+  case-without-path fail-closed guard, #411 fixed helper-runtime smoke `schemaVersion` parsing to
+  require an exact boundary instead of accepting prefixes such as `schemaVersion:10`, and #413 added
+  dedicated malformed-`stopped` schema guard coverage. These remain small guard / smoke / test slices
+  under the #400 umbrella; #400 stays open for the broader next local tracking backend / Native Core
+  boundary prototype work. See
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md),
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md), and
+  [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STOPPED_SCHEMA_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STOPPED_SCHEMA_GUARD_CLOSEOUT.md).
 - No production H2 integration exists; the default `lvk-tracker-core` runtime remains unchanged
   (the helper is not wired into it).
 - No real frame access, helper-owned camera capture, new dependency, or MotionFrame schema
@@ -952,11 +965,11 @@ These boundaries are preserved across all H2 docs:
   The current active boundary is the H2 Foundation Implementation Gate 2 decision:
   [`docs/TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md`](TRACKING_HELPER_PROCESS_H2_FOUNDATION_IMPLEMENTATION_GATE_2_DECISION.md).
   H2 Foundation Gate 1 inventory/map is complete, the first foundation implementation gate boundary
-  assertion closeout is closed, and the post Foundation Gate 1 owner decision is closed. Gate 2
-  approves only the next gate boundary, not implementation. Implementation remains unapproved until a
-  later implementation PR defines exact allowed files and excluded surfaces, preserves default runtime
-  behavior when `--helper-runtime-smoke` is omitted, preserves public/private stream boundaries, and
-  is reviewed against Gate 2. Do not proceed to production H2
+  assertion closeout is closed, and the post Foundation Gate 1 owner decision is closed. The later
+  narrow helper-runtime case-without-path, exact-boundary schema parsing, and malformed-`stopped`
+  schema guard slices have landed as #409 / #411 / #413. #400 remains open. The next step should be a
+  small implementation-oriented slice under the existing boundaries, not another broad docs rewrite.
+  Do not proceed to production H2
   integration, default helper runtime wiring, default `lvk-tracker-core` H2 runtime wiring,
   production supervisor behavior, production diagnostics-safety policy engine behavior, fallback
   MotionFrame behavior, fallback MotionFrame emission, MotionFrame schema changes, Motion Protocol
@@ -994,10 +1007,13 @@ These boundaries are preserved across all H2 docs:
 - [`docs/TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md`](TRACKING_HELPER_PROCESS_H2_IMPLEMENTATION_GATE_REQUIREMENTS.md)
   — fifth Option B planning document defining requirements for any future implementation gate while
   keeping implementation and production runtime behavior unapproved.
-- [`docs/TRACKING_HELPER_PROCESS_H2_POST_GATE_6_OWNER_DECISION.md`](TRACKING_HELPER_PROCESS_H2_POST_GATE_6_OWNER_DECISION.md)
-  — current active H2 boundary after the Gate 6 closeout; records that Gate 6 is closed, Gates 1
-  through 6 remain closed and are not reopened, and the next step is owner decision, not direct
-  implementation.
+- [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STOPPED_SCHEMA_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STOPPED_SCHEMA_GUARD_CLOSEOUT.md)
+  — latest narrow helper-runtime guard closeout in this index refresh; records the malformed
+  `stopped` schema guard from #413 while keeping #400 open for broader implementation work.
+- [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SCHEMA_VERSION_EXACT_BOUNDARY_CLOSEOUT.md)
+  — exact-boundary helper-runtime smoke `schemaVersion` parsing closeout from #411 / #410.
+- [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_SMOKE_CASE_WITHOUT_PATH_GUARD_CLOSEOUT.md)
+  — narrow helper-runtime case-without-path fail-closed guard closeout from #409.
 - [`docs/TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md`](TRACKING_HELPER_PROCESS_H2_NARROW_IMPLEMENTATION_GATE_6_DECISION.md)
   — owner decision that approved only the now-closed narrow synthetic/smoke-only checker
   implementation, not production runtime behavior.
