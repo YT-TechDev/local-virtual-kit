@@ -443,6 +443,19 @@ No MotionFrame schema changes are needed for a basic mapping. Richer output (all
 
 MediaPipe Face Landmarker output fields (478 landmarks, 52 blendshapes, 4×4 transformation matrix) are confirmed available via the Python Tasks route on Windows 11. A basic MotionFrame mapping is feasible without schema changes. **MediaPipe Face Landmarker remains a candidate only. No tracking backend is selected by this pass. No production dependency is added. No model/task file is committed. No MotionFrame schema change is made. Any production integration requires a separate architecture and implementation PR.**
 
+### Pass 5 — Helper-process synthetic prototype re-confirmation (2026-07-08)
+
+- Date: 2026-07-08
+- Machine / OS: Windows 11 Pro, x86-64 (developer workstation)
+- Full report: [`docs/reports/v0.3-tracking-backend-diagnostics-evidence-2026-07-08.md`](reports/v0.3-tracking-backend-diagnostics-evidence-2026-07-08.md)
+- Scope: camera-free re-confirmation of the safe baselines plus the new helper-process synthetic prototype now on `main`. No webcam, Electron, OBS, or rebuild was performed; no backend was selected.
+- Evidence collected (all exit 0):
+  - `--print-runtime-capabilities`: `opencvCameraSupport=true`, `opencvFaceDetectorSupport=true`, `supportedCameraSources=dummy,opencv`, `supportedFaceDetectors=noop,opencv`, `localOnly=true`.
+  - Dummy/noop finite pass: 5 valid MotionFrame JSON lines on stdout; `resultSource=none`, `usedFallbackTracking`, and `hasFace=false` on stderr (#391/#392 diagnostics); sub-millisecond pipeline stages.
+  - Helper synthetic smokes: `--helper-runtime-smoke` (`normal`, `helper-lifecycle-handshake`), `lvk-helper-result-mapping-smoke` (`mappedCaseCount=5`), `lvk-helper-process-supervision-smoke` (normal/failure/timeout/high-volume passed), `lvk-helper-h2-state-machine-smoke` (11 lifecycle cases passed). Public stdout stayed MotionFrame JSON; diagnostics stayed on stderr.
+  - `pnpm format:check` and `pnpm test:motion-validator-import`: pass.
+- Decision impact: The recommended Native Core-owned helper-process boundary has moved from design to a passing synthetic prototype (H1 contract + H2 synthetic smokes). The in-process MediaPipe C++/ONNX route remains deferred and OpenCV Haar remains smoke/baseline only. The active boundary is the **H2 production-runtime planning gate**, which stays blocked behind the explicit owner Option A/B/C decision in [`TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OWNER_DECISION_RECORD.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OWNER_DECISION_RECORD.md). No backend selected, no dependency added, no model/task file committed, no MotionFrame schema change, no production readiness claimed.
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
