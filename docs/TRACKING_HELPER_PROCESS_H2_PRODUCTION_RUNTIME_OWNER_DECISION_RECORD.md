@@ -2,13 +2,12 @@
 
 ## Status
 
-Status: docs-only owner-decision record / decision request after the H2 production-runtime planning
-gate.
-Scope: records the pending owner decision about whether LVK should enter H2 production-runtime
-planning.
+Status: docs-only owner-decision record after the H2 production-runtime planning gate.
+Scope: records the project owner's explicit Option B decision for issue #405: approve docs-only
+production-runtime planning only.
 
-This document does not choose an option, approve production-runtime planning, approve production
-implementation, approve default runtime wiring, or claim production readiness.
+This document records that docs-only production-runtime planning may proceed. It does not approve
+production implementation, approve default runtime wiring, or claim production readiness.
 
 ## Purpose
 
@@ -16,27 +15,27 @@ The H2 standalone synthetic-smoke vector phase is closed, and the production-run
 now the active boundary. This record makes the required owner decision explicit without entering
 production-runtime planning.
 
-Only the project owner can choose whether H2 remains blocked, moves into docs-only
-production-runtime planning, or is deferred.
+The project owner has chosen Option B: approve docs-only production-runtime planning only.
 
-## Current Default Decision State
+## Recorded Owner Decision
 
-Until the owner explicitly records a decision elsewhere:
+For issue #405, the project owner selected **Option B: Approve Docs-Only Production-Runtime
+Planning Only**.
 
-- production-runtime planning is not approved;
-- production implementation is not approved;
-- default `lvk-tracker-core` runtime wiring is not approved;
-- production helper process supervisor behavior is not approved;
-- production fail-closed fallback MotionFrame behavior is not approved;
-- all production behavior remains gated.
+This decision means:
 
-## Decision Required from Owner
-
-The owner must explicitly choose one of the decision options below before any H2
-production-runtime planning starts. This document is only the decision record / request; it does not
-select an option.
+- docs-only, source-grounded production-runtime planning may proceed in future PRs;
+- production implementation remains separately gated and is still not approved;
+- default `lvk-tracker-core` runtime wiring remains not approved;
+- production helper process supervisor behavior remains not approved;
+- production fail-closed fallback MotionFrame behavior remains not approved;
+- real camera access, helper-owned camera capture, raw-frame / pixel / tensor IPC, runtime
+  dependency changes, and MotionFrame schema changes remain not approved;
+- production readiness is not claimed.
 
 ## Decision Options
+
+The selected option is **Option B**. Options A and C remain listed for historical context only.
 
 ### Option A: Keep Production-Runtime Planning Blocked
 
@@ -127,13 +126,11 @@ analytics, cloud upload, external frame processing, hidden network calls, or net
 
 ## Next Possible PRs
 
-Before the owner chooses an option, the next possible PRs remain limited to docs-only decision
-clarification that does not enter production-runtime planning.
-
-If the owner explicitly chooses Option B, future PRs may propose docs-only, source-grounded
+Because the owner selected Option B, future PRs may propose docs-only, source-grounded
 production-runtime planning documents. Implementation remains separately gated.
 
-If the owner chooses Option A or Option C, future H2 work remains limited by that decision.
+Any future implementation PR still requires a separate owner approval, dedicated scope, validation
+plan, and non-goal list before work starts.
 
 ## Cross-References
 
