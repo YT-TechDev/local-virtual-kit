@@ -232,6 +232,12 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-unknown-type"};
   }
+  if (options.smokeCase == HelperRuntimeSmokeCase::MalformedStdoutLine) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-malformed-line"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 

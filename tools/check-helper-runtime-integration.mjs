@@ -1700,3 +1700,146 @@ console.log(
     "stdout lines, keeps public stderr to safe parent diagnostics only, and keeps " +
     "helper stdout/stderr private to Native Core.",
 );
+
+// --- H2 helper runtime normal-path malformed stdout line guard ----------------
+// The NORMAL helper-runtime smoke parse path recognizes only the known helper
+// stdout line types ("ready", "result", "stopped"); any other line reaches the
+// terminal unknown-line branch and is treated as a parse error. The new explicit
+// --helper-runtime-smoke-case malformed-stdout-line reuses the synthetic helper's
+// --emit-malformed-line mode so the helper emits one short, intentionally invalid
+// helper-output line ("{\"type\":\"malformed-synthetic\" this-is-not-valid-helper-
+// json") immediately after the "ready" line. Unlike unknown-stdout-line, whose
+// extra line is a WELL-FORMED helper object with an unrecognized "type", this line
+// is deliberately malformed (missing delimiters and a closing brace); on the normal
+// parse path it still matches none of the recognized branches and reaches the SAME
+// terminal unknown-line branch. Run with --frames 0 so the parser observes the
+// ready boundary, then reaches the malformed line as the second line and FAILS
+// CLOSED before any result frame could be mapped. This locks the current
+// public/private stream boundary: a malformed helper stdout line cannot leak
+// helper output, emit a fallback MotionFrame, or silently fall through. This guard
+// asserts the fail-closed public boundary: non-zero exit, EMPTY public stdout (no
+// MotionFrame, no fallback frame), public stderr limited to safe parent
+// [helper-runtime-smoke] diagnostics reporting the unknown-line parse error, and no
+// helper lifecycle marker, raw child stderr, child stdout JSON, unsafe child
+// output, or policy/error text on any public stream. Helper stdout/stderr stay
+// private to Native Core. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_STDOUT_LINE_GUARD_CLOSEOUT.md.
+
+const assertNormalPathMalformedStdoutLineRejected = () => {
+  const malformedResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperPath,
+      "--frames",
+      "0",
+      "--helper-runtime-smoke-case",
+      "malformed-stdout-line",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (malformedResult.error) {
+    fail(
+      `could not run malformed-stdout-line ${trackerPath}: ${malformedResult.error.message}`,
+      malformedResult,
+    );
+  }
+
+  // Fail-closed: the normal parse path must reject the malformed line and exit
+  // non-zero.
+  if (malformedResult.status === 0) {
+    fail(
+      "expected non-zero exit for malformed-stdout-line fail-closed case",
+      malformedResult,
+    );
+  }
+
+  // Public stdout must be EMPTY (no MotionFrame, no fallback frame): with
+  // --frames 0 the parser reaches and rejects the malformed line before mapping
+  // any MotionFrame.
+  const malformedStdout = malformedResult.stdout ?? "";
+  const malformedStdoutLines = malformedStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (malformedStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for malformed-stdout-line, got ${malformedStdoutLines.length}`,
+      malformedResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, or unsafe child
+  // markers may appear on public stdout (covers the private malformed helper
+  // line's "type" marker, helper lifecycle markers, raw child stderr forms, child
+  // stdout JSON markers, unsafe child output, and policy/error text).
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (malformedStdout.includes(marker)) {
+      fail(
+        `malformed-stdout-line public stdout leaked marker ${JSON.stringify(marker)}`,
+        malformedResult,
+      );
+    }
+  }
+
+  // Public stderr must be only safe parent [helper-runtime-smoke] diagnostics.
+  const malformedStderr = malformedResult.stderr ?? "";
+  const malformedStderrLines = malformedStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  malformedStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `malformed-stdout-line public stderr line without safe prefix: ${line}`,
+        malformedResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output, or
+  // other forbidden child JSON / policy / error text. The private malformed line's
+  // "malformed-synthetic" marker must not leak either.
+  const malformedForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+    "malformed-synthetic",
+  ];
+  for (const marker of malformedForbiddenStderrMarkers) {
+    if (malformedStderr.includes(marker)) {
+      fail(
+        `malformed-stdout-line public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        malformedResult,
+      );
+    }
+  }
+
+  // The parser must report the expected safe parse-error diagnostic for the
+  // rejected malformed line (it reaches the same terminal unknown-line branch).
+  if (!malformedStderr.includes("unknown line type")) {
+    fail(
+      "malformed-stdout-line public stderr did not report the expected parse-error diagnostic",
+      malformedResult,
+    );
+  }
+};
+
+assertNormalPathMalformedStdoutLineRejected();
+
+console.log(
+  "Normal-path malformed-stdout-line guard OK: a short intentionally invalid " +
+    "helper stdout line is rejected as a parse error, fails closed with non-zero " +
+    "exit and zero public stdout lines, keeps public stderr to safe parent " +
+    "diagnostics only, and keeps helper stdout/stderr private to Native Core.",
+);
