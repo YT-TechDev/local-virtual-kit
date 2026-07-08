@@ -111,3 +111,4 @@ approved after planning, with a dedicated scope, validation plan, and non-goal l
 - [H2 production runtime scope gate](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SCOPE_GATE.md)
 - [H2 validation scope gate](TRACKING_HELPER_PROCESS_H2_VALIDATION_SCOPE_GATE.md)
 - [H2 local runtime validation plan](TRACKING_HELPER_PROCESS_H2_LOCAL_RUNTIME_VALIDATION_PLAN.md)
+- [H2 production-runtime supervisor policy proposal](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_SUPERVISOR_POLICY_PROPOSAL.md)
