@@ -17,6 +17,10 @@ const FALLBACK_SOURCE_URL = new URL(
   "../apps/web-preview/src/motion/lostTrackingFallback.ts",
   import.meta.url,
 );
+const CALIBRATION_SOURCE_URL = new URL(
+  "../apps/web-preview/src/motion/faceFollowingCalibration.ts",
+  import.meta.url,
+);
 
 const requireFromWebPreview = createRequire(WEB_PREVIEW_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
@@ -62,10 +66,20 @@ const loadModules = async () => {
   const tempDir = await mkdtemp(join(tmpdir(), "lvk-lost-tracking-fallback-"));
 
   try {
+    const calibrationSource = await readFile(CALIBRATION_SOURCE_URL, "utf8");
+    await writeFile(
+      join(tempDir, "faceFollowingCalibration.mjs"),
+      transpileSource(calibrationSource, "faceFollowingCalibration.ts"),
+      "utf8",
+    );
+
     const mapSource = await readFile(MAP_SOURCE_URL, "utf8");
     await writeFile(
       join(tempDir, "mapMotionFrameToAvatar.mjs"),
-      transpileSource(mapSource, "mapMotionFrameToAvatar.ts"),
+      transpileSource(mapSource, "mapMotionFrameToAvatar.ts").replace(
+        'from "./faceFollowingCalibration"',
+        'from "./faceFollowingCalibration.mjs"',
+      ),
       "utf8",
     );
 
