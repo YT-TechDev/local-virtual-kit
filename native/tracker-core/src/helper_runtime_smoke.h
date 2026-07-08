@@ -202,6 +202,23 @@ enum class HelperRuntimeSmokeCase {
   // is smoke-local parse hardening only, NOT a production parser, backend, or
   // runtime.
   BoundedOversizedStdoutLine,
+  // Smoke-only guard for the NORMAL helper-runtime smoke parse path:
+  // synthetic-adapter. The synthetic helper emits its normal "ready" line,
+  // then, for each result frame, one of three deterministic adapter-style
+  // value patterns cycling by frame index (in-range, out-of-range, and
+  // exact-boundary), via --emit-adapter-values, then its normal "stopped"
+  // line, and exits 0. This proves the synthetic helper/adapter boundary at
+  // the value level: the normal parse path (parseResultLine) must parse each
+  // pattern's numeric text and createTrackingSampleFromHelperResult must
+  // clamp out-of-range values while preserving in-range and boundary values,
+  // through LIVE captured helper stdout -- distinct from
+  // lvk-helper-result-mapping-smoke, which calls the mapper directly on
+  // hand-built structs and never parses live helper stdout text. It emits one
+  // mapped MotionFrame JSON line per result frame on public stdout (same
+  // shape as the Normal case), keeps helper stdout/stderr private to Native
+  // Core, and returns 0 on success. This is smoke-local adapter/value-mapping
+  // observation only, NOT a production backend, model, or runtime.
+  SyntheticAdapter,
 };
 
 struct HelperRuntimeSmokeOptions {
