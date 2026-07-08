@@ -13,6 +13,10 @@ const MAP_SOURCE_URL = new URL(
   "../apps/web-preview/src/motion/mapMotionFrameToAvatar.ts",
   import.meta.url,
 );
+const CALIBRATION_SOURCE_URL = new URL(
+  "../apps/web-preview/src/motion/faceFollowingCalibration.ts",
+  import.meta.url,
+);
 
 const requireFromWebPreview = createRequire(WEB_PREVIEW_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
@@ -82,22 +86,38 @@ const createOutOfRangeFrame = () => ({
   },
 });
 
-const loadMappingModule = async () => {
-  const source = await readFile(MAP_SOURCE_URL, "utf8");
-  const output = ts.transpileModule(source, {
+const transpileSource = (source, fileName) =>
+  ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.ES2022,
       target: ts.ScriptTarget.ES2022,
       verbatimModuleSyntax: true,
     },
-    fileName: "mapMotionFrameToAvatar.ts",
-  });
+    fileName,
+  }).outputText;
 
+const loadMappingModule = async () => {
   const tempDir = await mkdtemp(join(tmpdir(), "lvk-motion-mapping-"));
-  const tempModulePath = join(tempDir, "mapMotionFrameToAvatar.mjs");
-  await writeFile(tempModulePath, output.outputText, "utf8");
 
   try {
+    const calibrationSource = await readFile(CALIBRATION_SOURCE_URL, "utf8");
+    await writeFile(
+      join(tempDir, "faceFollowingCalibration.mjs"),
+      transpileSource(calibrationSource, "faceFollowingCalibration.ts"),
+      "utf8",
+    );
+
+    const mapSource = await readFile(MAP_SOURCE_URL, "utf8");
+    const tempModulePath = join(tempDir, "mapMotionFrameToAvatar.mjs");
+    await writeFile(
+      tempModulePath,
+      transpileSource(mapSource, "mapMotionFrameToAvatar.ts").replace(
+        'from "./faceFollowingCalibration"',
+        'from "./faceFollowingCalibration.mjs"',
+      ),
+      "utf8",
+    );
+
     return await import(pathToFileURL(tempModulePath).href);
   } finally {
     await rm(tempDir, { recursive: true, force: true });

@@ -1,4 +1,9 @@
 import type { MotionFrame, TrackingStatus } from "@lvk/motion-protocol";
+import {
+  applyFaceFollowingCalibration,
+  DEFAULT_FACE_FOLLOWING_CALIBRATION,
+  type FaceFollowingCalibration,
+} from "./faceFollowingCalibration";
 
 export type AvatarMotionState = {
   trackingStatus: TrackingStatus;
@@ -21,12 +26,6 @@ const clamp = (value: number, min: number, max: number): number => {
 };
 
 const clamp01 = (value: number): number => clamp(value, 0, 1);
-
-const FACE_POSITION_INPUT_MIN = -1;
-const FACE_POSITION_INPUT_MAX = 1;
-const FACE_POSITION_X_SENSITIVITY = 3.2;
-const FACE_POSITION_Y_SENSITIVITY = 2.4;
-const FACE_POSITION_Z_SENSITIVITY = 0.9;
 
 export const createNeutralAvatarMotionState = (
   status: TrackingStatus = "not_started",
@@ -223,29 +222,24 @@ export const applyRendererIdleApproximation = (
   };
 };
 
+/**
+ * Map a MotionFrame onto avatar motion. The optional `calibration` tunes the
+ * local face-following mapping of `face.position` onto the avatar root offset
+ * (per-axis center + sensitivity). It defaults to the baseline calibration,
+ * which reproduces the previous hard-coded mapping exactly, so dummy and native
+ * behavior is unchanged unless a caller passes a different calibration.
+ */
 export const mapMotionFrameToAvatar = (
   frame: MotionFrame,
+  calibration: FaceFollowingCalibration = DEFAULT_FACE_FOLLOWING_CALIBRATION,
 ): AvatarMotionState => {
   return {
     trackingStatus: frame.tracking.status,
     confidence: clamp01(frame.tracking.confidence),
-    rootPosition: [
-      clamp(
-        frame.face.position.x,
-        FACE_POSITION_INPUT_MIN,
-        FACE_POSITION_INPUT_MAX,
-      ) * FACE_POSITION_X_SENSITIVITY,
-      clamp(
-        frame.face.position.y,
-        FACE_POSITION_INPUT_MIN,
-        FACE_POSITION_INPUT_MAX,
-      ) * FACE_POSITION_Y_SENSITIVITY,
-      clamp(
-        frame.face.position.z,
-        FACE_POSITION_INPUT_MIN,
-        FACE_POSITION_INPUT_MAX,
-      ) * FACE_POSITION_Z_SENSITIVITY,
-    ],
+    rootPosition: applyFaceFollowingCalibration(
+      frame.face.position,
+      calibration,
+    ),
     headRotation: [
       clamp(frame.face.rotation.pitch, -1, 1),
       clamp(frame.face.rotation.yaw, -1, 1),
