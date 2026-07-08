@@ -51,6 +51,7 @@ struct HelperOptions {
   bool skipStopped = false;
   bool emitMalformedReady = false;
   bool emitMalformedResultSchema = false;
+  bool emitMalformedStoppedSchema = false;
 };
 
 bool parseIntInRange(
@@ -79,7 +80,8 @@ void printUsage(std::ostream &output) {
             "[--emit-oversized-line] [--emit-graceful-shutdown] "
             "[--emit-timeout-forced-shutdown] [--fail-after N] "
             "[--skip-ready] [--skip-stopped] [--emit-malformed-ready] "
-            "[--emit-malformed-result-schema]\n";
+            "[--emit-malformed-result-schema] "
+            "[--emit-malformed-stopped-schema]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << " (default " << kDefaultFrameCount << ").\n";
   output << "--interval-ms N must be an integer between 0 and " << kMaxIntervalMs
@@ -160,6 +162,19 @@ void printUsage(std::ostream &output) {
             "confirm the normal parse path fails closed when a result line "
             "carries an invalid schema version. It stays synthetic only and is "
             "not a MotionFrame.\n";
+  output << "--emit-malformed-stopped-schema is a test-only mode that emits the "
+            "\"stopped\" lifecycle boundary line with an invalid schema version "
+            "(schemaVersion:10 instead of 1) in place of the normal stopped line; "
+            "the helper otherwise completes normally (emits the ready line, its "
+            "result frames, then the malformed stopped line, and exits 0). The "
+            "value 10 is chosen to directly test that the normal helper-runtime "
+            "smoke parser does not accept schemaVersion via a bare substring match "
+            "of \"schemaVersion\":1 (which would match schemaVersion:10). Pairing "
+            "it with --frames 0 keeps the rejection ahead of any mapped result "
+            "frame. It is smoke-local / test-only and models a malformed-stopped "
+            "failure vector so Native Core can confirm the normal parse path fails "
+            "closed when the stopped line carries an invalid schema version. It "
+            "stays synthetic only and is not a MotionFrame.\n";
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
@@ -279,6 +294,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--emit-malformed-result-schema") {
       options.emitMalformedResultSchema = true;
+      continue;
+    }
+
+    if (argument == "--emit-malformed-stopped-schema") {
+      options.emitMalformedStoppedSchema = true;
       continue;
     }
 
@@ -461,6 +481,25 @@ void writeStoppedLine(std::ostream &output, const std::string &reason) {
          << "\"reason\":\"" << reason << "\"}\n";
 }
 
+// Emits the "stopped" lifecycle boundary line with an INVALID schema version (10
+// instead of 1) in place of the normal stopped line. The value 10 is chosen
+// deliberately: it shares the digit "1" with the valid version, so the normal
+// helper-runtime smoke parser must NOT rely on a bare "schemaVersion":1 substring
+// match (which would also match "schemaVersion":10) and must instead match the
+// exact boundary "schemaVersion":1, or "schemaVersion":1}. The line is otherwise a
+// well-formed stopped shape so that, before the exact-boundary fix, a prefix match
+// would wrongly accept it. It is intentionally NOT a MotionFrame and contains no
+// raw data, paths, secrets, pixels, tensors, or model contents. Smoke-local /
+// test-only.
+void writeMalformedStoppedSchemaLine(
+    std::ostream &output,
+    const std::string &reason) {
+  output << "{"
+         << "\"type\":\"stopped\","
+         << "\"schemaVersion\":10,"
+         << "\"reason\":\"" << reason << "\"}\n";
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -620,6 +659,20 @@ int main(int argc, char *argv[]) {
     std::cerr << "[helper] shutdown: skipping stopped line "
                  "(reason=synthetic-skip-stopped), emittedResultCount="
               << emittedResultCount << "\n";
+    return 0;
+  }
+
+  // Test-only: emit the "stopped" lifecycle boundary line with an INVALID schema
+  // version (schemaVersion:10) in place of the normal stopped line. The normal
+  // helper-runtime smoke parser must reject it via exact-boundary schemaVersion
+  // matching and fail closed; a bare "schemaVersion":1 substring match would
+  // wrongly accept it. The helper still exits 0 cleanly. Pairing this with
+  // --frames 0 keeps the rejection ahead of any mapped result frame.
+  if (options.emitMalformedStoppedSchema) {
+    std::cerr << "[helper] shutdown: emitting malformed stopped schema line "
+                 "(reason=synthetic-malformed-stopped-schema), emittedResultCount="
+              << emittedResultCount << "\n";
+    writeMalformedStoppedSchemaLine(std::cout, "completed");
     return 0;
   }
 
