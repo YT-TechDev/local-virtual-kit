@@ -141,6 +141,28 @@ enum class HelperRuntimeSmokeCase {
   // MotionFrame, or silently fall through. This is smoke-local parse hardening
   // only, NOT a production parser, backend, or runtime.
   UnknownStdoutLine,
+  // Smoke-only guard for the NORMAL helper-runtime smoke parse path:
+  // malformed-stdout-line. The synthetic helper emits one short, intentionally
+  // invalid helper-output line ("{\"type\":\"malformed-synthetic\" this-is-not-
+  // valid-helper-json") immediately after the "ready" line, and otherwise
+  // completes cleanly (emits -- with --frames 0 -- no result frames, then the
+  // "stopped" line, and exits 0). Unlike unknown-stdout-line, whose line is a
+  // WELL-FORMED helper object carrying an unrecognized "type", this line is
+  // deliberately malformed (missing delimiters and a closing brace). On the
+  // normal parse path the malformed line still matches none of the recognized
+  // "ready"/"result"/"stopped" branches, so it reaches the SAME terminal
+  // unknown-line branch. The parse path must FAIL CLOSED -- reject the malformed
+  // line as a parse error, emit NOTHING to public stdout (no MotionFrame, and
+  // deliberately no fallback frame), keep helper stdout/stderr private to Native
+  // Core, write only a safe "[helper-runtime-smoke] " parent diagnostic ("unknown
+  // line type"), and return non-zero. With --frames 0 the malformed line is the
+  // second line parsed, so the rejection lands before any result frame could be
+  // mapped and exactly zero public stdout lines are produced. This locks the
+  // current normal parse-path boundary: a malformed helper stdout line cannot
+  // leak helper output, emit a fallback MotionFrame, or silently fall through.
+  // This is smoke-local parse hardening only, NOT a production parser, backend,
+  // or runtime.
+  MalformedStdoutLine,
 };
 
 struct HelperRuntimeSmokeOptions {
