@@ -147,7 +147,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
-            "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|malformed-result-schema|malformed-stopped-schema]]\n";
+            "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|malformed-result-schema|malformed-stopped-schema|malformed-ready-schema]]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
   output << "--continuous emits frames until the process is stopped.\n";
@@ -176,7 +176,7 @@ void printUsage(std::ostream &output) {
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
-  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, malformed-result-schema, and malformed-stopped-schema. Defaults to normal.\n";
+  output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, malformed-result-schema, malformed-stopped-schema, and malformed-ready-schema. Defaults to normal.\n";
   output << "--print-runtime-capabilities prints compile-time and local capability information to stdout and exits without opening a camera or emitting MotionFrame data.\n";
 }
 
@@ -559,6 +559,9 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       } else if (smokeCase == "malformed-stopped-schema") {
         options.helperRuntimeSmokeCase =
             lvk::tracker::HelperRuntimeSmokeCase::MalformedStoppedSchema;
+      } else if (smokeCase == "malformed-ready-schema") {
+        options.helperRuntimeSmokeCase =
+            lvk::tracker::HelperRuntimeSmokeCase::MalformedReadySchema;
       } else {
         std::cerr << "Unsupported --helper-runtime-smoke-case: " << smokeCase
                   << ". Supported values are normal, launch-failure, "
@@ -569,8 +572,9 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
                   << "helper-lifecycle-handshake-missing-ready, "
                   << "helper-lifecycle-handshake-missing-stopped, "
                   << "helper-lifecycle-handshake-malformed-ready, "
-                  << "malformed-result-schema, and "
-                  << "malformed-stopped-schema.\n";
+                  << "malformed-result-schema, "
+                  << "malformed-stopped-schema, and "
+                  << "malformed-ready-schema.\n";
         printUsage(std::cerr);
         return false;
       }

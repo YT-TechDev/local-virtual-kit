@@ -548,6 +548,13 @@ H2 implementation is approved by this index itself.
     the helper-runtime smoke path. Records implementation state only; it adds no parser branch beyond
     the exact-boundary behavior, no default runtime wiring, no MotionFrame change, and no readiness
     claim.
+81. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_READY_SCHEMA_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_MALFORMED_READY_SCHEMA_GUARD_CLOSEOUT.md)
+    — closeout for #417: dedicated malformed-`ready` `schemaVersion:10` guard coverage on the
+    **normal** helper-runtime parse path (parallel to the malformed-`result` and malformed-`stopped`
+    guards; distinct from the lifecycle-handshake malformed-`ready` guard). Records implementation
+    state only; it reuses the synthetic helper `--emit-malformed-ready` mode, adds no parser branch
+    beyond the exact-boundary behavior, no default runtime wiring, no MotionFrame change, and no
+    readiness claim.
 
 Background:
 
