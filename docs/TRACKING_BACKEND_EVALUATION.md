@@ -456,6 +456,10 @@ MediaPipe Face Landmarker output fields (478 landmarks, 52 blendshapes, 4×4 tra
   - `pnpm format:check` and `pnpm test:motion-validator-import`: pass.
 - Decision impact: The recommended Native Core-owned helper-process boundary has moved from design to a passing synthetic prototype (H1 contract + H2 synthetic smokes). The in-process MediaPipe C++/ONNX route remains deferred and OpenCV Haar remains smoke/baseline only. The active boundary is the **H2 production-runtime planning gate**, which stays blocked behind the explicit owner Option A/B/C decision in [`TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OWNER_DECISION_RECORD.md`](TRACKING_HELPER_PROCESS_H2_PRODUCTION_RUNTIME_OWNER_DECISION_RECORD.md). No backend selected, no dependency added, no model/task file committed, no MotionFrame schema change, no production readiness claimed.
 
+### v0.3 prototype entry decision for #400 (2026-07-08)
+
+The first v0.3 local tracking backend prototype entry decision for #400 is recorded in [`TRACKING_BACKEND_V0_3_PROTOTYPE_ENTRY_DECISION.md`](TRACKING_BACKEND_V0_3_PROTOTYPE_ENTRY_DECISION.md). It converts this evaluation's Pass 1-5 evidence into a smallest next PR-sized slice recommendation without selecting a backend, adding a dependency, or committing a model file.
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
