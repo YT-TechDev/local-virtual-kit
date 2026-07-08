@@ -1,5 +1,7 @@
 # Tracking Helper Process H2 Docs Index
 
+> **Historical/reference index:** This file exists to navigate H2 helper-process history, Gate/Closeout/Decision records, and related reference material. Implementation agents should not load it by default. For current tasks, start with `docs/AGENTS.md`, the current issue/PR body, and exact task/source files first; open this index only when the task explicitly requires H2 helper-process history, H2 Gate/Closeout/Decision docs, or this exact file.
+
 ## Status
 
 Status: H2 design-doc navigation / status index.
