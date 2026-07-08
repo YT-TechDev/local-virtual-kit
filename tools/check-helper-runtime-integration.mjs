@@ -1843,3 +1843,150 @@ console.log(
     "exit and zero public stdout lines, keeps public stderr to safe parent " +
     "diagnostics only, and keeps helper stdout/stderr private to Native Core.",
 );
+
+// --- H2 helper runtime normal-path bounded oversized stdout line guard --------
+// The NORMAL helper-runtime smoke parse path recognizes only the known helper
+// stdout line types ("ready", "result", "stopped"); any other line reaches the
+// terminal unknown-line branch and is treated as a parse error. The new explicit
+// --helper-runtime-smoke-case bounded-oversized-stdout-line reuses the synthetic
+// helper's existing --emit-oversized-line mode so the helper emits one
+// deterministic, bounded oversized helper-output line (the "oversized-synthetic"
+// marker plus a few KB of safe filler) immediately after the "ready" line. The
+// line is deliberately bounded to a few KB (not multi-MB) so this stays
+// deterministic and memory-safe; this guard is a smoke-only fixture, NOT a
+// production line-size policy or streaming parser test. On the normal parse path
+// the oversized line carries none of the recognized type markers, so it reaches
+// the SAME terminal unknown-line branch as unknown-stdout-line and
+// malformed-stdout-line. Run with --frames 0 so the parser observes the ready
+// boundary, then reaches the oversized line as the second line and FAILS CLOSED
+// before any result frame could be mapped. This locks the current normal
+// parse-path boundary: a bounded oversized helper stdout line cannot leak helper
+// output, emit a fallback MotionFrame, or silently fall through. This guard
+// asserts the fail-closed public boundary: non-zero exit, EMPTY public stdout (no
+// MotionFrame, no fallback frame), public stderr limited to safe parent
+// [helper-runtime-smoke] diagnostics reporting the unknown-line parse error, and
+// no helper lifecycle marker, raw child stderr, child stdout JSON, unsafe child
+// output, policy/error text, or the "oversized-synthetic" marker on any public
+// stream. Helper stdout/stderr stay private to Native Core. This guard makes NO
+// production line-size policy, streaming parser, buffer management, or
+// memory-pressure claim. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_BOUNDED_OVERSIZED_STDOUT_LINE_GUARD_CLOSEOUT.md.
+
+const assertNormalPathBoundedOversizedStdoutLineRejected = () => {
+  const oversizedResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperPath,
+      "--frames",
+      "0",
+      "--helper-runtime-smoke-case",
+      "bounded-oversized-stdout-line",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (oversizedResult.error) {
+    fail(
+      `could not run bounded-oversized-stdout-line ${trackerPath}: ${oversizedResult.error.message}`,
+      oversizedResult,
+    );
+  }
+
+  // Fail-closed: the normal parse path must reject the bounded oversized line and
+  // exit non-zero.
+  if (oversizedResult.status === 0) {
+    fail(
+      "expected non-zero exit for bounded-oversized-stdout-line fail-closed case",
+      oversizedResult,
+    );
+  }
+
+  // Public stdout must be EMPTY (no MotionFrame, no fallback frame): with
+  // --frames 0 the parser reaches and rejects the oversized line before mapping
+  // any MotionFrame.
+  const oversizedStdout = oversizedResult.stdout ?? "";
+  const oversizedStdoutLines = oversizedStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (oversizedStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for bounded-oversized-stdout-line, got ${oversizedStdoutLines.length}`,
+      oversizedResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, unsafe child
+  // markers, or the oversized line's own marker may appear on public stdout.
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+    "oversized-synthetic",
+  ]) {
+    if (oversizedStdout.includes(marker)) {
+      fail(
+        `bounded-oversized-stdout-line public stdout leaked marker ${JSON.stringify(marker)}`,
+        oversizedResult,
+      );
+    }
+  }
+
+  // Public stderr must be only safe parent [helper-runtime-smoke] diagnostics.
+  const oversizedStderr = oversizedResult.stderr ?? "";
+  const oversizedStderrLines = oversizedStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  oversizedStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `bounded-oversized-stdout-line public stderr line without safe prefix: ${line}`,
+        oversizedResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output,
+  // other forbidden child JSON / policy / error text, or the private oversized
+  // line's own "oversized-synthetic" marker.
+  const oversizedForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+    "oversized-synthetic",
+  ];
+  for (const marker of oversizedForbiddenStderrMarkers) {
+    if (oversizedStderr.includes(marker)) {
+      fail(
+        `bounded-oversized-stdout-line public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        oversizedResult,
+      );
+    }
+  }
+
+  // The parser must report the expected safe parse-error diagnostic for the
+  // rejected oversized line (it reaches the same terminal unknown-line branch).
+  if (!oversizedStderr.includes("unknown line type")) {
+    fail(
+      "bounded-oversized-stdout-line public stderr did not report the expected parse-error diagnostic",
+      oversizedResult,
+    );
+  }
+};
+
+assertNormalPathBoundedOversizedStdoutLineRejected();
+
+console.log(
+  "Normal-path bounded-oversized-stdout-line guard OK: the existing bounded " +
+    "oversized helper stdout line is rejected as a parse error, fails closed " +
+    "with non-zero exit and zero public stdout lines, keeps public stderr to " +
+    "safe parent diagnostics only, and keeps helper stdout/stderr private to " +
+    "Native Core.",
+);

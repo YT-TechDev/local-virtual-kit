@@ -573,6 +573,16 @@ H2 implementation is approved by this index itself.
     branch already exists), no default runtime wiring, no MotionFrame change, and no readiness claim.
     Complements #419 (well-formed line with an unrecognized `type`) with the adjacent malformed-line
     case.
+84. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_BOUNDED_OVERSIZED_STDOUT_LINE_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_BOUNDED_OVERSIZED_STDOUT_LINE_GUARD_CLOSEOUT.md)
+    — closeout for #423: dedicated bounded-oversized-stdout-line guard coverage on the **normal**
+    helper-runtime parse path, proving the existing bounded oversized helper stdout line (via
+    `--emit-oversized-line`) reaches the same terminal `unknown line type` branch and fails closed
+    (non-zero exit, zero public stdout, safe parent stderr only, helper stdout/stderr private).
+    Records implementation state only; it reuses the synthetic helper's existing
+    `--emit-oversized-line` mode, adds no parser branch (the terminal unknown-line branch already
+    exists), no production line-size policy, no streaming parser behavior, no default runtime
+    wiring, no MotionFrame change, and no readiness claim. Complements #419/#421 (unknown-type and
+    malformed-line) with the adjacent bounded-oversized-line case.
 
 Background:
 

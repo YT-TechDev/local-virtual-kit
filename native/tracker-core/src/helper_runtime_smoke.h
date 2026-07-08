@@ -163,6 +163,30 @@ enum class HelperRuntimeSmokeCase {
   // This is smoke-local parse hardening only, NOT a production parser, backend,
   // or runtime.
   MalformedStdoutLine,
+  // Smoke-only guard for the NORMAL helper-runtime smoke parse path:
+  // bounded-oversized-stdout-line. The synthetic helper emits its existing
+  // bounded oversized helper-output line (the "oversized-synthetic" marker plus
+  // a few KB of safe filler, via --emit-oversized-line) immediately after the
+  // "ready" line, and otherwise completes cleanly (emits -- with --frames 0 --
+  // no result frames, then the "stopped" line, and exits 0). The line is
+  // deliberately bounded to a few KB (not multi-MB) so this stays deterministic
+  // and memory-safe; it is a smoke-only fixture, NOT a production line-size
+  // policy or streaming parser test. On the normal parse path the oversized line
+  // carries none of the recognized "ready"/"result"/"stopped" type markers, so
+  // it reaches the SAME terminal unknown-line branch as UnknownStdoutLine and
+  // MalformedStdoutLine. The parse path must FAIL CLOSED -- reject the oversized
+  // line as a parse error, emit NOTHING to public stdout (no MotionFrame, and
+  // deliberately no fallback frame), keep helper stdout/stderr private to Native
+  // Core, write only a safe "[helper-runtime-smoke] " parent diagnostic ("unknown
+  // line type"), and return non-zero. With --frames 0 the oversized line is the
+  // second line parsed, so the rejection lands before any result frame could be
+  // mapped and exactly zero public stdout lines are produced. This locks the
+  // current normal parse-path boundary only: it does not implement or claim a
+  // production line-size policy, streaming parser behavior, buffer management
+  // policy, memory-pressure mitigation, or oversized-line recovery behavior. This
+  // is smoke-local parse hardening only, NOT a production parser, backend, or
+  // runtime.
+  BoundedOversizedStdoutLine,
 };
 
 struct HelperRuntimeSmokeOptions {
