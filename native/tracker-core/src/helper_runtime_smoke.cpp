@@ -238,6 +238,13 @@ std::vector<std::string> buildHelperArguments(
         std::to_string(options.frameCount),
         "--emit-malformed-line"};
   }
+  if (options.smokeCase ==
+      HelperRuntimeSmokeCase::BoundedOversizedStdoutLine) {
+    return {
+        "--frames",
+        std::to_string(options.frameCount),
+        "--emit-oversized-line"};
+  }
   return {"--frames", std::to_string(options.frameCount)};
 }
 
