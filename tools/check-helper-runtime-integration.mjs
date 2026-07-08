@@ -1563,3 +1563,140 @@ console.log(
     "non-zero exit and zero public stdout lines, keeps public stderr to safe " +
     "parent diagnostics only, and keeps helper stdout/stderr private to Native Core.",
 );
+
+// --- H2 helper runtime normal-path unknown stdout line guard ------------------
+// The NORMAL helper-runtime smoke parse path recognizes only the known helper
+// stdout line types ("ready", "result", "stopped"); any other line reaches the
+// terminal unknown-line branch and is treated as a parse error. The new explicit
+// --helper-runtime-smoke-case unknown-stdout-line reuses the synthetic helper's
+// --emit-unknown-type mode so the helper emits one extra well-formed helper line
+// carrying an unknown "type" ("unknown-synthetic") immediately after the "ready"
+// line. Run with --frames 0 so the parser observes the ready boundary, then
+// reaches the unknown line as the second line and FAILS CLOSED before any result
+// frame could be mapped. This locks the current public/private stream boundary:
+// an unknown helper stdout line cannot leak helper output, emit a fallback
+// MotionFrame, or silently fall through. This guard asserts the fail-closed
+// public boundary: non-zero exit, EMPTY public stdout (no MotionFrame, no
+// fallback frame), public stderr limited to safe parent [helper-runtime-smoke]
+// diagnostics reporting the unknown-line parse error, and no helper lifecycle
+// marker, raw child stderr, child stdout JSON, unsafe child output, or
+// policy/error text on any public stream. Helper stdout/stderr stay private to
+// Native Core. Synthetic/smoke-only, CI-safe. See
+// docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_UNKNOWN_STDOUT_LINE_GUARD_CLOSEOUT.md.
+
+const assertNormalPathUnknownStdoutLineRejected = () => {
+  const unknownResult = spawnSync(
+    trackerPath,
+    [
+      "--helper-runtime-smoke",
+      helperPath,
+      "--frames",
+      "0",
+      "--helper-runtime-smoke-case",
+      "unknown-stdout-line",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+
+  if (unknownResult.error) {
+    fail(
+      `could not run unknown-stdout-line ${trackerPath}: ${unknownResult.error.message}`,
+      unknownResult,
+    );
+  }
+
+  // Fail-closed: the normal parse path must reject the unknown line and exit
+  // non-zero.
+  if (unknownResult.status === 0) {
+    fail(
+      "expected non-zero exit for unknown-stdout-line fail-closed case",
+      unknownResult,
+    );
+  }
+
+  // Public stdout must be EMPTY (no MotionFrame, no fallback frame): with
+  // --frames 0 the parser reaches and rejects the unknown line before mapping any
+  // MotionFrame.
+  const unknownStdout = unknownResult.stdout ?? "";
+  const unknownStdoutLines = unknownStdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (unknownStdoutLines.length !== 0) {
+    fail(
+      `expected zero public stdout lines for unknown-stdout-line, got ${unknownStdoutLines.length}`,
+      unknownResult,
+    );
+  }
+
+  // No helper smoke-path / lifecycle markers, forbidden markers, or unsafe child
+  // markers may appear on public stdout (covers the private unknown helper line's
+  // "type"/"source" markers, helper lifecycle markers, raw child stderr forms,
+  // child stdout JSON markers, unsafe child output, and policy/error text).
+  for (const marker of [
+    ...helperSmokeEntryMarkers,
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ]) {
+    if (unknownStdout.includes(marker)) {
+      fail(
+        `unknown-stdout-line public stdout leaked marker ${JSON.stringify(marker)}`,
+        unknownResult,
+      );
+    }
+  }
+
+  // Public stderr must be only safe parent [helper-runtime-smoke] diagnostics.
+  const unknownStderr = unknownResult.stderr ?? "";
+  const unknownStderrLines = unknownStderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  unknownStderrLines.forEach((line) => {
+    if (!line.startsWith("[helper-runtime-smoke] ")) {
+      fail(
+        `unknown-stdout-line public stderr line without safe prefix: ${line}`,
+        unknownResult,
+      );
+    }
+  });
+
+  // Even behind the safe parent prefix, public stderr must not carry helper
+  // lifecycle / contract markers, raw child stderr forms, unsafe child output, or
+  // other forbidden child JSON / policy / error text.
+  const unknownForbiddenStderrMarkers = [
+    ...helperSmokeEntryMarkers.filter(
+      (marker) => marker !== "[helper-runtime-smoke]",
+    ),
+    ...forbiddenStdoutMarkers,
+    ...unsafeChildMarkers,
+  ];
+  for (const marker of unknownForbiddenStderrMarkers) {
+    if (unknownStderr.includes(marker)) {
+      fail(
+        `unknown-stdout-line public stderr leaked forbidden/helper marker ${JSON.stringify(marker)}`,
+        unknownResult,
+      );
+    }
+  }
+
+  // The parser must report the expected safe parse-error diagnostic for the
+  // rejected unknown line.
+  if (!unknownStderr.includes("unknown line type")) {
+    fail(
+      "unknown-stdout-line public stderr did not report the expected parse-error diagnostic",
+      unknownResult,
+    );
+  }
+};
+
+assertNormalPathUnknownStdoutLineRejected();
+
+console.log(
+  "Normal-path unknown-stdout-line guard OK: an unrecognized helper stdout line " +
+    "is rejected as a parse error, fails closed with non-zero exit and zero public " +
+    "stdout lines, keeps public stderr to safe parent diagnostics only, and keeps " +
+    "helper stdout/stderr private to Native Core.",
+);

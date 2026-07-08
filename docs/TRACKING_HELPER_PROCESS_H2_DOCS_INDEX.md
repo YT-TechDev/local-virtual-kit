@@ -555,6 +555,15 @@ H2 implementation is approved by this index itself.
     state only; it reuses the synthetic helper `--emit-malformed-ready` mode, adds no parser branch
     beyond the exact-boundary behavior, no default runtime wiring, no MotionFrame change, and no
     readiness claim.
+82. [`docs/TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_UNKNOWN_STDOUT_LINE_GUARD_CLOSEOUT.md`](TRACKING_HELPER_PROCESS_H2_HELPER_RUNTIME_UNKNOWN_STDOUT_LINE_GUARD_CLOSEOUT.md)
+    — closeout for #419: dedicated unknown-stdout-line guard coverage on the **normal** helper-runtime
+    parse path, proving an unrecognized helper stdout line reaches the terminal `unknown line type`
+    branch and fails closed (non-zero exit, zero public stdout, safe parent stderr only, helper
+    stdout/stderr private). Records implementation state only; it reuses the synthetic helper
+    `--emit-unknown-type` mode, adds no parser branch (the unknown-line branch already exists), no
+    default runtime wiring, no MotionFrame change, and no readiness claim. The synthetic helper's
+    aspirational `unknown_message_type_safe_ignore` note describes a future production runtime, not the
+    current smoke parse path, which fails closed.
 
 Background:
 
