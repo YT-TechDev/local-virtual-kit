@@ -73,6 +73,21 @@ enum class HelperRuntimeSmokeCase {
   // smoke-local observation only, NOT a production handshake, control channel,
   // supervisor, or fallback behavior.
   HelperLifecycleHandshakeMalformedReady,
+  // Smoke-only failure guard for the lifecycle-handshake observation:
+  // ready-timeout. The synthetic helper is launched with --delay-ready-ms set
+  // well above the bounded lifecycle-handshake smoke timeout, so it never emits
+  // the "ready" lifecycle boundary before the supervisor terminates it. This is
+  // a genuine startup/ready timeout at the H2 supervisor boundary -- distinct
+  // from HelperLifecycleHandshakeTimeout, whose paced helper already emits
+  // "ready" (and a result) before its bounded timeout fires, modeling
+  // post-ready silence rather than a missing ready boundary. The parent
+  // observation must FAIL CLOSED -- detect the supervisor timeout, emit
+  // NOTHING to public stdout (no MotionFrame, and deliberately no fallback
+  // frame), keep helper stdout/stderr private to Native Core, write only a
+  // safe "[helper-runtime-smoke] " parent diagnostic, and return non-zero.
+  // This is a smoke-local observation only, NOT a production handshake,
+  // control channel, supervisor, or fallback behavior.
+  HelperLifecycleHandshakeReadyTimeout,
   // Smoke-only failure guard for the NORMAL helper-runtime smoke parse path:
   // malformed-result-schema. The synthetic helper emits one "result" line with an
   // invalid schema version (schemaVersion:10 instead of 1) before its normal
