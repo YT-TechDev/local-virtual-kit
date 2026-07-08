@@ -135,5 +135,3 @@ skipped or failed with the exact missing-binary / path reason rather than claime
   — owner decision approving this narrow Native Core helper-runtime slice family.
 - [`docs/TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md`](TRACKING_HELPER_PROCESS_H2_DOCS_INDEX.md)
   — H2 docs navigation / status index.
-  </content>
-  </invoke>
