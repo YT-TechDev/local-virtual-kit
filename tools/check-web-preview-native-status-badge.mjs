@@ -476,7 +476,7 @@ const runSmokeCheck = async () => {
   }
 
   const demoBadgeContentMatch = source.match(
-    /return \{\s*label: ["']Source: Local demo MotionFrame["'],[\s\S]*?endpointNote: null,\s*\};/,
+    /return \{\s*label: ["']Source: Local demo MotionFrame · Dummy mode active["'],[\s\S]*?endpointNote: null,\s*\};/,
   );
 
   if (demoBadgeContentMatch === null) {

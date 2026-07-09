@@ -99,6 +99,12 @@ const runCheck = async () => {
     "window.setInterval",
     "setNativeFrameAgeCurrentTimeMs(Date.now())",
     "window.clearInterval",
+    "getNativeDisplayedMotionStatus(nativeStatus)",
+    "Displayed motion: native MotionFrames",
+    "Displayed motion: dummy fallback while waiting for native frames",
+    "Displayed motion: dummy fallback while opening localhost transport",
+    "Displayed motion: dummy fallback while reconnecting localhost transport",
+    "Displayed motion: dummy fallback because native frames are stale",
     "Frames received: ${receivedFrameCount}",
     "Last frame: not yet received",
     "currentTimeMs - lastFrameReceivedAtMs",
@@ -119,6 +125,20 @@ const runCheck = async () => {
     fail(
       "demo/OBS-hidden source badge path must not render native diagnostics",
     );
+  }
+
+  for (const guidanceSnippet of [
+    "Dummy mode is active",
+    "Transport open · Waiting for first native frame",
+    "Native MotionFrames live",
+    "Native frames stale · Showing fallback",
+    "Local transport disconnected · Retrying",
+    "Connected to localhost transport",
+    "built-in dummy fallback until native frames resume",
+  ]) {
+    if (!avatarPreviewSource.includes(guidanceSnippet)) {
+      fail(`AvatarPreview.tsx must include guidance text: ${guidanceSnippet}`);
+    }
   }
 
   if (avatarPreviewSource.includes("Last frame: recently received")) {
