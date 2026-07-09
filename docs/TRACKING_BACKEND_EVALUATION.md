@@ -5,6 +5,7 @@
 - Phase 6.5 planning / evaluation checklist.
 - No dependency or runtime changes in this PR.
 - No backend selected yet.
+- First v0.6.0 candidate spike route decision: `docs/TRACKING_BACKEND_V0_6_CANDIDATE_ROUTE_DECISION.md` recommends a MediaPipe Face Landmarker feasibility spike behind the Native Core boundary without selecting a production backend or approving dependencies.
 - See `docs/TRACKING_BACKEND_V0_3_IMPLEMENTATION_ENTRY_DECISION.md` for the #400 implementation-entry decision selecting a no-dependency synthetic backend/helper adapter slice as the next smallest implementation step.
 
 ## Purpose
