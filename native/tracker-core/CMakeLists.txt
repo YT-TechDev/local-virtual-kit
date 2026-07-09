@@ -43,6 +43,7 @@ add_executable(lvk-tracker-core
   src/main.cpp
   src/motion_frame_writer.cpp
   src/tracker.cpp
+  src/tracking_backend.cpp
   src/tracking_sample_factory.cpp
 )
 

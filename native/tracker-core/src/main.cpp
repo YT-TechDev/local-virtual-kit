@@ -1,10 +1,10 @@
 #include "camera_source.h"
 #include "face_detector.h"
-#include "face_tracking_pipeline.h"
 #include "frame_preprocessor.h"
 #include "helper_runtime_smoke.h"
 #include "motion_frame_writer.h"
 #include "tracker.h"
+#include "tracking_backend.h"
 
 #if LVK_HAS_OPENCV_FACE_DETECTOR
 #include "opencv_face_detector.h"
@@ -745,8 +745,9 @@ int main(int argc, char *argv[]) {
 
   lvk::tracker::NoopFramePreprocessor framePreprocessor;
   lvk::tracker::DummyMotionTracker motionTracker;
-  lvk::tracker::FaceTrackingPipeline trackingPipeline(
-      *faceDetector, motionTracker, options.faceDetectorName);
+  std::unique_ptr<lvk::tracker::TrackingBackend> trackingBackend =
+      std::make_unique<lvk::tracker::FaceTrackingPipelineBackend>(
+          *faceDetector, motionTracker, options.faceDetectorName);
   if (!cameraSource->start()) {
     std::cerr << "Failed to start local camera source: "
               << options.camera.sourceName << ".\n";
@@ -759,7 +760,7 @@ int main(int argc, char *argv[]) {
 
   if (options.logFaceStatus) {
     writeFaceStatus(
-        std::cerr, "startup", trackingPipeline.lastDetectionDiagnostics());
+        std::cerr, "startup", trackingBackend->lastDetectionDiagnostics());
   }
 
   auto nextFrameTime = std::chrono::steady_clock::now();
@@ -788,7 +789,7 @@ int main(int argc, char *argv[]) {
     const auto preprocessStoppedAt = std::chrono::steady_clock::now();
 
     const auto trackingStartedAt = std::chrono::steady_clock::now();
-    const auto trackingSample = trackingPipeline.track(preprocessedFrame);
+    const auto trackingSample = trackingBackend->track(preprocessedFrame);
     const auto trackingStoppedAt = std::chrono::steady_clock::now();
 
     const auto writeStartedAt = std::chrono::steady_clock::now();
@@ -819,7 +820,7 @@ int main(int argc, char *argv[]) {
         cameraDiagnostics.emittedFrameCount % options.faceStatusInterval == 0) {
       writeFaceStatus(
           std::cerr, "periodic",
-          trackingPipeline.lastDetectionDiagnostics());
+          trackingBackend->lastDetectionDiagnostics());
     }
 
     if (options.logCameraStatus && options.cameraStatusInterval > 0 &&
