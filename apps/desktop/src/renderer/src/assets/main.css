@@ -389,6 +389,46 @@ dd {
   opacity: 0.7;
 }
 
+.readiness-summary {
+  margin-bottom: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-left: 3px solid rgba(148, 163, 184, 0.4);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.readiness-summary--ready {
+  border-left-color: #34d399;
+}
+
+.readiness-summary--caution {
+  border-left-color: #f4b942;
+}
+
+.readiness-summary__headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.readiness-summary__headline p {
+  margin: 0;
+  color: var(--ev-c-text-2);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.readiness-summary__points {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ev-c-text-2);
+  font-size: 0.85rem;
+}
+
 .runtime-status-summary {
   margin-bottom: 20px;
   border: 1px solid rgba(148, 163, 184, 0.16);

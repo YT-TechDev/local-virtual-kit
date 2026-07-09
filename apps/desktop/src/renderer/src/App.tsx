@@ -253,6 +253,89 @@ const buildNativeCapabilitiesCopySummary = (
   return lines.join('\n')
 }
 
+type OpenCvSelectionState =
+  | 'not-selected'
+  | 'unchecked'
+  | 'unavailable'
+  | 'unsupported'
+  | 'supported'
+
+const getOpenCvSelectionState = (
+  isOpenCvSelected: boolean,
+  capabilitiesChecked: boolean,
+  hasSuccessfulNativeCapabilities: boolean,
+  supportFlag: boolean | null
+): OpenCvSelectionState => {
+  if (!isOpenCvSelected) {
+    return 'not-selected'
+  }
+  if (!capabilitiesChecked) {
+    return 'unchecked'
+  }
+  if (!hasSuccessfulNativeCapabilities) {
+    return 'unavailable'
+  }
+  return supportFlag === false ? 'unsupported' : 'supported'
+}
+
+const openCvSelectionStateLabels: Record<OpenCvSelectionState, string> = {
+  'not-selected': 'no OpenCV preflight required',
+  unchecked: 'unchecked — run Check capabilities',
+  unavailable: 'unavailable — latest capabilities preflight did not succeed',
+  unsupported: 'unsupported by the latest capabilities preflight',
+  supported: 'supported by the latest capabilities preflight'
+}
+
+type ReadinessTone = 'ready' | 'caution'
+
+interface NativeRuntimeReadinessSummary {
+  tone: ReadinessTone
+  headline: string
+  points: string[]
+}
+
+const buildNativeRuntimeReadinessSummary = ({
+  status,
+  canStart,
+  selectedCameraSource,
+  selectedFaceDetector,
+  cameraSourceOpenCvState,
+  faceDetectorOpenCvState,
+  capabilitiesChecked
+}: {
+  status: RuntimeStatus
+  canStart: boolean
+  selectedCameraSource: NativePipelineCameraSource
+  selectedFaceDetector: NativePipelineFaceDetector
+  cameraSourceOpenCvState: OpenCvSelectionState
+  faceDetectorOpenCvState: OpenCvSelectionState
+  capabilitiesChecked: boolean
+}): NativeRuntimeReadinessSummary => {
+  const hasOpenCvConcern = [cameraSourceOpenCvState, faceDetectorOpenCvState].some(
+    (state) => state === 'unchecked' || state === 'unavailable' || state === 'unsupported'
+  )
+
+  const tone: ReadinessTone = canStart && !hasOpenCvConcern ? 'ready' : 'caution'
+  const headline = !canStart
+    ? 'Not ready to attempt a local native pipeline start yet.'
+    : hasOpenCvConcern
+      ? 'Ready to attempt a local native pipeline start, with OpenCV selections to review.'
+      : 'Ready to attempt a local native pipeline start.'
+
+  return {
+    tone,
+    headline,
+    points: [
+      `Native tracker: ${statusLabels[status.nativeTrackerStatus]}`,
+      `Motion bridge: ${bridgeLabels[status.motionBridgeStatus]}`,
+      `Camera source: ${cameraSourceLabels[selectedCameraSource]} (${openCvSelectionStateLabels[cameraSourceOpenCvState]})`,
+      `Face detector: ${faceDetectorLabels[selectedFaceDetector]} (${openCvSelectionStateLabels[faceDetectorOpenCvState]})`,
+      `Native capabilities checked: ${capabilitiesChecked ? 'yes' : 'no'}`,
+      'Capabilities preflight is advisory only; it does not block starting the native pipeline.'
+    ]
+  }
+}
+
 const getStatusTone = (status: NativeTrackerStatus | MotionBridgeStatus): StatusTone => {
   if (status === 'running') {
     return 'success'
@@ -848,6 +931,30 @@ function App(): React.JSX.Element {
     (message, index, messages): message is string =>
       Boolean(message) && messages.indexOf(message) === index
   )
+  const capabilitiesChecked = nativeCapabilities !== null
+  const cameraSourceOpenCvState = getOpenCvSelectionState(
+    selectedCameraSource === 'opencv',
+    capabilitiesChecked,
+    hasSuccessfulNativeCapabilities,
+    nativeCapabilities?.opencvCameraSupport ?? null
+  )
+  const faceDetectorOpenCvState = getOpenCvSelectionState(
+    selectedFaceDetector === 'opencv',
+    capabilitiesChecked,
+    hasSuccessfulNativeCapabilities,
+    nativeCapabilities?.opencvFaceDetectorSupport ?? null
+  )
+  const nativeRuntimeReadinessSummary = runtimeStatus
+    ? buildNativeRuntimeReadinessSummary({
+        status: runtimeStatus,
+        canStart: canStartNativePipeline,
+        selectedCameraSource,
+        selectedFaceDetector,
+        cameraSourceOpenCvState,
+        faceDetectorOpenCvState,
+        capabilitiesChecked
+      })
+    : null
 
   return (
     <main className="desktop-shell">
@@ -980,6 +1087,28 @@ function App(): React.JSX.Element {
               </div>
               <StatusPill label="Auto-refreshing" />
             </div>
+
+            {nativeRuntimeReadinessSummary ? (
+              <div
+                className={`readiness-summary readiness-summary--${nativeRuntimeReadinessSummary.tone}`}
+                aria-label="Native runtime readiness summary"
+              >
+                <div className="readiness-summary__headline">
+                  <StatusPill
+                    label={
+                      nativeRuntimeReadinessSummary.tone === 'ready' ? 'Ready' : 'Review needed'
+                    }
+                    tone={nativeRuntimeReadinessSummary.tone === 'ready' ? 'success' : 'warning'}
+                  />
+                  <p>{nativeRuntimeReadinessSummary.headline}</p>
+                </div>
+                <ul className="readiness-summary__points">
+                  {nativeRuntimeReadinessSummary.points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             <div className="runtime-status-summary" aria-label="Native runtime overview">
               <p className="runtime-status-summary__header">Native runtime overview</p>
