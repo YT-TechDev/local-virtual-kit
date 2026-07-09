@@ -27,6 +27,14 @@
 #define LVK_HAS_OPENCV_FACE_DETECTOR 0
 #endif
 
+// MediaPipe Face Landmarker candidate backend support. This v0.6.0 scaffold
+// keeps the candidate disabled by default: no MediaPipe dependency, task/
+// model file, or runtime download is added. See
+// docs/TRACKING_BACKEND_V0_6_CANDIDATE_ROUTE_DECISION.md.
+#ifndef LVK_HAS_MEDIAPIPE_FACE_LANDMARKER
+#define LVK_HAS_MEDIAPIPE_FACE_LANDMARKER 0
+#endif
+
 namespace {
 
 constexpr int kDefaultFrameCount = 120;
@@ -57,6 +65,7 @@ struct TrackerOptions {
   int pipelineStatusInterval = kDefaultPipelineStatusInterval;
   lvk::tracker::CameraSourceOptions camera;
   std::string faceDetectorName = "noop";
+  std::string trackingBackendName = "face-pipeline";
   std::string helperRuntimeSmokePath;
   lvk::tracker::HelperRuntimeSmokeCase helperRuntimeSmokeCase =
       lvk::tracker::HelperRuntimeSmokeCase::Normal;
@@ -147,6 +156,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
+            "[--tracking-backend face-pipeline|mediapipe-face-landmarker] "
             "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|helper-lifecycle-handshake-ready-timeout|malformed-result-schema|malformed-stopped-schema|malformed-ready-schema|unknown-stdout-line|malformed-stdout-line|bounded-oversized-stdout-line|synthetic-adapter]]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
@@ -175,6 +185,8 @@ void printUsage(std::ostream &output) {
          << kMaxCameraFps << ".\n";
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
+  output << "--tracking-backend selects the Native Core tracking backend; supported values are 'face-pipeline' and 'mediapipe-face-landmarker'. "
+            "The mediapipe-face-landmarker candidate is a fail-closed scaffold and is not enabled in this build.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
   output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, helper-lifecycle-handshake-ready-timeout, malformed-result-schema, malformed-stopped-schema, malformed-ready-schema, unknown-stdout-line, malformed-stdout-line, bounded-oversized-stdout-line, and synthetic-adapter. Defaults to normal.\n";
   output << "--print-runtime-capabilities prints compile-time and local capability information to stdout and exits without opening a camera or emitting MotionFrame data.\n";
@@ -184,6 +196,7 @@ void printRuntimeCapabilities(std::ostream &output) {
   output << "LVK native runtime capabilities\n";
   output << "opencvCameraSupport=" << (LVK_HAS_OPENCV_CAMERA ? "true" : "false") << "\n";
   output << "opencvFaceDetectorSupport=" << (LVK_HAS_OPENCV_FACE_DETECTOR ? "true" : "false") << "\n";
+  output << "mediapipeFaceLandmarkerSupport=" << (LVK_HAS_MEDIAPIPE_FACE_LANDMARKER ? "true" : "false") << "\n";
 
   std::string cameraSources = "dummy";
 #if LVK_HAS_OPENCV_CAMERA
@@ -196,6 +209,12 @@ void printRuntimeCapabilities(std::ostream &output) {
   faceDetectors += ",opencv";
 #endif
   output << "supportedFaceDetectors=" << faceDetectors << "\n";
+
+  std::string trackingBackends = "face-pipeline";
+#if LVK_HAS_MEDIAPIPE_FACE_LANDMARKER
+  trackingBackends += ",mediapipe-face-landmarker";
+#endif
+  output << "supportedTrackingBackends=" << trackingBackends << "\n";
 
   output << "cameraOpened=false\n";
   output << "motionFramesEmitted=false\n";
@@ -636,6 +655,28 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       continue;
     }
 
+    if (argument == "--tracking-backend") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --tracking-backend.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      const std::string trackingBackendName = argv[argIndex + 1];
+      if (trackingBackendName != "face-pipeline" &&
+          trackingBackendName != "mediapipe-face-landmarker") {
+        std::cerr << "Unsupported tracking backend: " << trackingBackendName
+                  << ". Supported values are 'face-pipeline' and "
+                     "'mediapipe-face-landmarker'.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.trackingBackendName = trackingBackendName;
+      ++argIndex;
+      continue;
+    }
+
     std::cerr << "Unknown argument: " << argument << "\n";
     printUsage(std::cerr);
     return false;
@@ -701,6 +742,17 @@ int main(int argc, char *argv[]) {
         },
         std::cout,
         std::cerr);
+  }
+
+  if (options.trackingBackendName == "mediapipe-face-landmarker" &&
+      !LVK_HAS_MEDIAPIPE_FACE_LANDMARKER) {
+    std::cerr
+        << "The MediaPipe Face Landmarker candidate backend is not enabled "
+           "in this build. This v0.6.0 scaffold does not add MediaPipe "
+           "runtime, task/model files, runtime downloads, or production "
+           "backend selection. Use --tracking-backend face-pipeline "
+           "(default) instead.\n";
+    return 1;
   }
 
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);

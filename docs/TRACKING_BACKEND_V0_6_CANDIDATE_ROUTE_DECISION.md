@@ -75,3 +75,15 @@ The recommended #471 implementation issue should:
 
 - #471 should use this route decision as input for the first MediaPipe Face Landmarker local candidate feasibility spike.
 - #472 should add or adjust MotionFrame compatibility evidence after the spike, based on what the spike actually implements or intentionally skips.
+
+## Implementation entry (#471)
+
+#471 implemented a no-dependency, fail-closed MediaPipe Face Landmarker candidate scaffold behind the Native Core `TrackingBackend` boundary:
+
+- Added `--tracking-backend face-pipeline|mediapipe-face-landmarker` (default `face-pipeline`, preserving current behavior).
+- Added compile-time `LVK_HAS_MEDIAPIPE_FACE_LANDMARKER` (default `0`) and runtime capability fields `mediapipeFaceLandmarkerSupport=false` / `supportedTrackingBackends=face-pipeline`.
+- Selecting `mediapipe-face-landmarker` in this build fails closed with a clear stderr message before any camera source is opened or `MotionFrame` JSON is emitted.
+- No MediaPipe dependency, task/model file, runtime package, or runtime download was added. No production backend was selected.
+- Added `tools/check-native-mediapipe-candidate-boundary.mjs` (`pnpm test:native-mediapipe-candidate-boundary`) for focused checker coverage of the unsupported/fail-closed path.
+
+#472 should build MotionFrame compatibility evidence on top of this scaffold.
