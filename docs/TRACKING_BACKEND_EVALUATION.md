@@ -20,6 +20,55 @@ This document also prevents the optional OpenCV Haar rectangle detector from bei
 - `detectionDurationMs` exists as stderr-only safe timing metadata for backend evaluation; stdout remains MotionFrame JSON.
 - Product-quality landmark extraction, head pose estimation, gaze, eye openness, mouth/expression tracking, smoothing, and calibration-quality tracking are still future work.
 
+## v0.5.0 Backend Boundary Evidence (2026-07-09)
+
+The v0.5.0 backend-boundary work establishes evidence for evaluating future
+local tracking backend candidates, but it does not select or add a production
+tracking backend. The current source-grounded baseline is:
+
+- Native Core has a small backend adapter seam. `TrackingBackend` and
+  `FaceTrackingPipelineBackend` keep the current detector/tracker wiring inside
+  Native Core so future local candidates can be evaluated behind that boundary.
+- The dummy/noop path remains the stable local dependency-free producer and is
+  verified by checker coverage.
+- The OpenCV Haar-style baseline remains optional, dependency-aware, and
+  camera-free by default behind the boundary; it remains a smoke/baseline path,
+  not product-quality VTuber tracking.
+- MotionFrame stdout JSON compatibility across backend-boundary behavior is
+  protected by focused checker coverage.
+
+Relevant evidence commands/checkers for this boundary are:
+
+- `pnpm test:native-dummy-backend-boundary`
+- `pnpm test:native-opencv-baseline-boundary`
+- `pnpm test:native-backend-parity-motionframe`
+- `pnpm test:native-runtime-capabilities`
+- `pnpm test`
+
+This evidence intentionally does not prove or approve:
+
+- any selected, approved, or production-ready backend;
+- MediaPipe, ONNX, model, task, cascade, generated asset, runtime dependency, or
+  runtime download inclusion;
+- OpenCV Haar as product-quality VTuber tracking;
+- OpenCV-enabled cascade-backed parity smoke unless a trusted local cascade path
+  and an OpenCV-enabled build were actually used and recorded;
+- webcam, OBS, Electron GUI, packaged app, or other local/manual validation
+  unless separately evidenced;
+- MotionFrame schema expansion.
+
+Future local backend candidate evidence must record, at minimum:
+
+- dependency, build, packaging, and platform impact;
+- license, notice, model/task/cascade, and redistribution review;
+- local-only operation and raw-frame handling;
+- confirmation that runtime downloads remain forbidden unless separately
+  approved;
+- MotionFrame compatibility, including stdout JSON stability;
+- safe diagnostics separation from MotionFrame stdout;
+- exact validation commands, results, skipped checks, and honest notes for
+  unsupported, unavailable, or not validated paths.
+
 ## Non-Negotiable Constraints
 
 - Raw camera frames stay local to Native Core memory.
