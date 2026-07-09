@@ -84,6 +84,8 @@ Use this section for machine-local smoke testing. Mark each item with the OS, ha
 ./native/tracker-core/build/lvk-tracker-core --camera-source dummy --continuous --realtime --log-pipeline-status --pipeline-status-interval 60 | node tools/motion-ws-bridge.mjs
 ```
 
+- [ ] For a bounded, dependency-free version of the same end-to-end path, run `pnpm smoke:native-dummy-pipeline:local` (or `node tools/check-native-dummy-pipeline-ws-smoke.mjs [path-to-lvk-tracker-core]`). It resolves the built tracker executable, pipes its dummy/noop MotionFrame stdout into `tools/motion-ws-bridge.mjs`, connects a WebSocket client to `ws://127.0.0.1:45731/motion`, validates 3 native MotionFrame messages, and cleans up both child processes on success or failure.
+
 - [ ] Open `http://localhost:5173/?source=native` while `pnpm dev:web` is running.
 - [ ] Confirm the Web Preview receives MotionFrame data through `ws://127.0.0.1:45731/motion`.
 - [ ] Confirm only MotionFrame JSON is piped to the bridge; raw camera frames are not piped, printed, uploaded, or written by this path.
