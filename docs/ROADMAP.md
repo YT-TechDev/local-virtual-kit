@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.4.0 is the local runtime confidence and native pipeline readiness closeout after the v0.3.0 local tracking quality release-readiness pass. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.5+ work should continue toward evidence-based local backend evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
+For current release-prep work, v0.5.0 is the Native Core backend evaluation foundation closeout after the v0.4.0 local runtime confidence and native pipeline readiness pass. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. Future work should continue toward evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
 
 ---
 
@@ -177,10 +177,13 @@ v0.3.0 followed up with post-v0.2 documentation navigation consolidation, local 
 
 v0.4.0 followed up with local runtime confidence work: native dummy pipeline WebSocket smoke coverage, Electron native runtime readiness status, Electron no-frame startup warning behavior, Web Preview native-source guidance, and renderer-side calibration preset polish. v0.4.0 does not select a production backend/model/runtime, add runtime downloads, change MotionFrame or Motion Protocol, or claim new webcam / OBS / packaged Electron / local hardware readiness validation.
 
-Future v0.5+ direction should focus on evidence-based local backend evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
+v0.5.0 followed up with Native Core backend evaluation foundation work: a `TrackingBackend` / `FaceTrackingPipelineBackend` seam, dummy/noop boundary preservation, optional OpenCV Haar-style baseline boundary preservation, backend parity `MotionFrame` checker coverage, and backend evaluation evidence notes. v0.5.0 does not select a production backend/model/runtime, add runtime downloads, change MotionFrame or Motion Protocol, or claim new webcam / OBS / packaged Electron / local hardware readiness validation.
+
+Future post-v0.5.0 direction should focus on evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
 
 ## Release Entry Points
 
+- v0.5.0 release-readiness notes: `docs/releases/v0.5.0.md`.
 - v0.4.0 release-readiness notes: `docs/releases/v0.4.0.md`.
 - v0.3.0 release-readiness notes: `docs/releases/v0.3.0.md`.
 - v0.2.0 baseline notes: `docs/releases/v0.2.0.md`.
