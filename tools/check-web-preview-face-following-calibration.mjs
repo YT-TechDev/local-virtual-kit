@@ -13,6 +13,14 @@ const CALIBRATION_SOURCE_URL = new URL(
   "../apps/web-preview/src/motion/faceFollowingCalibration.ts",
   import.meta.url,
 );
+const PRESETS_SOURCE_URL = new URL(
+  "../apps/web-preview/src/motion/faceFollowingPresets.ts",
+  import.meta.url,
+);
+const AVATAR_PREVIEW_SOURCE_URL = new URL(
+  "../apps/web-preview/src/components/AvatarPreview.tsx",
+  import.meta.url,
+);
 
 const requireFromWebPreview = createRequire(WEB_PREVIEW_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
@@ -71,6 +79,7 @@ const loadModule = async (sourceUrl, fileName) => {
 const runCheck = async () => {
   const {
     DEFAULT_FACE_FOLLOWING_CALIBRATION,
+    FACE_FOLLOWING_MAX_DEADZONE,
     FACE_FOLLOWING_MAX_SENSITIVITY,
     applyFaceFollowingCalibration,
     clampFaceFollowingCalibration,
@@ -123,10 +132,11 @@ const runCheck = async () => {
     "centered movement scales the offset from the resting position",
   );
 
-  // Sensitivity is clamped to safe bounds; a wild value cannot fling the avatar.
+  // Sensitivity and deadzone are clamped to safe bounds; wild values cannot fling the avatar.
   const clampedHigh = clampFaceFollowingCalibration({
     center: { x: 0, y: 0, z: 0 },
     sensitivity: { x: 1000, y: -5, z: 2 },
+    deadzone: { x: 99, y: -1, z: 0.2 },
   });
   assertClose(
     clampedHigh.sensitivity.x,
@@ -138,11 +148,35 @@ const runCheck = async () => {
     0,
     "negative sensitivity is clamped to zero",
   );
+  assertClose(
+    clampedHigh.deadzone.x,
+    FACE_FOLLOWING_MAX_DEADZONE,
+    "deadzone is clamped to the maximum",
+  );
+  assertClose(
+    clampedHigh.deadzone.y,
+    0,
+    "negative deadzone is clamped to zero",
+  );
+
+  assertTupleClose(
+    applyFaceFollowingCalibration(
+      { x: 0.04, y: -0.06, z: 0.2 },
+      {
+        center: { x: 0, y: 0, z: 0 },
+        sensitivity: { x: 3, y: 2, z: 1 },
+        deadzone: { x: 0.05, y: 0.05, z: 0.05 },
+      },
+    ),
+    [0, -0.02, 0.15000000000000002],
+    "deadzone suppresses tiny centered movement before scaling",
+  );
 
   // Non-finite / missing values fall back to defaults instead of producing NaN.
   const clampedBad = clampFaceFollowingCalibration({
     center: { x: Number.NaN, y: 5, z: 0 },
     sensitivity: { x: Number.POSITIVE_INFINITY, y: 2.4, z: 0.9 },
+    deadzone: { x: Number.NaN, y: 0, z: 0 },
   });
   assertClose(
     clampedBad.center.x,
@@ -160,6 +194,7 @@ const runCheck = async () => {
   const reset = createDefaultFaceFollowingCalibration();
   reset.sensitivity.x = 99;
   reset.center.y = 1;
+  reset.deadzone.z = 1;
   assertClose(
     DEFAULT_FACE_FOLLOWING_CALIBRATION.sensitivity.x,
     3.2,
@@ -170,6 +205,32 @@ const runCheck = async () => {
     0,
     "createDefaultFaceFollowingCalibration center is independent of the default",
   );
+  assertClose(
+    DEFAULT_FACE_FOLLOWING_CALIBRATION.deadzone.z,
+    0,
+    "createDefaultFaceFollowingCalibration deadzone is independent of the default",
+  );
+
+  const presetsSource = await readFile(PRESETS_SOURCE_URL, "utf8");
+  const avatarPreviewSource = await readFile(AVATAR_PREVIEW_SOURCE_URL, "utf8");
+  for (const label of ["Balanced", "Steady", "Responsive"]) {
+    if (!presetsSource.includes(`label: "${label}"`)) {
+      fail(`missing calibration preset label: ${label}`);
+    }
+  }
+  if (!avatarPreviewSource.includes("Renderer-side calibration preset")) {
+    fail("UI copy must say renderer-side calibration");
+  }
+  if (!avatarPreviewSource.includes("Uses current MotionFrame fields only")) {
+    fail("UI copy must say presets use current MotionFrame fields only");
+  }
+  if (
+    !/no\s+real\s+eye, mouth, expression, landmark, blendshape, or ML tracking/.test(
+      avatarPreviewSource,
+    )
+  ) {
+    fail("UI copy must avoid real tracking claims");
+  }
 
   console.log("Web Preview face-following calibration check passed.");
 };

@@ -30,6 +30,16 @@ import { lerpTuple3, type AvatarMotionState } from "./mapMotionFrameToAvatar";
 export const TRACKING_POSITION_SMOOTHING_TAU_SECONDS = 0.12;
 export const TRACKING_ROTATION_SMOOTHING_TAU_SECONDS = 0.12;
 
+export type TrackingSmoothingOptions = {
+  positionTauSeconds: number;
+  rotationTauSeconds: number;
+};
+
+export const DEFAULT_TRACKING_SMOOTHING_OPTIONS: TrackingSmoothingOptions = {
+  positionTauSeconds: TRACKING_POSITION_SMOOTHING_TAU_SECONDS,
+  rotationTauSeconds: TRACKING_ROTATION_SMOOTHING_TAU_SECONDS,
+};
+
 /**
  * Frame-rate-independent exponential smoothing factor for a given frame delta
  * and time constant, returned as a lerp amount in [0, 1].
@@ -66,14 +76,15 @@ export const smoothTrackingMotion = (
   previous: AvatarMotionState,
   target: AvatarMotionState,
   deltaSeconds: number,
+  options: TrackingSmoothingOptions = DEFAULT_TRACKING_SMOOTHING_OPTIONS,
 ): AvatarMotionState => {
   const positionAlpha = computeExponentialSmoothingAlpha(
     deltaSeconds,
-    TRACKING_POSITION_SMOOTHING_TAU_SECONDS,
+    options.positionTauSeconds,
   );
   const rotationAlpha = computeExponentialSmoothingAlpha(
     deltaSeconds,
-    TRACKING_ROTATION_SMOOTHING_TAU_SECONDS,
+    options.rotationTauSeconds,
   );
 
   return {

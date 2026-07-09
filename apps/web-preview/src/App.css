@@ -251,3 +251,30 @@
   box-shadow: 0 0 0.75rem rgb(250 204 21 / 0.75);
   transform: translate(-50%, -50%);
 }
+
+.preview-source-badge__calibration {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.preview-source-badge__calibration-label {
+  color: #dbeafe;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.preview-source-badge__calibration-select {
+  border: 1px solid rgb(186 230 253 / 0.42);
+  border-radius: 0.5rem;
+  background: rgb(15 23 42 / 0.92);
+  color: #f8fafc;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+}
+
+.preview-source-badge__calibration-select:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}

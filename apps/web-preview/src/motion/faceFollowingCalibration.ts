@@ -8,7 +8,7 @@ import type { Vector3 } from "@lvk/motion-protocol";
 // that mapping so the v0.2 face-following MVP becomes tunable without touching
 // MotionFrame, Native Core, or the protocol schema.
 //
-// Two knobs, both per axis and both deterministic:
+// Three knobs, all per axis and deterministic:
 //
 //   center       A neutral-pose offset in normalized face.position space. It is
 //                subtracted from the incoming position before scaling, so a user
@@ -16,8 +16,10 @@ import type { Vector3 } from "@lvk/motion-protocol";
 //                centered around it instead of around the raw camera origin.
 //   sensitivity  A multiplier applied after centering. Larger values move the
 //                avatar root further for the same head movement.
+//   deadzone    A small neutral band applied after centering. Values inside it
+//                map to zero so tiny jitter can be suppressed.
 //
-// The defaults reproduce the previous hard-coded mapping exactly (center 0 on
+// The defaults reproduce the previous hard-coded mapping exactly (center/deadzone 0 on
 // every axis, the original per-axis sensitivity multipliers), so dummy and
 // native behavior is unchanged until a caller supplies a different calibration.
 //
@@ -36,6 +38,8 @@ export type FaceFollowingCalibration = {
   center: FaceFollowingAxisCalibration;
   /** Per-axis multiplier applied to the centered face position. */
   sensitivity: FaceFollowingAxisCalibration;
+  /** Per-axis neutral band applied after centering and before scaling. */
+  deadzone: FaceFollowingAxisCalibration;
 };
 
 const clamp = (value: number, min: number, max: number): number => {
@@ -56,11 +60,14 @@ export const DEFAULT_FACE_POSITION_Z_SENSITIVITY = 0.9;
 
 // Safe bounds for user/config-supplied calibration values. Sensitivity stays
 // non-negative and capped so a bad value cannot fling the avatar off-screen;
-// center stays inside the same normalized domain as the input position.
+// center stays inside the same normalized domain as the input position;
+// deadzone stays small enough to preserve visible face-following movement.
 export const FACE_FOLLOWING_MIN_SENSITIVITY = 0;
 export const FACE_FOLLOWING_MAX_SENSITIVITY = 8;
 export const FACE_FOLLOWING_MIN_CENTER = FACE_POSITION_INPUT_MIN;
 export const FACE_FOLLOWING_MAX_CENTER = FACE_POSITION_INPUT_MAX;
+export const FACE_FOLLOWING_MIN_DEADZONE = 0;
+export const FACE_FOLLOWING_MAX_DEADZONE = 0.45;
 
 export const DEFAULT_FACE_FOLLOWING_CALIBRATION: FaceFollowingCalibration = {
   center: { x: 0, y: 0, z: 0 },
@@ -69,6 +76,7 @@ export const DEFAULT_FACE_FOLLOWING_CALIBRATION: FaceFollowingCalibration = {
     y: DEFAULT_FACE_POSITION_Y_SENSITIVITY,
     z: DEFAULT_FACE_POSITION_Z_SENSITIVITY,
   },
+  deadzone: { x: 0, y: 0, z: 0 },
 };
 
 /**
@@ -79,6 +87,7 @@ export const createDefaultFaceFollowingCalibration =
   (): FaceFollowingCalibration => ({
     center: { ...DEFAULT_FACE_FOLLOWING_CALIBRATION.center },
     sensitivity: { ...DEFAULT_FACE_FOLLOWING_CALIBRATION.sensitivity },
+    deadzone: { ...DEFAULT_FACE_FOLLOWING_CALIBRATION.deadzone },
   });
 
 const resolveNumber = (value: unknown, fallback: number): number => {
@@ -109,7 +118,15 @@ export const clampFaceFollowingCalibration = (
     calibration.center ?? DEFAULT_FACE_FOLLOWING_CALIBRATION.center;
   const sensitivity =
     calibration.sensitivity ?? DEFAULT_FACE_FOLLOWING_CALIBRATION.sensitivity;
+  const deadzone =
+    calibration.deadzone ?? DEFAULT_FACE_FOLLOWING_CALIBRATION.deadzone;
   const defaults = DEFAULT_FACE_FOLLOWING_CALIBRATION;
+  const clampDeadzone = (value: unknown, fallback: number): number =>
+    clamp(
+      resolveNumber(value, fallback),
+      FACE_FOLLOWING_MIN_DEADZONE,
+      FACE_FOLLOWING_MAX_DEADZONE,
+    );
 
   return {
     center: {
@@ -121,6 +138,11 @@ export const clampFaceFollowingCalibration = (
       x: clampSensitivity(sensitivity.x, defaults.sensitivity.x),
       y: clampSensitivity(sensitivity.y, defaults.sensitivity.y),
       z: clampSensitivity(sensitivity.z, defaults.sensitivity.z),
+    },
+    deadzone: {
+      x: clampDeadzone(deadzone.x, defaults.deadzone.x),
+      y: clampDeadzone(deadzone.y, defaults.deadzone.y),
+      z: clampDeadzone(deadzone.z, defaults.deadzone.z),
     },
   };
 };
@@ -142,13 +164,25 @@ export const createFaceFollowingCalibrationFromCenter = (
       z: restingPosition.z,
     },
     sensitivity: baseCalibration.sensitivity,
+    deadzone: baseCalibration.deadzone,
   });
+};
+
+const applyDeadzone = (value: number, deadzone: number): number => {
+  const magnitude = Math.abs(value);
+
+  if (magnitude <= deadzone) {
+    return 0;
+  }
+
+  return Math.sign(value) * (magnitude - deadzone);
 };
 
 const calibrateAxis = (
   value: number,
   center: number,
   sensitivity: number,
+  deadzone: number,
 ): number => {
   const centered = clamp(
     value - center,
@@ -156,7 +190,7 @@ const calibrateAxis = (
     FACE_POSITION_INPUT_MAX,
   );
 
-  return centered * sensitivity;
+  return applyDeadzone(centered, deadzone) * sensitivity;
 };
 
 /**
@@ -165,7 +199,8 @@ const calibrateAxis = (
  *
  * Deterministic and pure: it centers the position (subtract calibrated center,
  * clamp back into the input domain) then scales by the calibrated per-axis
- * sensitivity. The calibration is clamped to safe ranges first, so out-of-range
+ * sensitivity after applying an optional deadzone. The calibration is clamped to
+ * safe ranges first, so out-of-range
  * inputs cannot produce an unbounded offset. With the default calibration this
  * is identical to the previous hard-coded position mapping.
  */
@@ -176,8 +211,23 @@ export const applyFaceFollowingCalibration = (
   const resolved = clampFaceFollowingCalibration(calibration);
 
   return [
-    calibrateAxis(position.x, resolved.center.x, resolved.sensitivity.x),
-    calibrateAxis(position.y, resolved.center.y, resolved.sensitivity.y),
-    calibrateAxis(position.z, resolved.center.z, resolved.sensitivity.z),
+    calibrateAxis(
+      position.x,
+      resolved.center.x,
+      resolved.sensitivity.x,
+      resolved.deadzone.x,
+    ),
+    calibrateAxis(
+      position.y,
+      resolved.center.y,
+      resolved.sensitivity.y,
+      resolved.deadzone.y,
+    ),
+    calibrateAxis(
+      position.z,
+      resolved.center.z,
+      resolved.sensitivity.z,
+      resolved.deadzone.z,
+    ),
   ];
 };
