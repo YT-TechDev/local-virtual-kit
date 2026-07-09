@@ -87,15 +87,15 @@ const decodeTextFrame = (buffer) => {
   let offset = 2;
 
   if (!fin) {
-    fail("received fragmented WebSocket frame");
+    throw new Error("received fragmented WebSocket frame");
   }
 
   if (opcode !== 0x1) {
-    fail(`received non-text WebSocket frame opcode ${opcode}`);
+    throw new Error(`received non-text WebSocket frame opcode ${opcode}`);
   }
 
   if (masked) {
-    fail("received masked server WebSocket frame");
+    throw new Error("received masked server WebSocket frame");
   }
 
   if (payloadLength === 126) {
@@ -112,7 +112,7 @@ const decodeTextFrame = (buffer) => {
 
     const longPayloadLength = buffer.readBigUInt64BE(offset);
     if (longPayloadLength > BigInt(Number.MAX_SAFE_INTEGER)) {
-      fail("received WebSocket frame payload that is too large");
+      throw new Error("received WebSocket frame payload that is too large");
     }
 
     payloadLength = Number(longPayloadLength);
@@ -182,15 +182,20 @@ const runSmokeCheck = async (executablePath) => {
     }
 
     await new Promise((resolve) => {
+      let killTimer = null;
+
       const finishExit = () => {
-        clearTimeout(killTimer);
+        if (killTimer !== null) {
+          clearTimeout(killTimer);
+          killTimer = null;
+        }
         resolve();
       };
 
       child.once("exit", finishExit);
       child.kill();
 
-      const killTimer = setTimeout(() => {
+      killTimer = setTimeout(() => {
         if (child.exitCode === null && child.signalCode === null) {
           child.kill("SIGKILL");
         }
@@ -279,7 +284,7 @@ const runSmokeCheck = async (executablePath) => {
 
               const headers = received.subarray(0, headerEnd).toString("utf8");
               if (!headers.startsWith("HTTP/1.1 101 ")) {
-                fail(
+                throw new Error(
                   `invalid WebSocket handshake status: ${headers.split("\r\n")[0]}`,
                 );
               }
@@ -295,7 +300,7 @@ const runSmokeCheck = async (executablePath) => {
                 .trim();
 
               if (actualAccept !== expectedAccept) {
-                fail(
+                throw new Error(
                   "invalid Sec-WebSocket-Accept header in handshake response",
                 );
               }
@@ -314,7 +319,7 @@ const runSmokeCheck = async (executablePath) => {
 
               const frame = parseNativeMotionFrameJson(decoded.text);
               if (frame === null) {
-                fail(
+                throw new Error(
                   `received invalid native MotionFrame JSON: ${decoded.text}`,
                 );
               }
