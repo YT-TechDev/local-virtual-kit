@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.3.0 is the local tracking quality and release-readiness target after the v0.2.0 Local OpenCV Face-Following MVP. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.4+ work should continue toward evidence-based local backend evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
+For current release-prep work, v0.4.0 is the local runtime confidence and native pipeline readiness closeout after the v0.3.0 local tracking quality release-readiness pass. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.5+ work should continue toward evidence-based local backend evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
 
 ---
 
@@ -175,10 +175,13 @@ Known v0.2.0 limits remain explicit: no real eye, mouth, expression, or landmark
 
 v0.3.0 followed up with post-v0.2 documentation navigation consolidation, local face-following calibration/sensitivity baseline work, packaged Electron runtime validation follow-up preparation, H2 helper-runtime supervisor planning and fail-closed guard coverage, helper launch-failure / ready-timeout guard coverage, and no-dependency synthetic helper adapter smoke coverage behind the Native Core boundary.
 
-Future v0.4+ direction should focus on evidence-based local backend evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary. v0.3.0 does not select a production H2 backend/model/runtime, add runtime downloads, change MotionFrame or Motion Protocol, or claim packaged Electron / local hardware readiness validation.
+v0.4.0 followed up with local runtime confidence work: native dummy pipeline WebSocket smoke coverage, Electron native runtime readiness status, Electron no-frame startup warning behavior, Web Preview native-source guidance, and renderer-side calibration preset polish. v0.4.0 does not select a production backend/model/runtime, add runtime downloads, change MotionFrame or Motion Protocol, or claim new webcam / OBS / packaged Electron / local hardware readiness validation.
+
+Future v0.5+ direction should focus on evidence-based local backend evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
 
 ## Release Entry Points
 
+- v0.4.0 release-readiness notes: `docs/releases/v0.4.0.md`.
 - v0.3.0 release-readiness notes: `docs/releases/v0.3.0.md`.
 - v0.2.0 baseline notes: `docs/releases/v0.2.0.md`.
 
