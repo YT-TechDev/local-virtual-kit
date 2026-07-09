@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.5.0 is the Native Core backend evaluation foundation closeout after the v0.4.0 local runtime confidence and native pipeline readiness pass. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. Future work should continue toward evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
+For current release-prep work, v0.6.0 is the Local backend candidate validation spike after the v0.5.0 Native Core backend evaluation foundation. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. Future work should continue toward evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
 
 ---
 
@@ -179,10 +179,13 @@ v0.4.0 followed up with local runtime confidence work: native dummy pipeline Web
 
 v0.5.0 followed up with Native Core backend evaluation foundation work: a `TrackingBackend` / `FaceTrackingPipelineBackend` seam, dummy/noop boundary preservation, optional OpenCV Haar-style baseline boundary preservation, backend parity `MotionFrame` checker coverage, and backend evaluation evidence notes. v0.5.0 does not select a production backend/model/runtime, add runtime downloads, change MotionFrame or Motion Protocol, or claim new webcam / OBS / packaged Electron / local hardware readiness validation.
 
-Future post-v0.5.0 direction should focus on evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
+v0.6.0 followed up with Local backend candidate validation spike work: OpenCV cascade-backed baseline evidence, a first local backend candidate route decision choosing MediaPipe Face Landmarker as a feasibility spike route, a no-dependency fail-closed MediaPipe candidate scaffold behind the Native Core boundary, and MotionFrame compatibility evidence for default vs explicit face-pipeline behavior. v0.6.0 does not select a production backend/model/runtime, add MediaPipe or ONNX dependencies, add runtime downloads, change MotionFrame or Motion Protocol, or claim new webcam / OBS / Electron GUI / packaged Electron / hardware readiness validation.
+
+Future post-v0.6.0 direction should focus on evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
 
 ## Release Entry Points
 
+- v0.6.0 release-readiness notes: `docs/releases/v0.6.0.md`.
 - v0.5.0 release-readiness notes: `docs/releases/v0.5.0.md`.
 - v0.4.0 release-readiness notes: `docs/releases/v0.4.0.md`.
 - v0.3.0 release-readiness notes: `docs/releases/v0.3.0.md`.
