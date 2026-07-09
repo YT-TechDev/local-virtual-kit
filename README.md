@@ -2,9 +2,9 @@
 
 Local Virtual Kit is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
 
-LVK is currently in early development. The current public baseline is **v0.3.0: local tracking quality and release readiness** after the v0.2.0 Local OpenCV Face-Following MVP. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
+LVK is currently in early development. The current public baseline is **v0.4.0: local runtime confidence and native pipeline readiness** after the v0.3.0 local tracking quality release-readiness pass. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
 
-v0.3.0 captures post-v0.2 documentation navigation consolidation, local face-following calibration/sensitivity baseline work, packaged Electron runtime validation follow-up preparation, H2/helper-runtime guard coverage, and synthetic helper adapter smoke coverage behind the Native Core boundary. It does not change MotionFrame, Motion Protocol, runtime behavior, backend selection, dependencies, model artifacts, runtime downloads, telemetry, cloud upload, remote inference, external frame processing, or hidden network behavior.
+v0.4.0 captures native dummy pipeline WebSocket smoke coverage, Electron native runtime readiness status, Electron no-frame startup warning behavior, Web Preview native-source status guidance, and renderer-side calibration preset polish. It does not change MotionFrame, Motion Protocol, runtime behavior, backend selection, dependencies, model artifacts, runtime downloads, telemetry, cloud upload, remote inference, external frame processing, or hidden network behavior.
 
 ## Core principles
 
@@ -124,7 +124,8 @@ LVK is local-first. Raw camera frames must remain local. Telemetry, analytics, c
 
 For the post-v0.2 entrypoint, use these current source-of-truth documents first:
 
-- `docs/releases/v0.3.0.md` - current local tracking quality and release-readiness notes.
+- `docs/releases/v0.4.0.md` - current local runtime confidence and native pipeline readiness notes.
+- `docs/releases/v0.3.0.md` - local tracking quality and release-readiness notes.
 - `docs/releases/v0.2.0.md` - Local OpenCV Face-Following MVP baseline and known limitations.
 - `docs/ROADMAP.md` - implementation sequence and v0.4+ direction.
 - `docs/LOCAL_RUNTIME_CHECKLIST.md` - local/manual validation boundaries and runtime checklist.
