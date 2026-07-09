@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import {
@@ -16,6 +16,13 @@ import {
   type AvatarMotionState,
 } from "../motion/mapMotionFrameToAvatar";
 import { computeLostTrackingFallbackMotion } from "../motion/lostTrackingFallback";
+import {
+  DEFAULT_FACE_FOLLOWING_PRESET_ID,
+  FACE_FOLLOWING_PRESETS,
+  getFaceFollowingPresetById,
+  type FaceFollowingPreset,
+  type FaceFollowingPresetId,
+} from "../motion/faceFollowingPresets";
 import { smoothTrackingMotion } from "../motion/trackingSmoothing";
 import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
@@ -29,6 +36,7 @@ type AvatarPreviewProps = {
 
 type AvatarSceneProps = {
   nativeFrame: MotionFrame | null;
+  preset: FaceFollowingPreset;
   source: PreviewSource;
 };
 
@@ -311,7 +319,7 @@ function getSourceBadgeContent(
   };
 }
 
-function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
+function AvatarScene({ nativeFrame, preset, source }: AvatarSceneProps) {
   const [fallbackState, setFallbackState] = useState(
     createInitialTrackingFallbackState,
   );
@@ -326,7 +334,7 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
       source === "native"
         ? (nativeFrame ?? stableNativeFallbackFrame)
         : createDummyMotionFrame(timestampMs);
-    const mappedMotion = mapMotionFrameToAvatar(frame);
+    const mappedMotion = mapMotionFrameToAvatar(frame, preset.calibration);
 
     setFallbackState((previousState) => {
       if (mappedMotion.trackingStatus === "tracking") {
@@ -354,6 +362,7 @@ function AvatarScene({ nativeFrame, source }: AvatarSceneProps) {
                 previousState.lastTrackingMotion ?? idleApproximatedMotion,
                 idleApproximatedMotion,
                 delta,
+                preset.smoothing,
               )
             : idleApproximatedMotion;
 
@@ -424,6 +433,9 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const panelClassName = `preview-panel preview-panel--${mode}`;
   const [endpointCopyFeedback, setEndpointCopyFeedback] =
     useState<EndpointCopyFeedbackState>(null);
+  const [selectedPresetId, setSelectedPresetId] =
+    useState<FaceFollowingPresetId>(DEFAULT_FACE_FOLLOWING_PRESET_ID);
+  const selectedPreset = getFaceFollowingPresetById(selectedPresetId);
   const currentEndpointCopyFeedback =
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
@@ -456,6 +468,10 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
       window.clearTimeout(clearFeedbackTimer);
     };
   }, [endpointCopyFeedback]);
+
+  const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedPresetId(event.target.value as FaceFollowingPresetId);
+  };
 
   const handleCopyEndpoint = () => {
     if (navigator.clipboard === undefined) {
@@ -559,6 +575,30 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               )}
             </span>
           )}
+          <label className="preview-source-badge__calibration">
+            <span className="preview-source-badge__calibration-label">
+              Renderer-side calibration preset
+            </span>
+            <select
+              className="preview-source-badge__calibration-select"
+              value={selectedPresetId}
+              onChange={handlePresetChange}
+              aria-describedby="web-preview-calibration-copy"
+            >
+              {FACE_FOLLOWING_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span
+            id="web-preview-calibration-copy"
+            className="preview-source-badge__note"
+          >
+            {selectedPreset.summary} Uses current MotionFrame fields only; no
+            real eye, mouth, expression, landmark, blendshape, or ML tracking.
+          </span>
           <span className="preview-source-badge__note">
             {PREVIEW_LOCAL_PRIVACY_NOTE}
           </span>
@@ -579,7 +619,11 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
           camera={{ position: [0, 0, 5], fov: 45 }}
           gl={{ alpha: isObsMode }}
         >
-          <AvatarScene nativeFrame={nativeFrame} source={source} />
+          <AvatarScene
+            nativeFrame={nativeFrame}
+            preset={selectedPreset}
+            source={source}
+          />
         </Canvas>
       </section>
     </main>
