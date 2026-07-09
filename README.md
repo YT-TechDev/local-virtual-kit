@@ -2,9 +2,9 @@
 
 Local Virtual Kit is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
 
-LVK is currently in early development. The current public baseline is **v0.2.0: the Local OpenCV Face-Following MVP**. In this baseline, the local Native Core can produce MotionFrame face-position output from OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
+LVK is currently in early development. The current public baseline is **v0.3.0: local tracking quality and release readiness** after the v0.2.0 Local OpenCV Face-Following MVP. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
 
-The next v0.3.0 implementation work focuses on improving local tracking quality, calibration and sensitivity polish, and evidence-based evaluation of the next local backend while preserving LVK's local-first boundaries.
+v0.3.0 captures post-v0.2 documentation navigation consolidation, local face-following calibration/sensitivity baseline work, packaged Electron runtime validation follow-up preparation, H2/helper-runtime guard coverage, and synthetic helper adapter smoke coverage behind the Native Core boundary. It does not change MotionFrame, Motion Protocol, runtime behavior, backend selection, dependencies, model artifacts, runtime downloads, telemetry, cloud upload, remote inference, external frame processing, or hidden network behavior.
 
 ## Core principles
 
@@ -124,8 +124,9 @@ LVK is local-first. Raw camera frames must remain local. Telemetry, analytics, c
 
 For the post-v0.2 entrypoint, use these current source-of-truth documents first:
 
-- `docs/releases/v0.2.0.md` - current Local OpenCV Face-Following MVP baseline and known limitations.
-- `docs/ROADMAP.md` - implementation sequence and v0.3+ direction.
+- `docs/releases/v0.3.0.md` - current local tracking quality and release-readiness notes.
+- `docs/releases/v0.2.0.md` - Local OpenCV Face-Following MVP baseline and known limitations.
+- `docs/ROADMAP.md` - implementation sequence and v0.4+ direction.
 - `docs/LOCAL_RUNTIME_CHECKLIST.md` - local/manual validation boundaries and runtime checklist.
 
 Start contributor or agent work with `docs/AGENTS.md`, then read only the focused document relevant to the task.
