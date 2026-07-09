@@ -510,6 +510,26 @@ MediaPipe Face Landmarker output fields (478 landmarks, 52 blendshapes, 4×4 tra
 
 The first v0.3 local tracking backend prototype entry decision for #400 is recorded in [`TRACKING_BACKEND_V0_3_PROTOTYPE_ENTRY_DECISION.md`](TRACKING_BACKEND_V0_3_PROTOTYPE_ENTRY_DECISION.md). It converts this evaluation's Pass 1-5 evidence into a smallest next PR-sized slice recommendation without selecting a backend, adding a dependency, or committing a model file.
 
+### v0.6.0 OpenCV Cascade Baseline Evidence (2026-07-09)
+
+- Date: 2026-07-09
+- Environment: Windows 11 Pro, x86-64 (developer workstation), Native Core reconfigured/rebuilt from current `main` with `-DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake` (Release config).
+- Native build: `opencvCameraSupport=true`, `opencvFaceDetectorSupport=true` confirmed via `--print-runtime-capabilities` on the freshly rebuilt binary (components: core+videoio for camera, core+imgproc+objdetect for the face detector). The previously staged local build predated the `--print-runtime-capabilities` flag and was stale, so it was reconfigured and rebuilt before evidence collection.
+- Runtime capabilities: `supportedCameraSources=dummy,opencv`; `supportedFaceDetectors=noop,opencv`; `cameraOpened=false`; `motionFramesEmitted=false`; `localOnly=true`.
+- Commands:
+  - `pnpm format:check`
+  - `node tools/check-native-runtime-capabilities.mjs <opencv-build>/lvk-tracker-core.exe`
+  - `node tools/check-native-opencv-baseline-boundary.mjs <opencv-build>/lvk-tracker-core.exe`
+  - `node tools/check-native-backend-parity-motionframe.mjs <opencv-build>/lvk-tracker-core.exe`
+  - `LVK_TEST_FACE_CASCADE_PATH=<trusted-local-haar-cascade-xml> node tools/check-native-opencv-baseline-boundary.mjs <opencv-build>/lvk-tracker-core.exe`
+  - `LVK_TEST_FACE_CASCADE_PATH=<trusted-local-haar-cascade-xml> node tools/check-native-backend-parity-motionframe.mjs <opencv-build>/lvk-tracker-core.exe`
+  - The trusted cascade path used was the official OpenCV 4.12.0 source tree installed locally via vcpkg (`haarcascade_frontalface_default.xml`, Apache 2.0 licensed); not committed to the repository.
+- Result: All commands passed. `format:check` reported all files formatted. The runtime capabilities checker passed against the OpenCV-enabled binary. The baseline boundary checker passed both without a cascade path (verified fail-closed `--face-detector opencv requires --face-cascade PATH` behavior) and with the trusted cascade path (cascade-backed smoke passed, `detectorName=opencv` present in stderr diagnostics). The backend parity checker passed both without and with the cascade path, confirming dummy/noop MotionFrame stdout schema, runtime capabilities local-only contract, and cascade-backed OpenCV MotionFrame parity schema.
+- Evidence type: Outcome A — OpenCV-enabled cascade-backed baseline was actually run, using the fail-closed/missing-cascade path checker plus the cascade-backed smoke path from `tools/check-native-opencv-baseline-boundary.mjs` and `tools/check-native-backend-parity-motionframe.mjs`. Both checkers drive the cascade-backed detection contract using `--camera-source dummy` (synthetic frames), not a live webcam; no real camera hardware was exercised in this pass.
+- Skipped / not validated: Live webcam/camera capture through the cascade-backed detector, Electron GUI, OBS Browser Source, and OS camera permission checks were not performed; out of scope for this evidence issue. Face-detection quality/accuracy was not evaluated — this remains smoke/baseline wiring evidence only, consistent with Pass 3.
+- Raw frame handling: No real camera frames were captured in this pass (checkers use `--camera-source dummy`). No cascade XML, generated artifacts, binaries, or build outputs were committed; the local OpenCV-enabled build directory remains git-ignored (`native/**/build-*`). `git status --short` was clean before and after this evidence collection.
+- Decision impact: OpenCV cascade-backed baseline evidence was collected; OpenCV Haar remains a smoke/baseline path only and is not selected as a production backend.
+
 ## Decision Record Template
 
 Copy this template into a future backend evaluation or decision PR after evidence is collected.
