@@ -220,32 +220,49 @@ function getNativeStatusText(status: NativeMotionConnectionStatus) {
     case "disabled":
       return "Disabled";
     case "connecting":
-      return "Connecting to bridge";
+      return "Opening localhost transport";
     case "connected":
-      return "Receiving native frames";
+      return "Native MotionFrames live";
     case "connected_waiting_for_frame":
-      return "Bridge open · Waiting for first frame";
+      return "Transport open · Waiting for first native frame";
     case "reconnecting":
-      return "Bridge disconnected · Retrying";
+      return "Local transport disconnected · Retrying";
     case "fallback":
-      return "Bridge open · No recent frames";
+      return "Native frames stale · Showing fallback";
   }
 }
 
 function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
   switch (status) {
     case "connected":
-      return "Connected to localhost and receiving valid native MotionFrames.";
+      return "Connected to localhost transport and using incoming native MotionFrames for the avatar.";
     case "connected_waiting_for_frame":
-      return `The localhost bridge accepted the preview connection, but no valid native MotionFrame has arrived yet; the fallback avatar appears after about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s if frames do not arrive.`;
+      return `The localhost transport is open, but no valid native MotionFrame has arrived yet; the fallback avatar appears after about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s if frames do not arrive, and the preview keeps showing the built-in dummy fallback until frames arrive.`;
     case "connecting":
-      return "Opening the localhost MotionFrame bridge connection; the fallback avatar stays visible while waiting.";
+      return "Opening the localhost MotionFrame transport; the built-in dummy fallback stays visible while waiting.";
     case "reconnecting":
-      return `The localhost bridge connection closed or is unavailable; retrying in about ${RECONNECT_DELAY_SECONDS.toFixed(1)}s without changing transport behavior.`;
+      return `The localhost MotionFrame transport is closed or unavailable; retrying in about ${RECONNECT_DELAY_SECONDS.toFixed(1)}s without changing transport behavior and showing the built-in dummy fallback.`;
     case "fallback":
-      return `The bridge is still connected, but valid native MotionFrames have paused for about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s; showing the fallback avatar until frames resume.`;
+      return `The localhost transport is still open, but valid native MotionFrames have paused for about ${NATIVE_FRAME_STALE_TIMEOUT_SECONDS.toFixed(1)}s; showing the built-in dummy fallback until native frames resume.`;
     case "disabled":
       return "Native MotionFrame input is disabled for the current preview source.";
+  }
+}
+
+function getNativeDisplayedMotionStatus(status: NativeMotionConnectionStatus) {
+  switch (status) {
+    case "connected":
+      return "Displayed motion: native MotionFrames";
+    case "connected_waiting_for_frame":
+      return "Displayed motion: dummy fallback while waiting for native frames";
+    case "connecting":
+      return "Displayed motion: dummy fallback while opening localhost transport";
+    case "reconnecting":
+      return "Displayed motion: dummy fallback while reconnecting localhost transport";
+    case "fallback":
+      return "Displayed motion: dummy fallback because native frames are stale";
+    case "disabled":
+      return "Displayed motion: dummy source";
   }
 }
 
@@ -278,6 +295,7 @@ function getSourceBadgeContent(
       helper: getNativeStatusHelper(nativeStatus),
       endpointNote: `Local MotionFrame endpoint: ${NATIVE_MOTION_WS_URL}`,
       diagnostics: [
+        getNativeDisplayedMotionStatus(nativeStatus),
         `Frames received: ${receivedFrameCount}`,
         getNativeFrameReceivedStatus(lastFrameReceivedAtMs, currentTimeMs),
       ],
@@ -285,9 +303,9 @@ function getSourceBadgeContent(
   }
 
   return {
-    label: "Source: Local demo MotionFrame",
+    label: "Source: Local demo MotionFrame · Dummy mode active",
     helper:
-      "No native runtime connected — showing a built-in local demo MotionFrame so the preview stays useful offline.",
+      "Dummy mode is active — no native runtime or localhost transport is required, and the preview uses built-in local demo MotionFrames.",
     diagnostics: null,
     endpointNote: null,
   };
