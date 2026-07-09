@@ -86,4 +86,11 @@ The recommended #471 implementation issue should:
 - No MediaPipe dependency, task/model file, runtime package, or runtime download was added. No production backend was selected.
 - Added `tools/check-native-mediapipe-candidate-boundary.mjs` (`pnpm test:native-mediapipe-candidate-boundary`) for focused checker coverage of the unsupported/fail-closed path.
 
-#472 should build MotionFrame compatibility evidence on top of this scaffold.
+## MotionFrame compatibility evidence (#472)
+
+#472 strengthens candidate scaffold evidence without adding MediaPipe runtime or inference:
+
+- explicit `--tracking-backend face-pipeline` preserves the same MotionFrame stdout JSON schema as the default path;
+- unsupported `--tracking-backend mediapipe-face-landmarker` emits no MotionFrame stdout and fails closed before camera open;
+- runtime capabilities continue to report `mediapipeFaceLandmarkerSupport=false` and `supportedTrackingBackends=face-pipeline`;
+- no production backend is selected and no dependency/model/task asset/runtime download is approved.
