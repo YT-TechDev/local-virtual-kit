@@ -22,6 +22,9 @@ const PREVIEW_NATIVE_URL = 'http://localhost:5173/?source=native'
 const PREVIEW_OBS_NATIVE_URL = 'http://localhost:5173/?mode=obs&source=native'
 const MOTION_ENDPOINT = 'ws://127.0.0.1:45731/motion'
 const FORCE_KILL_TIMEOUT_MS = 1_500
+const NO_FRAME_STARTUP_TIMEOUT_MS = 8_000
+const NO_FRAME_STARTUP_WARNING_MESSAGE =
+  'No MotionFrame has been received yet since the native pipeline started. Check the tracker/camera configuration or rebuild the native tracker.'
 const MAX_STATUS_MESSAGE_LENGTH = 360
 const DEFAULT_CAMERA_FPS = 60
 const DEFAULT_CAMERA_WIDTH = 640
@@ -105,6 +108,7 @@ function createInitialStatus(): LvkRuntimeStatus {
     motionEndpoint: MOTION_ENDPOINT,
     nativeTrackerStatus: 'not_started',
     motionBridgeStatus: 'not_started',
+    startupWarning: 'none',
     pipelineCameraSource: 'dummy',
     pipelineFaceDetector: 'noop',
     pipelineCameraIndex: 0,
@@ -346,6 +350,8 @@ export class NativePipelineManager {
   private trackerProcess: ChildProcessWithoutNullStreams | null = null
   private trackerStdoutReader: RlInterface | null = null
   private isStopping = false
+  private noFrameStartupTimer: NodeJS.Timeout | null = null
+  private hasReceivedMotionFrameSinceStart = false
 
   getStatus(): LvkRuntimeStatus {
     return { ...this.status }
@@ -390,6 +396,7 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'not_started',
+        startupWarning: 'none',
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
@@ -416,6 +423,7 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'not_started',
+        startupWarning: 'none',
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
@@ -444,9 +452,11 @@ export class NativePipelineManager {
     try {
       startMotionBridgeServer((error) => {
         if (!this.isStopping) {
+          this.clearNoFrameStartupTimer()
           this.status = {
             ...this.status,
             motionBridgeStatus: 'error',
+            startupWarning: 'none',
             lastError: `Motion bridge server error: ${truncateStatusMessage(error.message)}`
           }
           void this.terminateProcess(this.trackerProcess)
@@ -468,8 +478,12 @@ export class NativePipelineManager {
         terminal: false
       })
       this.trackerStdoutReader.on('line', (line: string) => {
-        publishMotionFrameLine(line)
+        if (publishMotionFrameLine(line)) {
+          this.handleValidMotionFrameReceived()
+        }
       })
+
+      this.armNoFrameStartupTimer()
 
       this.status = {
         ...this.status,
@@ -484,10 +498,12 @@ export class NativePipelineManager {
         lastMessage: `Native pipeline started with ${cameraSourceLabel} source and ${faceDetectorLabel}. Open ${PREVIEW_NATIVE_URL} to preview native MotionFrames.`
       }
     } catch (error) {
+      this.clearNoFrameStartupTimer()
       this.status = {
         ...this.status,
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'error',
+        startupWarning: 'none',
         lastError: error instanceof Error ? error.message : 'Failed to start native pipeline.'
       }
       void this.stop()
@@ -506,6 +522,7 @@ export class NativePipelineManager {
     }
 
     this.isStopping = true
+    this.clearNoFrameStartupTimer()
     try {
       this.status = {
         ...this.status,
@@ -525,6 +542,7 @@ export class NativePipelineManager {
         ...this.status,
         nativeTrackerStatus: 'exited',
         motionBridgeStatus: 'exited',
+        startupWarning: 'none',
         lastMessage: 'Native MotionFrame pipeline stopped.'
       }
     } finally {
@@ -536,6 +554,7 @@ export class NativePipelineManager {
 
   cleanupOnQuit(): void {
     this.isStopping = true
+    this.clearNoFrameStartupTimer()
 
     this.trackerStdoutReader?.close()
     this.trackerStdoutReader = null
@@ -566,9 +585,11 @@ export class NativePipelineManager {
 
     childProcess.once('error', (error) => {
       if (kind === 'tracker') {
+        this.clearNoFrameStartupTimer()
         this.status = {
           ...this.status,
           nativeTrackerStatus: 'error',
+          startupWarning: 'none',
           lastError: truncateStatusMessage(describeTrackerSpawnError(error))
         }
         this.terminateBridgeAfterTrackerExit()
@@ -578,11 +599,13 @@ export class NativePipelineManager {
     childProcess.once('exit', (code, signal) => {
       if (kind === 'tracker' && this.trackerProcess === childProcess) {
         this.trackerProcess = null
+        this.clearNoFrameStartupTimer()
         if (!this.isStopping) {
           const trackerExitMessage = `Native tracker stopped unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'none'}): check stderr output or rebuild and retry.`
           this.status = {
             ...this.status,
             nativeTrackerStatus: code === 0 ? 'exited' : 'error',
+            startupWarning: 'none',
             lastMessage: 'Native tracker stopped unexpectedly. Stopping the MotionFrame bridge.',
             lastError: trackerExitMessage
           }
@@ -590,6 +613,43 @@ export class NativePipelineManager {
         }
       }
     })
+  }
+
+  private armNoFrameStartupTimer(): void {
+    this.clearNoFrameStartupTimer()
+    this.hasReceivedMotionFrameSinceStart = false
+    this.noFrameStartupTimer = setTimeout(() => {
+      this.noFrameStartupTimer = null
+      if (this.hasReceivedMotionFrameSinceStart || this.isStopping) {
+        return
+      }
+      if (!isActiveStatus(this.status.nativeTrackerStatus)) {
+        return
+      }
+      this.status = {
+        ...this.status,
+        startupWarning: 'no_frame_timeout',
+        lastMessage: NO_FRAME_STARTUP_WARNING_MESSAGE
+      }
+    }, NO_FRAME_STARTUP_TIMEOUT_MS)
+  }
+
+  private clearNoFrameStartupTimer(): void {
+    if (this.noFrameStartupTimer !== null) {
+      clearTimeout(this.noFrameStartupTimer)
+      this.noFrameStartupTimer = null
+    }
+  }
+
+  private handleValidMotionFrameReceived(): void {
+    if (this.hasReceivedMotionFrameSinceStart) {
+      return
+    }
+    this.hasReceivedMotionFrameSinceStart = true
+    this.clearNoFrameStartupTimer()
+    if (this.status.startupWarning !== 'none') {
+      this.status = { ...this.status, startupWarning: 'none' }
+    }
   }
 
   private terminateBridgeAfterTrackerExit(): void {

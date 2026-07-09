@@ -16,6 +16,11 @@ export type MotionBridgeStatus =
 export type NativePipelineCameraSource = 'dummy' | 'opencv'
 export type NativePipelineFaceDetector = 'noop' | 'opencv'
 
+// Distinct from nativeTrackerStatus/motionBridgeStatus: this represents a
+// bounded "tracker and bridge started, but no MotionFrame arrived yet" signal,
+// not a spawn failure, bridge failure, or tracker exit.
+export type NativePipelineStartupWarning = 'none' | 'no_frame_timeout'
+
 export interface NativePipelineStartOptions {
   cameraSource?: NativePipelineCameraSource
   faceDetector?: NativePipelineFaceDetector
@@ -53,6 +58,7 @@ export interface LvkRuntimeStatus {
   motionEndpoint: string
   nativeTrackerStatus: NativeTrackerStatus
   motionBridgeStatus: MotionBridgeStatus
+  startupWarning: NativePipelineStartupWarning
   pipelineCameraSource?: NativePipelineCameraSource
   pipelineFaceDetector?: NativePipelineFaceDetector
   pipelineCameraIndex?: number

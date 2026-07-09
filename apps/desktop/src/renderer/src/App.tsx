@@ -179,6 +179,9 @@ const buildNativeRuntimeDiagnostics = (
   [
     `Native tracker status: ${statusLabels[status.nativeTrackerStatus]}`,
     `Motion bridge status: ${bridgeLabels[status.motionBridgeStatus]}`,
+    status.startupWarning === 'no_frame_timeout'
+      ? 'Startup warning: no MotionFrame received within the startup window.'
+      : null,
     status.lastMessage ? `Latest status: ${status.lastMessage}` : null,
     status.lastError ? `Latest error: ${status.lastError}` : null,
     pipelineError ? `Pipeline error: ${pipelineError}` : null
@@ -1107,6 +1110,22 @@ function App(): React.JSX.Element {
                     <li key={point}>{point}</li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+
+            {runtimeStatus.startupWarning === 'no_frame_timeout' ? (
+              <div
+                className="runtime-message compact"
+                role="status"
+                aria-labelledby="no-frame-startup-warning-label"
+              >
+                <strong id="no-frame-startup-warning-label" className="status-detail-label">
+                  No-frame startup warning
+                </strong>
+                <span>
+                  No MotionFrame has been received yet since the native pipeline started. Check the
+                  tracker/camera configuration, or rebuild the native tracker, then Refresh status.
+                </span>
               </div>
             ) : null}
 
