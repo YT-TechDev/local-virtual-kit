@@ -160,10 +160,11 @@ export function stopMotionBridgeServer(): void {
   latestTimestampMs = -Infinity
 }
 
-export function publishMotionFrameLine(line: string): void {
+export function publishMotionFrameLine(line: string): boolean {
   const parsed = parseFrameLine(line)
-  if (parsed === null || parsed.timestampMs <= latestTimestampMs) return
+  if (parsed === null || parsed.timestampMs <= latestTimestampMs) return false
   latestTimestampMs = parsed.timestampMs
   latestFrameText = parsed.text
   broadcast(parsed.text)
+  return true
 }
