@@ -32,6 +32,18 @@ message(STATUS "LVK Native Core OpenCV feature summary:")
 message(STATUS "  LVK OpenCV camera support: ${LVK_OPENCV_CAMERA_STATUS} (components: core + videoio)")
 message(STATUS "  LVK OpenCV face detector support: ${LVK_OPENCV_FACE_DETECTOR_STATUS} (components: core + imgproc + objdetect)")
 
+# v0.7.0 MediaPipe Face Landmarker build feasibility probe boundary (#481).
+# Disabled by default and does not add MediaPipe find_package, includes,
+# libraries, sources, or set LVK_HAS_MEDIAPIPE_FACE_LANDMARKER=1. See
+# docs/TRACKING_BACKEND_V0_7_MEDIAPIPE_FEASIBILITY.md: #480 does not approve
+# MediaPipe dependency, task/model assets, runtime downloads, or production
+# backend selection, so enabling this option fails configure fast instead of
+# pretending support exists.
+option(LVK_ENABLE_MEDIAPIPE_FACE_LANDMARKER_PROBE "Enable LVK MediaPipe Face Landmarker feasibility probe (no task/model assets bundled)" OFF)
+if(LVK_ENABLE_MEDIAPIPE_FACE_LANDMARKER_PROBE)
+  message(FATAL_ERROR "LVK_ENABLE_MEDIAPIPE_FACE_LANDMARKER_PROBE is not implemented in v0.7.0: #480 does not approve MediaPipe dependency, task/model assets, runtime downloads, or production backend selection.")
+endif()
+
 add_executable(lvk-tracker-core
   src/camera_source.cpp
   src/face_detector.cpp
