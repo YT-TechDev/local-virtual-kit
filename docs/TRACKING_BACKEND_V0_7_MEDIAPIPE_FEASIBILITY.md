@@ -79,3 +79,13 @@ Do not claim MediaPipe inference, landmark output, blendshape output, face trans
 - #481 should use this route decision as input.
 - #482 should add evidence for whatever #481 actually implements or defers.
 - #483 should close v0.7.0 with release-readiness notes.
+
+## Build feasibility probe entry (#481)
+
+#481 records the current v0.7.0 build feasibility boundary:
+
+- normal Native Core builds still do not add MediaPipe runtime, task/model assets, runtime packages, runtime downloads, or inference;
+- the optional CMake probe option, `LVK_ENABLE_MEDIAPIPE_FACE_LANDMARKER_PROBE`, is disabled by default and fails fast at CMake configure time when enabled because #480 does not approve dependency or asset integration;
+- the probe option does not call `find_package(MediaPipe)`, add MediaPipe includes/libraries/sources, or set `LVK_HAS_MEDIAPIPE_FACE_LANDMARKER=1`;
+- `mediapipe-face-landmarker` remains unsupported/fail-closed at runtime; capability reporting and CLI behavior are unchanged;
+- default `face-pipeline`, dummy/noop, and OpenCV baseline behavior remain unchanged.
