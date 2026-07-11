@@ -89,3 +89,13 @@ Do not claim MediaPipe inference, landmark output, blendshape output, face trans
 - the probe option does not call `find_package(MediaPipe)`, add MediaPipe includes/libraries/sources, or set `LVK_HAS_MEDIAPIPE_FACE_LANDMARKER=1`;
 - `mediapipe-face-landmarker` remains unsupported/fail-closed at runtime; capability reporting and CLI behavior are unchanged;
 - default `face-pipeline`, dummy/noop, and OpenCV baseline behavior remain unchanged.
+
+## Feasibility boundary checker evidence (#482)
+
+#482 adds automated evidence for the v0.7.0 MediaPipe build feasibility boundary:
+
+- the CMake probe option remains disabled by default;
+- enabling the probe is expected to fail at configure time with the explicit #480 non-approval message;
+- the checker confirms no MediaPipe `find_package`, include, library, source, task/model asset, runtime download, inference, or production backend enablement is introduced by this boundary;
+- existing runtime candidate and MotionFrame boundary checkers remain unchanged and compatible;
+- environments without CMake may report an honest runtime-check skip only after static boundary checks pass.
