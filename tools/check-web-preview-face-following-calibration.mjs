@@ -633,6 +633,55 @@ const FACE_FOLLOWING_PRESETS = [{ id: "balanced" }, { id: "steady" }, { id: "res
   ) {
     fail("disabled capture must reference nearby availability guidance");
   }
+  if (
+    !/type\s+CalibrationFeedbackState\s*=\s*\{[\s\S]*?revision:\s*number;[\s\S]*?message:\s*string;[\s\S]*?\}\s*\|\s*null;/.test(
+      avatarPreviewSource,
+    )
+  ) {
+    fail("calibration feedback state must include both revision and message");
+  }
+  if (
+    !avatarPreviewSource.includes("calibrationFeedbackRevisionRef = useRef(0)")
+  ) {
+    fail("calibration feedback revisions must be generated from a local ref");
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "const showCalibrationFeedback = (message: string)",
+    )
+  ) {
+    fail("calibration feedback must use a dedicated publishing helper");
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "calibrationFeedbackRevisionRef.current += 1",
+    ) ||
+    !avatarPreviewSource.includes(
+      "revision: calibrationFeedbackRevisionRef.current",
+    ) ||
+    !avatarPreviewSource.includes("message,")
+  ) {
+    fail(
+      "feedback publishing helper must create a new revisioned feedback event",
+    );
+  }
+  for (const feedbackCall of [
+    "showCalibrationFeedback(\n      rendererCalibrationState.neutralCenter === null",
+    'showCalibrationFeedback("Neutral pose captured and saved locally.")',
+    "showCalibrationFeedback(\n      `Neutral pose reset to the ${selectedPreset.label} preset default.`",
+  ]) {
+    if (!avatarPreviewSource.includes(feedbackCall)) {
+      fail(`calibration feedback path must use helper: ${feedbackCall}`);
+    }
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "<span key={calibrationFeedback.revision}>",
+    ) ||
+    !avatarPreviewSource.includes("{calibrationFeedback.message}")
+  ) {
+    fail("rendered feedback message must be keyed by the feedback revision");
+  }
   if (!avatarPreviewSource.includes("setCalibrationFeedback(null)")) {
     fail("calibration action feedback must be transient and clear locally");
   }

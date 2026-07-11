@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import {
@@ -201,6 +201,11 @@ const RESET_NEUTRAL_NOTE_ID = "web-preview-reset-neutral-note";
 type EndpointCopyFeedbackState = {
   message: string;
   endpointNote: string | null;
+} | null;
+
+type CalibrationFeedbackState = {
+  revision: number;
+  message: string;
 } | null;
 
 function getAvatarPreviewLabel(source: PreviewSource) {
@@ -506,9 +511,9 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const [rendererCalibrationState, setRendererCalibrationState] =
     useState<RendererCalibrationState>(loadRendererCalibrationState);
   const [calibrationRevision, setCalibrationRevision] = useState(0);
-  const [calibrationFeedback, setCalibrationFeedback] = useState<string | null>(
-    null,
-  );
+  const [calibrationFeedback, setCalibrationFeedback] =
+    useState<CalibrationFeedbackState>(null);
+  const calibrationFeedbackRevisionRef = useRef(0);
   const selectedPreset = getFaceFollowingPresetById(
     rendererCalibrationState.presetId,
   );
@@ -544,6 +549,14 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
       : null;
+
+  const showCalibrationFeedback = (message: string) => {
+    calibrationFeedbackRevisionRef.current += 1;
+    setCalibrationFeedback({
+      revision: calibrationFeedbackRevisionRef.current,
+      message,
+    });
+  };
 
   useEffect(() => {
     if (source !== "native" || lastFrameReceivedAtMs === null) {
@@ -599,7 +612,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setCalibrationRevision((revision) => revision + 1);
     saveRendererCalibrationState(nextState);
     const nextPreset = getFaceFollowingPresetById(nextPresetId);
-    setCalibrationFeedback(
+    showCalibrationFeedback(
       rendererCalibrationState.neutralCenter === null
         ? `Preset changed to ${nextPreset.label}; using the preset default center.`
         : `Preset changed to ${nextPreset.label}; the custom neutral pose was preserved.`,
@@ -623,7 +636,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setRendererCalibrationState(nextState);
     setCalibrationRevision((revision) => revision + 1);
     saveRendererCalibrationState(nextState);
-    setCalibrationFeedback("Neutral pose captured and saved locally.");
+    showCalibrationFeedback("Neutral pose captured and saved locally.");
   };
 
   const handleResetNeutralPose = () => {
@@ -639,7 +652,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setRendererCalibrationState(nextState);
     setCalibrationRevision((revision) => revision + 1);
     saveRendererCalibrationState(nextState);
-    setCalibrationFeedback(
+    showCalibrationFeedback(
       `Neutral pose reset to the ${selectedPreset.label} preset default.`,
     );
   };
@@ -842,7 +855,11 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               role="status"
               aria-live="polite"
             >
-              {calibrationFeedback}
+              {calibrationFeedback !== null ? (
+                <span key={calibrationFeedback.revision}>
+                  {calibrationFeedback.message}
+                </span>
+              ) : null}
             </p>
             <p className="preview-source-badge__note">
               {PREVIEW_LOCAL_PRIVACY_NOTE}
