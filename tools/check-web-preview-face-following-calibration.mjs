@@ -21,6 +21,10 @@ const AVATAR_PREVIEW_SOURCE_URL = new URL(
   "../apps/web-preview/src/components/AvatarPreview.tsx",
   import.meta.url,
 );
+const STORAGE_SOURCE_URL = new URL(
+  "../apps/web-preview/src/motion/rendererCalibrationStorage.ts",
+  import.meta.url,
+);
 
 const requireFromWebPreview = createRequire(WEB_PREVIEW_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
@@ -46,8 +50,12 @@ const assertTupleClose = (actual, expected, label, tolerance = 1e-9) => {
   });
 };
 
-const loadModule = async (sourceUrl, fileName) => {
-  const source = await readFile(sourceUrl, "utf8");
+const loadModule = async (
+  sourceUrl,
+  fileName,
+  rewriteSource = (source) => source,
+) => {
+  const source = rewriteSource(await readFile(sourceUrl, "utf8"));
 
   // Strip the `@lvk/motion-protocol` type-only import; it carries no runtime
   // value and is not resolvable from a standalone transpiled module.
@@ -74,6 +82,35 @@ const loadModule = async (sourceUrl, fileName) => {
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+};
+
+const createMemoryStorage = (initialValue = null) => {
+  let storedValue = initialValue;
+
+  return {
+    getItemCalls: 0,
+    setItemCalls: 0,
+    setValue(value) {
+      storedValue = value;
+    },
+    getWrittenValue() {
+      return storedValue;
+    },
+    getItem(key) {
+      this.getItemCalls += 1;
+      if (key !== "lvk.webPreview.rendererCalibration") {
+        fail(`unexpected storage read key: ${key}`);
+      }
+      return storedValue;
+    },
+    setItem(key, value) {
+      this.setItemCalls += 1;
+      if (key !== "lvk.webPreview.rendererCalibration") {
+        fail(`unexpected storage write key: ${key}`);
+      }
+      storedValue = value;
+    },
+  };
 };
 
 const runCheck = async () => {
@@ -211,6 +248,90 @@ const runCheck = async () => {
     "createDefaultFaceFollowingCalibration deadzone is independent of the default",
   );
 
+  const {
+    RENDERER_CALIBRATION_STORAGE_KEY,
+    loadRendererCalibrationPresetId,
+    saveRendererCalibrationPresetId,
+  } = await loadModule(
+    STORAGE_SOURCE_URL,
+    "rendererCalibrationStorage.ts",
+    (source) =>
+      source.replace(
+        /import \{[\s\S]*?\} from "\.\/faceFollowingPresets";\n/,
+        'const DEFAULT_FACE_FOLLOWING_PRESET_ID = "balanced";\nconst FACE_FOLLOWING_PRESETS = [{ id: "balanced" }, { id: "steady" }, { id: "responsive" }];\n',
+      ),
+  );
+
+  if (
+    RENDERER_CALIBRATION_STORAGE_KEY !== "lvk.webPreview.rendererCalibration"
+  ) {
+    fail("renderer calibration storage key changed unexpectedly");
+  }
+
+  if (
+    loadRendererCalibrationPresetId(createMemoryStorage(null)) !== "balanced"
+  ) {
+    fail("missing persisted calibration must fall back to balanced");
+  }
+  if (
+    loadRendererCalibrationPresetId(
+      createMemoryStorage(
+        JSON.stringify({ version: 1, presetId: "responsive" }),
+      ),
+    ) !== "responsive"
+  ) {
+    fail("valid persisted calibration must restore its preset ID");
+  }
+  if (
+    loadRendererCalibrationPresetId(createMemoryStorage("not json")) !==
+    "balanced"
+  ) {
+    fail("invalid persisted JSON must fall back to balanced");
+  }
+  if (
+    loadRendererCalibrationPresetId(
+      createMemoryStorage(JSON.stringify({ version: 2, presetId: "steady" })),
+    ) !== "balanced"
+  ) {
+    fail(
+      "unsupported persisted calibration version must fall back to balanced",
+    );
+  }
+  if (
+    loadRendererCalibrationPresetId(
+      createMemoryStorage(JSON.stringify({ version: 1, presetId: "turbo" })),
+    ) !== "balanced"
+  ) {
+    fail("unknown persisted calibration preset ID must fall back to balanced");
+  }
+  if (
+    loadRendererCalibrationPresetId({
+      getItem() {
+        throw new Error("storage read denied");
+      },
+      setItem() {},
+    }) !== "balanced"
+  ) {
+    fail("storage read exceptions must fall back to balanced");
+  }
+
+  const writeStorage = createMemoryStorage(null);
+  saveRendererCalibrationPresetId("steady", writeStorage);
+  if (
+    writeStorage.getWrittenValue() !==
+    JSON.stringify({ version: 1, presetId: "steady" })
+  ) {
+    fail("saving a valid calibration preset must write the versioned shape");
+  }
+  saveRendererCalibrationPresetId("responsive", {
+    getItem() {
+      return null;
+    },
+    setItem() {
+      throw new Error("storage write denied");
+    },
+  });
+
   const presetsSource = await readFile(PRESETS_SOURCE_URL, "utf8");
   const avatarPreviewSource = await readFile(AVATAR_PREVIEW_SOURCE_URL, "utf8");
   for (const label of ["Balanced", "Steady", "Responsive"]) {
@@ -220,6 +341,18 @@ const runCheck = async () => {
   }
   if (!avatarPreviewSource.includes("Renderer-side calibration preset")) {
     fail("UI copy must say renderer-side calibration");
+  }
+  if (!avatarPreviewSource.includes("loadRendererCalibrationPresetId")) {
+    fail(
+      "AvatarPreview must load the persisted calibration preset during initialization",
+    );
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "saveRendererCalibrationPresetId(nextPresetId)",
+    )
+  ) {
+    fail("changing the UI calibration preset must invoke persistence");
   }
   if (!avatarPreviewSource.includes("Uses current MotionFrame fields only")) {
     fail("UI copy must say presets use current MotionFrame fields only");

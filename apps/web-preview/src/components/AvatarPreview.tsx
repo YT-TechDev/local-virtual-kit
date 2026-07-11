@@ -17,12 +17,15 @@ import {
 } from "../motion/mapMotionFrameToAvatar";
 import { computeLostTrackingFallbackMotion } from "../motion/lostTrackingFallback";
 import {
-  DEFAULT_FACE_FOLLOWING_PRESET_ID,
   FACE_FOLLOWING_PRESETS,
   getFaceFollowingPresetById,
   type FaceFollowingPreset,
   type FaceFollowingPresetId,
 } from "../motion/faceFollowingPresets";
+import {
+  loadRendererCalibrationPresetId,
+  saveRendererCalibrationPresetId,
+} from "../motion/rendererCalibrationStorage";
 import { smoothTrackingMotion } from "../motion/trackingSmoothing";
 import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
@@ -434,7 +437,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const [endpointCopyFeedback, setEndpointCopyFeedback] =
     useState<EndpointCopyFeedbackState>(null);
   const [selectedPresetId, setSelectedPresetId] =
-    useState<FaceFollowingPresetId>(DEFAULT_FACE_FOLLOWING_PRESET_ID);
+    useState<FaceFollowingPresetId>(loadRendererCalibrationPresetId);
   const selectedPreset = getFaceFollowingPresetById(selectedPresetId);
   const currentEndpointCopyFeedback =
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
@@ -470,7 +473,10 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   }, [endpointCopyFeedback]);
 
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setSelectedPresetId(event.target.value as FaceFollowingPresetId);
+    const nextPresetId = event.target.value as FaceFollowingPresetId;
+
+    setSelectedPresetId(nextPresetId);
+    saveRendererCalibrationPresetId(nextPresetId);
   };
 
   const handleCopyEndpoint = () => {
