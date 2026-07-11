@@ -586,6 +586,106 @@ const FACE_FOLLOWING_PRESETS = [{ id: "balanced" }, { id: "steady" }, { id: "res
   if (!avatarPreviewSource.includes("!isObsMode &&")) {
     fail("calibration controls must remain excluded from OBS mode");
   }
+
+  for (const expectedCopy of [
+    "preview-source-panel",
+    "preview-calibration-panel",
+    "Renderer calibration",
+    "Active preset",
+    "Neutral center",
+    "Custom",
+    "Preset default",
+    `role="status"`,
+    "CALIBRATION_FEEDBACK_CLEAR_DELAY_MS",
+    "getNeutralPoseCaptureGuidance",
+    "Switch to the native source to capture a neutral pose.",
+    "Opening the localhost MotionFrame connection.",
+    "Reconnecting to the localhost MotionFrame connection.",
+    "Waiting for the first valid native MotionFrame.",
+    "Native frames are stale; waiting for a fresh tracking frame.",
+    "Connected, but no current native MotionFrame is available.",
+    "Native tracking has not started yet.",
+    "Tracking is currently lost.",
+    "Ready to capture the current native tracking pose.",
+    "Neutral pose captured and saved locally.",
+    "the custom neutral pose was preserved",
+    "using the preset default center",
+  ]) {
+    if (!avatarPreviewSource.includes(expectedCopy)) {
+      fail(
+        `AvatarPreview is missing calibration panel coverage copy: ${expectedCopy}`,
+      );
+    }
+  }
+  if (avatarPreviewSource.includes('aria-atomic="true"')) {
+    fail(
+      "interactive controls must not be wrapped in a broad atomic live region",
+    );
+  }
+  if (!avatarPreviewSource.includes("disabled={resetNeutralPoseDisabled}")) {
+    fail("reset must be disabled when no custom neutral center exists");
+  }
+  if (!avatarPreviewSource.includes("disabled={!canCaptureNeutralPose}")) {
+    fail("capture button must remain connected to canCaptureNativeNeutralPose");
+  }
+  if (
+    !avatarPreviewSource.includes("aria-describedby={CALIBRATION_GUIDANCE_ID}")
+  ) {
+    fail("disabled capture must reference nearby availability guidance");
+  }
+  if (
+    !/type\s+CalibrationFeedbackState\s*=\s*\{[\s\S]*?revision:\s*number;[\s\S]*?message:\s*string;[\s\S]*?\}\s*\|\s*null;/.test(
+      avatarPreviewSource,
+    )
+  ) {
+    fail("calibration feedback state must include both revision and message");
+  }
+  if (
+    !avatarPreviewSource.includes("calibrationFeedbackRevisionRef = useRef(0)")
+  ) {
+    fail("calibration feedback revisions must be generated from a local ref");
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "const showCalibrationFeedback = (message: string)",
+    )
+  ) {
+    fail("calibration feedback must use a dedicated publishing helper");
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "calibrationFeedbackRevisionRef.current += 1",
+    ) ||
+    !avatarPreviewSource.includes(
+      "revision: calibrationFeedbackRevisionRef.current",
+    ) ||
+    !avatarPreviewSource.includes("message,")
+  ) {
+    fail(
+      "feedback publishing helper must create a new revisioned feedback event",
+    );
+  }
+  for (const feedbackCall of [
+    "showCalibrationFeedback(\n      rendererCalibrationState.neutralCenter === null",
+    'showCalibrationFeedback("Neutral pose captured and saved locally.")',
+    "showCalibrationFeedback(\n      `Neutral pose reset to the ${selectedPreset.label} preset default.`",
+  ]) {
+    if (!avatarPreviewSource.includes(feedbackCall)) {
+      fail(`calibration feedback path must use helper: ${feedbackCall}`);
+    }
+  }
+  if (
+    !avatarPreviewSource.includes(
+      "<span key={calibrationFeedback.revision}>",
+    ) ||
+    !avatarPreviewSource.includes("{calibrationFeedback.message}")
+  ) {
+    fail("rendered feedback message must be keyed by the feedback revision");
+  }
+  if (!avatarPreviewSource.includes("setCalibrationFeedback(null)")) {
+    fail("calibration action feedback must be transient and clear locally");
+  }
+
   if (!avatarPreviewSource.includes("Uses current MotionFrame fields only")) {
     fail("UI copy must say presets use current MotionFrame fields only");
   }

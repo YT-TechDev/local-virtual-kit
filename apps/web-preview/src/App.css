@@ -278,3 +278,173 @@
   outline: 2px solid #38bdf8;
   outline-offset: 2px;
 }
+
+.preview-source-panel,
+.preview-calibration-panel {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgb(148 163 184 / 0.28);
+  border-radius: 0.75rem;
+  background: rgb(15 23 42 / 0.72);
+  box-shadow: 0 0.75rem 1.75rem rgb(2 6 23 / 0.22);
+  backdrop-filter: blur(12px);
+}
+
+.preview-calibration-panel {
+  border-color: rgb(125 211 252 / 0.34);
+  background: rgb(8 20 39 / 0.78);
+}
+
+.preview-controls__heading {
+  margin: 0;
+  color: #bae6fd;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.preview-calibration-panel__heading {
+  color: #bfdbfe;
+}
+
+.preview-calibration-panel__state {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.preview-calibration-panel__state div {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgb(147 197 253 / 0.22);
+  border-radius: 0.5rem;
+  background: rgb(15 23 42 / 0.55);
+}
+
+.preview-calibration-panel__state dt {
+  color: #93c5fd;
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preview-calibration-panel__state dd {
+  margin: 0;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.preview-calibration-panel__field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.preview-calibration-panel__label {
+  color: #dbeafe;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.preview-calibration-panel__select {
+  min-width: 0;
+  border: 1px solid rgb(186 230 253 / 0.42);
+  border-radius: 0.5rem;
+  background: rgb(15 23 42 / 0.92);
+  color: #f8fafc;
+  font: inherit;
+  padding: 0.3rem 0.45rem;
+}
+
+.preview-calibration-panel__select:focus-visible,
+.preview-calibration-panel__button:focus-visible,
+.preview-source-badge__copy-button:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.preview-calibration-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.preview-calibration-panel__button {
+  border: 1px solid rgb(186 230 253 / 0.42);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+}
+
+.preview-calibration-panel__button--primary {
+  background: rgb(14 165 233 / 0.24);
+  color: #f0f9ff;
+}
+
+.preview-calibration-panel__button--secondary {
+  background: rgb(30 41 59 / 0.72);
+  color: #dbeafe;
+}
+
+.preview-calibration-panel__button:hover:not(:disabled) {
+  border-color: rgb(125 211 252 / 0.76);
+  background: rgb(14 165 233 / 0.34);
+}
+
+.preview-calibration-panel__button:disabled {
+  border-color: rgb(148 163 184 / 0.28);
+  background: rgb(51 65 85 / 0.58);
+  color: #94a3b8;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.preview-calibration-panel__note,
+.preview-calibration-panel__guidance,
+.preview-calibration-panel__feedback {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.6875rem;
+}
+
+.preview-calibration-panel__note {
+  color: #94a3b8;
+}
+
+.preview-calibration-panel__guidance {
+  color: #cbd5e1;
+}
+
+.preview-calibration-panel__feedback {
+  min-height: 0.9rem;
+  color: #bbf7d0;
+  font-weight: 700;
+}
+
+@media (max-width: 36rem) {
+  .preview-calibration-panel__state {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-calibration-panel__actions {
+    display: grid;
+  }
+}
+
+.preview-source-badge {
+  width: min(30rem, calc(100vw - 2rem));
+  max-width: min(30rem, calc(100vw - 2rem));
+  gap: 0.6rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}

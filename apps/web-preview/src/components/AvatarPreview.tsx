@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
 import {
@@ -189,13 +189,23 @@ const RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_MS / 1000;
 const ENDPOINT_COPY_SUCCESS_TEXT = "Endpoint copied";
 const ENDPOINT_COPY_FAILURE_TEXT = "Copy failed";
 const ENDPOINT_COPY_FEEDBACK_CLEAR_DELAY_MS = 2000;
+const CALIBRATION_FEEDBACK_CLEAR_DELAY_MS = 4000;
 const NATIVE_FRAME_AGE_REFRESH_INTERVAL_MS = 500;
 const ENDPOINT_COPY_FEEDBACK_ID = "web-preview-endpoint-copy-feedback";
 const SOURCE_BADGE_ENDPOINT_NOTE_ID = "web-preview-native-endpoint-note";
+const CALIBRATION_GUIDANCE_ID = "web-preview-calibration-guidance";
+const CALIBRATION_FEEDBACK_ID = "web-preview-calibration-feedback";
+const CALIBRATION_COPY_ID = "web-preview-calibration-copy";
+const RESET_NEUTRAL_NOTE_ID = "web-preview-reset-neutral-note";
 
 type EndpointCopyFeedbackState = {
   message: string;
   endpointNote: string | null;
+} | null;
+
+type CalibrationFeedbackState = {
+  revision: number;
+  message: string;
 } | null;
 
 function getAvatarPreviewLabel(source: PreviewSource) {
@@ -270,46 +280,51 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
   }
 }
 
-function getNeutralPoseCaptureStatus({
+function getNeutralPoseCaptureGuidance({
   canCapture,
-  hasCustomNeutralCenter,
   nativeFrame,
   nativeStatus,
   source,
 }: {
   canCapture: boolean;
-  hasCustomNeutralCenter: boolean;
   nativeFrame: MotionFrame | null;
   nativeStatus: NativeMotionConnectionStatus;
   source: PreviewSource;
 }) {
-  if (canCapture) {
-    return "Ready to capture current native tracking pose.";
-  }
-
   if (source !== "native") {
-    return "Switch to native source to capture a neutral pose.";
+    return "Switch to the native source to capture a neutral pose.";
   }
 
-  if (nativeStatus === "fallback") {
-    return "Native frames are stale; waiting for a fresh tracking frame.";
-  }
-
-  if (nativeStatus !== "connected") {
-    return "Waiting for a live native tracking frame.";
+  switch (nativeStatus) {
+    case "disabled":
+      return "Native MotionFrame input is disabled for the current preview source.";
+    case "connecting":
+      return "Opening the localhost MotionFrame connection.";
+    case "reconnecting":
+      return "Reconnecting to the localhost MotionFrame connection.";
+    case "connected_waiting_for_frame":
+      return "Waiting for the first valid native MotionFrame.";
+    case "fallback":
+      return "Native frames are stale; waiting for a fresh tracking frame.";
+    case "connected":
+      break;
   }
 
   if (nativeFrame === null) {
-    return "Waiting for the first native tracking frame.";
+    return "Connected, but no current native MotionFrame is available.";
   }
 
-  if (nativeFrame.tracking.status !== "tracking") {
-    return "Tracking is currently lost; neutral capture is unavailable.";
+  if (nativeFrame.tracking.status === "not_started") {
+    return "Native tracking has not started yet.";
   }
 
-  return hasCustomNeutralCenter
-    ? "Neutral pose captured and persisted."
-    : "Neutral pose reset to the active preset default.";
+  if (nativeFrame.tracking.status === "lost") {
+    return "Tracking is currently lost.";
+  }
+
+  return canCapture
+    ? "Ready to capture the current native tracking pose."
+    : "Waiting for a valid native tracking frame.";
 }
 
 function getNativeDisplayedMotionStatus(status: NativeMotionConnectionStatus) {
@@ -496,6 +511,9 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const [rendererCalibrationState, setRendererCalibrationState] =
     useState<RendererCalibrationState>(loadRendererCalibrationState);
   const [calibrationRevision, setCalibrationRevision] = useState(0);
+  const [calibrationFeedback, setCalibrationFeedback] =
+    useState<CalibrationFeedbackState>(null);
+  const calibrationFeedbackRevisionRef = useRef(0);
   const selectedPreset = getFaceFollowingPresetById(
     rendererCalibrationState.presetId,
   );
@@ -512,17 +530,33 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     nativeStatus,
     source,
   });
-  const neutralPoseStatus = getNeutralPoseCaptureStatus({
+  const hasCustomNeutralCenter =
+    rendererCalibrationState.neutralCenter !== null;
+  const neutralCenterStateLabel = hasCustomNeutralCenter
+    ? "Custom"
+    : "Preset default";
+  const neutralPoseGuidance = getNeutralPoseCaptureGuidance({
     canCapture: canCaptureNeutralPose,
-    hasCustomNeutralCenter: rendererCalibrationState.neutralCenter !== null,
     nativeFrame,
     nativeStatus,
     source,
   });
+  const resetNeutralPoseDisabled = !hasCustomNeutralCenter;
+  const resetNeutralPoseNote = resetNeutralPoseDisabled
+    ? `The ${selectedPreset.label} preset default center is already in use.`
+    : `Reset to the ${selectedPreset.label} preset default center.`;
   const currentEndpointCopyFeedback =
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
       : null;
+
+  const showCalibrationFeedback = (message: string) => {
+    calibrationFeedbackRevisionRef.current += 1;
+    setCalibrationFeedback({
+      revision: calibrationFeedbackRevisionRef.current,
+      message,
+    });
+  };
 
   useEffect(() => {
     if (source !== "native" || lastFrameReceivedAtMs === null) {
@@ -537,6 +571,20 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
       window.clearInterval(refreshNativeFrameAgeTimer);
     };
   }, [lastFrameReceivedAtMs, source]);
+
+  useEffect(() => {
+    if (calibrationFeedback === null) {
+      return undefined;
+    }
+
+    const clearFeedbackTimer = window.setTimeout(() => {
+      setCalibrationFeedback(null);
+    }, CALIBRATION_FEEDBACK_CLEAR_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(clearFeedbackTimer);
+    };
+  }, [calibrationFeedback]);
 
   useEffect(() => {
     if (endpointCopyFeedback === null) {
@@ -563,6 +611,12 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setRendererCalibrationState(nextState);
     setCalibrationRevision((revision) => revision + 1);
     saveRendererCalibrationState(nextState);
+    const nextPreset = getFaceFollowingPresetById(nextPresetId);
+    showCalibrationFeedback(
+      rendererCalibrationState.neutralCenter === null
+        ? `Preset changed to ${nextPreset.label}; using the preset default center.`
+        : `Preset changed to ${nextPreset.label}; the custom neutral pose was preserved.`,
+    );
   };
 
   const handleCaptureNeutralPose = () => {
@@ -582,9 +636,14 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setRendererCalibrationState(nextState);
     setCalibrationRevision((revision) => revision + 1);
     saveRendererCalibrationState(nextState);
+    showCalibrationFeedback("Neutral pose captured and saved locally.");
   };
 
   const handleResetNeutralPose = () => {
+    if (resetNeutralPoseDisabled) {
+      return;
+    }
+
     const nextState = {
       presetId: rendererCalibrationState.presetId,
       neutralCenter: null,
@@ -593,6 +652,9 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setRendererCalibrationState(nextState);
     setCalibrationRevision((revision) => revision + 1);
     saveRendererCalibrationState(nextState);
+    showCalibrationFeedback(
+      `Neutral pose reset to the ${selectedPreset.label} preset default.`,
+    );
   };
 
   const handleCopyEndpoint = () => {
@@ -625,120 +687,184 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
       {!isObsMode && (
         <aside
           className="preview-source-badge"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          aria-label="Preview source status"
+          aria-label="Web Preview controls"
           aria-describedby={
             sourceBadgeContent.endpointNote !== null
               ? SOURCE_BADGE_ENDPOINT_NOTE_ID
               : undefined
           }
         >
-          <span className="preview-source-badge__label">
-            {badgeIndicatorVariant !== null && (
-              <span
-                className={`preview-source-badge__indicator preview-source-badge__indicator--${badgeIndicatorVariant}`}
-                aria-hidden="true"
-              />
-            )}
-            {sourceBadgeContent.label}
-          </span>
-          {sourceBadgeContent.helper !== null && (
-            <span className="preview-source-badge__helper">
-              {sourceBadgeContent.helper}
-            </span>
-          )}
-          {sourceBadgeContent.diagnostics !== null && (
-            <span className="preview-source-badge__diagnostics">
-              {sourceBadgeContent.diagnostics.map((diagnostic) => (
-                <span
-                  className="preview-source-badge__diagnostic"
-                  key={diagnostic}
-                >
-                  {diagnostic}
-                </span>
-              ))}
-            </span>
-          )}
-          {sourceBadgeContent.endpointNote !== null && (
-            <span
-              className="preview-source-badge__endpoint-row"
-              role="group"
-              aria-labelledby={SOURCE_BADGE_ENDPOINT_NOTE_ID}
-            >
-              <span
-                id={SOURCE_BADGE_ENDPOINT_NOTE_ID}
-                className="preview-source-badge__endpoint"
-              >
-                {sourceBadgeContent.endpointNote}
-              </span>
-              <button
-                className="preview-source-badge__copy-button"
-                type="button"
-                onClick={handleCopyEndpoint}
-                aria-describedby={
-                  currentEndpointCopyFeedback !== null
-                    ? ENDPOINT_COPY_FEEDBACK_ID
-                    : undefined
-                }
-              >
-                Copy endpoint
-              </button>
-              {currentEndpointCopyFeedback !== null && (
-                <span
-                  id={ENDPOINT_COPY_FEEDBACK_ID}
-                  className="preview-source-badge__copy-feedback"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {currentEndpointCopyFeedback}
-                </span>
-              )}
-            </span>
-          )}
-          <label className="preview-source-badge__calibration">
-            <span className="preview-source-badge__calibration-label">
-              Renderer-side calibration preset
-            </span>
-            <select
-              className="preview-source-badge__calibration-select"
-              value={rendererCalibrationState.presetId}
-              onChange={handlePresetChange}
-              aria-describedby="web-preview-calibration-copy"
-            >
-              {FACE_FOLLOWING_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span
-            id="web-preview-calibration-copy"
-            className="preview-source-badge__note"
+          <section
+            className="preview-source-panel"
+            aria-labelledby="preview-source-heading"
+            aria-describedby={
+              sourceBadgeContent.endpointNote !== null
+                ? SOURCE_BADGE_ENDPOINT_NOTE_ID
+                : undefined
+            }
           >
-            {selectedPreset.summary} Uses current MotionFrame fields only; no
-            real eye, mouth, expression, landmark, blendshape, or ML tracking.
-          </span>
-          <span className="preview-source-badge__calibration-actions">
-            <button
-              type="button"
-              onClick={handleCaptureNeutralPose}
-              disabled={!canCaptureNeutralPose}
+            <h2
+              id="preview-source-heading"
+              className="preview-controls__heading"
             >
-              Set current pose as neutral
-            </button>
-            <button type="button" onClick={handleResetNeutralPose}>
-              Reset neutral pose
-            </button>
-          </span>
-          <span className="preview-source-badge__note">
-            {neutralPoseStatus}
-          </span>
-          <span className="preview-source-badge__note">
-            {PREVIEW_LOCAL_PRIVACY_NOTE}
-          </span>
+              Preview source
+            </h2>
+            <span className="preview-source-badge__label">
+              {badgeIndicatorVariant !== null && (
+                <span
+                  className={`preview-source-badge__indicator preview-source-badge__indicator--${badgeIndicatorVariant}`}
+                  aria-hidden="true"
+                />
+              )}
+              {sourceBadgeContent.label}
+            </span>
+            {sourceBadgeContent.helper !== null && (
+              <span className="preview-source-badge__helper">
+                {sourceBadgeContent.helper}
+              </span>
+            )}
+            {sourceBadgeContent.diagnostics !== null && (
+              <span className="preview-source-badge__diagnostics">
+                {sourceBadgeContent.diagnostics.map((diagnostic) => (
+                  <span
+                    className="preview-source-badge__diagnostic"
+                    key={diagnostic}
+                  >
+                    {diagnostic}
+                  </span>
+                ))}
+              </span>
+            )}
+            {sourceBadgeContent.endpointNote !== null && (
+              <span
+                className="preview-source-badge__endpoint-row"
+                role="group"
+                aria-labelledby={SOURCE_BADGE_ENDPOINT_NOTE_ID}
+              >
+                <span
+                  id={SOURCE_BADGE_ENDPOINT_NOTE_ID}
+                  className="preview-source-badge__endpoint"
+                >
+                  {sourceBadgeContent.endpointNote}
+                </span>
+                <button
+                  className="preview-source-badge__copy-button"
+                  type="button"
+                  onClick={handleCopyEndpoint}
+                  aria-describedby={
+                    currentEndpointCopyFeedback !== null
+                      ? ENDPOINT_COPY_FEEDBACK_ID
+                      : undefined
+                  }
+                >
+                  Copy endpoint
+                </button>
+                {currentEndpointCopyFeedback !== null && (
+                  <span
+                    id={ENDPOINT_COPY_FEEDBACK_ID}
+                    className="preview-source-badge__copy-feedback"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {currentEndpointCopyFeedback}
+                  </span>
+                )}
+              </span>
+            )}
+          </section>
+
+          <section
+            className="preview-calibration-panel"
+            aria-labelledby="renderer-calibration-heading"
+          >
+            <h2
+              id="renderer-calibration-heading"
+              className="preview-controls__heading preview-calibration-panel__heading"
+            >
+              Renderer calibration
+            </h2>
+            <dl className="preview-calibration-panel__state">
+              <div>
+                <dt>Active preset</dt>
+                <dd>{selectedPreset.label}</dd>
+              </div>
+              <div>
+                <dt>Neutral center</dt>
+                <dd>{neutralCenterStateLabel}</dd>
+              </div>
+            </dl>
+            <label className="preview-calibration-panel__field">
+              <span className="preview-calibration-panel__label">
+                Renderer-side calibration preset
+              </span>
+              <select
+                className="preview-calibration-panel__select"
+                value={rendererCalibrationState.presetId}
+                onChange={handlePresetChange}
+                aria-describedby={CALIBRATION_COPY_ID}
+              >
+                {FACE_FOLLOWING_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p
+              id={CALIBRATION_COPY_ID}
+              className="preview-calibration-panel__note"
+            >
+              {selectedPreset.summary} Uses current MotionFrame fields only; no
+              real eye, mouth, expression, landmark, blendshape, or ML tracking.
+            </p>
+            <p
+              id={CALIBRATION_GUIDANCE_ID}
+              className="preview-calibration-panel__guidance"
+            >
+              {neutralPoseGuidance}
+            </p>
+            <div className="preview-calibration-panel__actions">
+              <button
+                className="preview-calibration-panel__button preview-calibration-panel__button--primary"
+                type="button"
+                onClick={handleCaptureNeutralPose}
+                disabled={!canCaptureNeutralPose}
+                aria-describedby={CALIBRATION_GUIDANCE_ID}
+              >
+                Set current pose as neutral
+              </button>
+              <button
+                className="preview-calibration-panel__button preview-calibration-panel__button--secondary"
+                type="button"
+                onClick={handleResetNeutralPose}
+                disabled={resetNeutralPoseDisabled}
+                aria-describedby={RESET_NEUTRAL_NOTE_ID}
+              >
+                Reset neutral pose
+              </button>
+            </div>
+            <p
+              id={RESET_NEUTRAL_NOTE_ID}
+              className="preview-calibration-panel__note"
+            >
+              {resetNeutralPoseNote}
+            </p>
+            <p
+              id={CALIBRATION_FEEDBACK_ID}
+              className="preview-calibration-panel__feedback"
+              role="status"
+              aria-live="polite"
+            >
+              {calibrationFeedback !== null ? (
+                <span key={calibrationFeedback.revision}>
+                  {calibrationFeedback.message}
+                </span>
+              ) : null}
+            </p>
+            <p className="preview-source-badge__note">
+              {PREVIEW_LOCAL_PRIVACY_NOTE}
+            </p>
+          </section>
         </aside>
       )}
       {debugMode === "motion" && (
