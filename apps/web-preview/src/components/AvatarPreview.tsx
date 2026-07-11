@@ -19,13 +19,22 @@ import { computeLostTrackingFallbackMotion } from "../motion/lostTrackingFallbac
 import {
   FACE_FOLLOWING_PRESETS,
   getFaceFollowingPresetById,
-  type FaceFollowingPreset,
   type FaceFollowingPresetId,
 } from "../motion/faceFollowingPresets";
 import {
-  loadRendererCalibrationPresetId,
-  saveRendererCalibrationPresetId,
+  createFaceFollowingCalibrationFromCenter,
+  type FaceFollowingCalibration,
+} from "../motion/faceFollowingCalibration";
+import type { TrackingSmoothingOptions } from "../motion/trackingSmoothing";
+import {
+  loadRendererCalibrationState,
+  saveRendererCalibrationState,
+  type RendererCalibrationState,
 } from "../motion/rendererCalibrationStorage";
+import {
+  canCaptureNativeNeutralPose,
+  resolveRendererFaceFollowingCalibration,
+} from "../motion/rendererNeutralPose";
 import { smoothTrackingMotion } from "../motion/trackingSmoothing";
 import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
@@ -38,8 +47,9 @@ type AvatarPreviewProps = {
 };
 
 type AvatarSceneProps = {
+  calibration: FaceFollowingCalibration;
   nativeFrame: MotionFrame | null;
-  preset: FaceFollowingPreset;
+  smoothing: TrackingSmoothingOptions;
   source: PreviewSource;
 };
 
@@ -260,6 +270,48 @@ function getNativeStatusHelper(status: NativeMotionConnectionStatus) {
   }
 }
 
+function getNeutralPoseCaptureStatus({
+  canCapture,
+  hasCustomNeutralCenter,
+  nativeFrame,
+  nativeStatus,
+  source,
+}: {
+  canCapture: boolean;
+  hasCustomNeutralCenter: boolean;
+  nativeFrame: MotionFrame | null;
+  nativeStatus: NativeMotionConnectionStatus;
+  source: PreviewSource;
+}) {
+  if (canCapture) {
+    return "Ready to capture current native tracking pose.";
+  }
+
+  if (source !== "native") {
+    return "Switch to native source to capture a neutral pose.";
+  }
+
+  if (nativeStatus === "fallback") {
+    return "Native frames are stale; waiting for a fresh tracking frame.";
+  }
+
+  if (nativeStatus !== "connected") {
+    return "Waiting for a live native tracking frame.";
+  }
+
+  if (nativeFrame === null) {
+    return "Waiting for the first native tracking frame.";
+  }
+
+  if (nativeFrame.tracking.status !== "tracking") {
+    return "Tracking is currently lost; neutral capture is unavailable.";
+  }
+
+  return hasCustomNeutralCenter
+    ? "Neutral pose captured and persisted."
+    : "Neutral pose reset to the active preset default.";
+}
+
 function getNativeDisplayedMotionStatus(status: NativeMotionConnectionStatus) {
   switch (status) {
     case "connected":
@@ -322,7 +374,12 @@ function getSourceBadgeContent(
   };
 }
 
-function AvatarScene({ nativeFrame, preset, source }: AvatarSceneProps) {
+function AvatarScene({
+  calibration,
+  nativeFrame,
+  smoothing,
+  source,
+}: AvatarSceneProps) {
   const [fallbackState, setFallbackState] = useState(
     createInitialTrackingFallbackState,
   );
@@ -337,7 +394,7 @@ function AvatarScene({ nativeFrame, preset, source }: AvatarSceneProps) {
       source === "native"
         ? (nativeFrame ?? stableNativeFallbackFrame)
         : createDummyMotionFrame(timestampMs);
-    const mappedMotion = mapMotionFrameToAvatar(frame, preset.calibration);
+    const mappedMotion = mapMotionFrameToAvatar(frame, calibration);
 
     setFallbackState((previousState) => {
       if (mappedMotion.trackingStatus === "tracking") {
@@ -365,7 +422,7 @@ function AvatarScene({ nativeFrame, preset, source }: AvatarSceneProps) {
                 previousState.lastTrackingMotion ?? idleApproximatedMotion,
                 idleApproximatedMotion,
                 delta,
-                preset.smoothing,
+                smoothing,
               )
             : idleApproximatedMotion;
 
@@ -436,9 +493,32 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const panelClassName = `preview-panel preview-panel--${mode}`;
   const [endpointCopyFeedback, setEndpointCopyFeedback] =
     useState<EndpointCopyFeedbackState>(null);
-  const [selectedPresetId, setSelectedPresetId] =
-    useState<FaceFollowingPresetId>(loadRendererCalibrationPresetId);
-  const selectedPreset = getFaceFollowingPresetById(selectedPresetId);
+  const [rendererCalibrationState, setRendererCalibrationState] =
+    useState<RendererCalibrationState>(loadRendererCalibrationState);
+  const [calibrationRevision, setCalibrationRevision] = useState(0);
+  const selectedPreset = getFaceFollowingPresetById(
+    rendererCalibrationState.presetId,
+  );
+  const effectiveCalibration = useMemo(
+    () =>
+      resolveRendererFaceFollowingCalibration(
+        selectedPreset,
+        rendererCalibrationState,
+      ),
+    [rendererCalibrationState.neutralCenter, selectedPreset],
+  );
+  const canCaptureNeutralPose = canCaptureNativeNeutralPose({
+    nativeFrame,
+    nativeStatus,
+    source,
+  });
+  const neutralPoseStatus = getNeutralPoseCaptureStatus({
+    canCapture: canCaptureNeutralPose,
+    hasCustomNeutralCenter: rendererCalibrationState.neutralCenter !== null,
+    nativeFrame,
+    nativeStatus,
+    source,
+  });
   const currentEndpointCopyFeedback =
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
@@ -475,8 +555,44 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextPresetId = event.target.value as FaceFollowingPresetId;
 
-    setSelectedPresetId(nextPresetId);
-    saveRendererCalibrationPresetId(nextPresetId);
+    const nextState = {
+      presetId: nextPresetId,
+      neutralCenter: rendererCalibrationState.neutralCenter,
+    };
+
+    setRendererCalibrationState(nextState);
+    setCalibrationRevision((revision) => revision + 1);
+    saveRendererCalibrationState(nextState);
+  };
+
+  const handleCaptureNeutralPose = () => {
+    if (!canCaptureNeutralPose || nativeFrame === null) {
+      return;
+    }
+
+    const capturedCalibration = createFaceFollowingCalibrationFromCenter(
+      nativeFrame.face.position,
+      selectedPreset.calibration,
+    );
+    const nextState = {
+      presetId: rendererCalibrationState.presetId,
+      neutralCenter: capturedCalibration.center,
+    };
+
+    setRendererCalibrationState(nextState);
+    setCalibrationRevision((revision) => revision + 1);
+    saveRendererCalibrationState(nextState);
+  };
+
+  const handleResetNeutralPose = () => {
+    const nextState = {
+      presetId: rendererCalibrationState.presetId,
+      neutralCenter: null,
+    };
+
+    setRendererCalibrationState(nextState);
+    setCalibrationRevision((revision) => revision + 1);
+    saveRendererCalibrationState(nextState);
   };
 
   const handleCopyEndpoint = () => {
@@ -587,7 +703,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
             </span>
             <select
               className="preview-source-badge__calibration-select"
-              value={selectedPresetId}
+              value={rendererCalibrationState.presetId}
               onChange={handlePresetChange}
               aria-describedby="web-preview-calibration-copy"
             >
@@ -604,6 +720,21 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
           >
             {selectedPreset.summary} Uses current MotionFrame fields only; no
             real eye, mouth, expression, landmark, blendshape, or ML tracking.
+          </span>
+          <span className="preview-source-badge__calibration-actions">
+            <button
+              type="button"
+              onClick={handleCaptureNeutralPose}
+              disabled={!canCaptureNeutralPose}
+            >
+              Set current pose as neutral
+            </button>
+            <button type="button" onClick={handleResetNeutralPose}>
+              Reset neutral pose
+            </button>
+          </span>
+          <span className="preview-source-badge__note">
+            {neutralPoseStatus}
           </span>
           <span className="preview-source-badge__note">
             {PREVIEW_LOCAL_PRIVACY_NOTE}
@@ -626,8 +757,10 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
           gl={{ alpha: isObsMode }}
         >
           <AvatarScene
+            key={calibrationRevision}
+            calibration={effectiveCalibration}
             nativeFrame={nativeFrame}
-            preset={selectedPreset}
+            smoothing={selectedPreset.smoothing}
             source={source}
           />
         </Canvas>

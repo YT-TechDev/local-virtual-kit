@@ -25,6 +25,10 @@ const STORAGE_SOURCE_URL = new URL(
   "../apps/web-preview/src/motion/rendererCalibrationStorage.ts",
   import.meta.url,
 );
+const NEUTRAL_POSE_SOURCE_URL = new URL(
+  "../apps/web-preview/src/motion/rendererNeutralPose.ts",
+  import.meta.url,
+);
 
 const requireFromWebPreview = createRequire(WEB_PREVIEW_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
@@ -250,16 +254,33 @@ const runCheck = async () => {
 
   const {
     RENDERER_CALIBRATION_STORAGE_KEY,
+    loadRendererCalibrationState,
     loadRendererCalibrationPresetId,
+    saveRendererCalibrationState,
     saveRendererCalibrationPresetId,
   } = await loadModule(
     STORAGE_SOURCE_URL,
     "rendererCalibrationStorage.ts",
     (source) =>
-      source.replace(
-        /import \{[\s\S]*?\} from "\.\/faceFollowingPresets";\n/,
-        'const DEFAULT_FACE_FOLLOWING_PRESET_ID = "balanced";\nconst FACE_FOLLOWING_PRESETS = [{ id: "balanced" }, { id: "steady" }, { id: "responsive" }];\n',
-      ),
+      source
+        .replace(
+          new RegExp(
+            String.raw`import \{[\s\S]*?\} from "\.\/faceFollowingCalibration";\s*`,
+            "m",
+          ),
+          `const FACE_FOLLOWING_MIN_CENTER = -1;
+const FACE_FOLLOWING_MAX_CENTER = 1;
+`,
+        )
+        .replace(
+          new RegExp(
+            String.raw`import \{[\s\S]*?\} from "\.\/faceFollowingPresets";\s*`,
+            "m",
+          ),
+          `const DEFAULT_FACE_FOLLOWING_PRESET_ID = "balanced";
+const FACE_FOLLOWING_PRESETS = [{ id: "balanced" }, { id: "steady" }, { id: "responsive" }];
+`,
+        ),
   );
 
   if (
@@ -288,9 +309,35 @@ const runCheck = async () => {
   ) {
     fail("invalid persisted JSON must fall back to balanced");
   }
+  const restoredV1 = loadRendererCalibrationState(
+    createMemoryStorage(JSON.stringify({ version: 1, presetId: "responsive" })),
+  );
+  if (
+    restoredV1.presetId !== "responsive" ||
+    restoredV1.neutralCenter !== null
+  ) {
+    fail("valid version 1 data must restore its preset with no custom center");
+  }
+  const restoredV2 = loadRendererCalibrationState(
+    createMemoryStorage(
+      JSON.stringify({
+        version: 2,
+        presetId: "steady",
+        neutralCenter: { x: 0.2, y: -0.1, z: 0.3 },
+      }),
+    ),
+  );
+  if (
+    restoredV2.presetId !== "steady" ||
+    restoredV2.neutralCenter?.x !== 0.2 ||
+    restoredV2.neutralCenter?.y !== -0.1 ||
+    restoredV2.neutralCenter?.z !== 0.3
+  ) {
+    fail("valid version 2 data must restore preset and neutral center");
+  }
   if (
     loadRendererCalibrationPresetId(
-      createMemoryStorage(JSON.stringify({ version: 2, presetId: "steady" })),
+      createMemoryStorage(JSON.stringify({ version: 99, presetId: "steady" })),
     ) !== "balanced"
   ) {
     fail(
@@ -319,9 +366,24 @@ const runCheck = async () => {
   saveRendererCalibrationPresetId("steady", writeStorage);
   if (
     writeStorage.getWrittenValue() !==
-    JSON.stringify({ version: 1, presetId: "steady" })
+    JSON.stringify({ version: 2, presetId: "steady", neutralCenter: null })
   ) {
     fail("saving a valid calibration preset must write the versioned shape");
+  }
+  const writeCenterStorage = createMemoryStorage(null);
+  saveRendererCalibrationState(
+    { presetId: "responsive", neutralCenter: { x: 0.1, y: 0.2, z: -0.3 } },
+    writeCenterStorage,
+  );
+  if (
+    writeCenterStorage.getWrittenValue() !==
+    JSON.stringify({
+      version: 2,
+      presetId: "responsive",
+      neutralCenter: { x: 0.1, y: 0.2, z: -0.3 },
+    })
+  ) {
+    fail("saving calibration state must write preset and neutral center");
   }
   saveRendererCalibrationPresetId("responsive", {
     getItem() {
@@ -331,6 +393,169 @@ const runCheck = async () => {
       throw new Error("storage write denied");
     },
   });
+
+  for (const badCenter of [
+    7,
+    { x: 0, y: 0 },
+    { x: Number.NaN, y: 0, z: 0 },
+    { x: Number.POSITIVE_INFINITY, y: 0, z: 0 },
+    { x: "0", y: 0, z: 0 },
+    { x: 2, y: 0, z: 0 },
+  ]) {
+    const restored = loadRendererCalibrationState(
+      createMemoryStorage(
+        JSON.stringify({
+          version: 2,
+          presetId: "steady",
+          neutralCenter: badCenter,
+        }),
+      ),
+    );
+    if (restored.presetId !== "steady" || restored.neutralCenter !== null) {
+      fail(
+        "invalid neutral-center data must be dropped while preserving valid preset",
+      );
+    }
+  }
+
+  const {
+    canCaptureNativeNeutralPose,
+    resolveRendererFaceFollowingCalibration,
+  } = await loadModule(
+    NEUTRAL_POSE_SOURCE_URL,
+    "rendererNeutralPose.ts",
+    (source) =>
+      source
+        .replace(
+          /^import type \{ MotionFrame \} from "@lvk\/motion-protocol";\s*$/m,
+          "",
+        )
+        .replace(
+          /^import type \{ NativeMotionConnectionStatus \} from "\.\/nativeMotionFrameLifecycle";\s*$/m,
+          "",
+        )
+        .replace(
+          /import \{[\s\S]*?\} from "\.\/faceFollowingCalibration";\s*/m,
+          `const createFaceFollowingCalibrationFromCenter = (restingPosition, baseCalibration) => ({
+            center: { x: restingPosition.x, y: restingPosition.y, z: restingPosition.z },
+            sensitivity: baseCalibration.sensitivity,
+            deadzone: baseCalibration.deadzone,
+          });
+`,
+        )
+        .replace(
+          /^import type \{ FaceFollowingPreset \} from "\.\/faceFollowingPresets";\s*$/m,
+          "",
+        )
+        .replace(
+          /^import type \{ RendererCalibrationState \} from "\.\/rendererCalibrationStorage";\s*$/m,
+          "",
+        )
+        .replace(
+          /^import type \{ PreviewSource \} from "\.\.\/preview\/previewSource";\s*$/m,
+          "",
+        ),
+  );
+
+  const trackingFrame = {
+    face: { position: { x: 0.25, y: -0.2, z: 0.1 } },
+    tracking: { status: "tracking" },
+  };
+  if (
+    !canCaptureNativeNeutralPose({
+      source: "native",
+      nativeStatus: "connected",
+      nativeFrame: trackingFrame,
+    })
+  ) {
+    fail("valid native tracking frame must be eligible for neutral capture");
+  }
+  for (const blocked of [
+    { source: "dummy", nativeStatus: "disabled", nativeFrame: trackingFrame },
+    {
+      source: "native",
+      nativeStatus: "connected_waiting_for_frame",
+      nativeFrame: null,
+    },
+    {
+      source: "native",
+      nativeStatus: "reconnecting",
+      nativeFrame: trackingFrame,
+    },
+    { source: "native", nativeStatus: "fallback", nativeFrame: trackingFrame },
+    {
+      source: "native",
+      nativeStatus: "connected",
+      nativeFrame: { ...trackingFrame, tracking: { status: "lost" } },
+    },
+    { source: "native", nativeStatus: "connected", nativeFrame: null },
+  ]) {
+    if (canCaptureNativeNeutralPose(blocked)) {
+      fail(
+        `blocked capture state was incorrectly eligible: ${JSON.stringify(blocked)}`,
+      );
+    }
+  }
+
+  const responsivePreset = {
+    calibration: {
+      center: { x: 0, y: 0, z: 0 },
+      sensitivity: { x: 3.776, y: 2.832, z: 1.062 },
+      deadzone: { x: 0.015, y: 0.015, z: 0.0075 },
+    },
+    smoothing: { positionTauSeconds: 0.08, rotationTauSeconds: 0.08 },
+  };
+  const captured = createFaceFollowingCalibrationFromCenter(
+    trackingFrame.face.position,
+    responsivePreset.calibration,
+  );
+  assertTupleClose(
+    applyFaceFollowingCalibration(trackingFrame.face.position, captured),
+    [0, 0, 0],
+    "capturing a position with active preset maps that position to origin",
+  );
+  assertClose(
+    captured.sensitivity.x,
+    responsivePreset.calibration.sensitivity.x,
+    "capture preserves active preset sensitivity",
+  );
+  assertClose(
+    captured.deadzone.x,
+    responsivePreset.calibration.deadzone.x,
+    "capture preserves active preset deadzone",
+  );
+  if (responsivePreset.smoothing.positionTauSeconds !== 0.08) {
+    fail("capture must not mutate active preset smoothing");
+  }
+  const resetCalibration = resolveRendererFaceFollowingCalibration(
+    responsivePreset,
+    {
+      presetId: "responsive",
+      neutralCenter: null,
+    },
+  );
+  assertClose(
+    resetCalibration.center.x,
+    0,
+    "reset restores active preset default center",
+  );
+  const switchedCalibration = resolveRendererFaceFollowingCalibration(
+    responsivePreset,
+    {
+      presetId: "responsive",
+      neutralCenter: captured.center,
+    },
+  );
+  assertClose(
+    switchedCalibration.center.x,
+    captured.center.x,
+    "preset change preserves captured neutral center",
+  );
+  assertClose(
+    switchedCalibration.sensitivity.x,
+    responsivePreset.calibration.sensitivity.x,
+    "preset change applies new preset sensitivity",
+  );
 
   const presetsSource = await readFile(PRESETS_SOURCE_URL, "utf8");
   const avatarPreviewSource = await readFile(AVATAR_PREVIEW_SOURCE_URL, "utf8");
@@ -342,17 +567,24 @@ const runCheck = async () => {
   if (!avatarPreviewSource.includes("Renderer-side calibration preset")) {
     fail("UI copy must say renderer-side calibration");
   }
-  if (!avatarPreviewSource.includes("loadRendererCalibrationPresetId")) {
+  if (!avatarPreviewSource.includes("loadRendererCalibrationState")) {
     fail(
-      "AvatarPreview must load the persisted calibration preset during initialization",
+      "AvatarPreview must load the persisted renderer calibration state during initialization",
     );
   }
   if (
-    !avatarPreviewSource.includes(
-      "saveRendererCalibrationPresetId(nextPresetId)",
-    )
+    !avatarPreviewSource.includes("saveRendererCalibrationState(nextState)")
   ) {
-    fail("changing the UI calibration preset must invoke persistence");
+    fail("changing renderer calibration must invoke state persistence");
+  }
+  if (!avatarPreviewSource.includes("Set current pose as neutral")) {
+    fail("UI must include the neutral-pose capture control");
+  }
+  if (!avatarPreviewSource.includes("Reset neutral pose")) {
+    fail("UI must include the neutral-pose reset control");
+  }
+  if (!avatarPreviewSource.includes("!isObsMode &&")) {
+    fail("calibration controls must remain excluded from OBS mode");
   }
   if (!avatarPreviewSource.includes("Uses current MotionFrame fields only")) {
     fail("UI copy must say presets use current MotionFrame fields only");
