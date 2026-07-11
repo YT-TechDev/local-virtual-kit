@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.7.0 is the MediaPipe local feasibility foundation after the v0.6.0 local backend candidate validation spike. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.7.0 establishes a conservative dependency/build feasibility boundary without integrating MediaPipe or approving task/model assets, runtime downloads, inference, or production backend selection.
+For current release-prep work, v0.8.0 is the completed first user-facing Web Preview renderer calibration workflow. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.8.0 keeps calibration renderer-owned, browser-local, OBS-control-excluded, and compatible with the existing Native Core and MotionFrame boundaries.
 
 ---
 
@@ -183,10 +183,13 @@ v0.6.0 followed up with Local backend candidate validation spike work: OpenCV ca
 
 v0.7.0 followed up with MediaPipe local feasibility foundation work: a source-grounded dependency and task/model asset route decision, a disabled-by-default CMake feasibility option that fails fast at configure time when enabled, and automated checker evidence for that boundary. v0.7.0 does not integrate or enable MediaPipe, add dependencies or task/model assets, add runtime downloads or inference, change MotionFrame or Motion Protocol, or claim new webcam / OBS / Electron GUI / packaged Electron / hardware readiness validation.
 
-Future post-v0.7.0 direction should prioritize visible implementation work such as calibration polish, avatar preview polish, visible local tracking UX improvements, or renderer/avatar integration planning backed by actual UI implementation, without weakening LVK's local-first privacy boundary. Any real MediaPipe integration must be separately approved and scoped rather than folded into another docs-only Gate cycle by default.
+v0.8.0 followed up with the first user-facing Web Preview renderer calibration workflow: persistent Balanced / Steady / Responsive preset selection, versioned fail-safe browser-local renderer calibration state, native neutral-pose capture/reset, calibration panel UX/accessibility improvements, and OBS control exclusion. v0.8.0 does not expand MotionFrame, Motion Protocol, Native Core, localhost transport, camera access, tracking backend selection, network behavior, telemetry, cloud upload, remote inference, or privacy scope.
+
+Future post-v0.8.0 direction should not begin another docs-only Gate cycle by default. Inspect the current repository state and open issues before selecting work, and prefer one visible implementation milestone. Possible categories include avatar preview/renderer integration, visible local tracking UX or tracking-quality improvement, or calibration validation with owner-side runtime evidence; this roadmap does not approve any one category as the next milestone. Any real MediaPipe integration must remain separately approved and scoped.
 
 ## Release Entry Points
 
+- v0.8.0 release-readiness notes: `docs/releases/v0.8.0.md`.
 - v0.7.0 release-readiness notes: `docs/releases/v0.7.0.md`.
 - v0.6.0 release-readiness notes: `docs/releases/v0.6.0.md`.
 - v0.5.0 release-readiness notes: `docs/releases/v0.5.0.md`.
