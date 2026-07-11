@@ -720,19 +720,14 @@ const runSmokeCheck = async () => {
     fail("native source badge must keep existing status text/helper semantics");
   }
 
-  const requiredAttributes = [
-    ["role", "status"],
-    ["aria-live", "polite"],
-    ["aria-atomic", "true"],
-    ["aria-label", "Preview source status"],
-  ];
+  if (!hasJsxAttribute(badgeTag, "aria-label", "Web Preview controls")) {
+    fail("preview-source-badge must label the grouped Web Preview controls");
+  }
 
-  for (const [attributeName, expectedValue] of requiredAttributes) {
-    if (!hasJsxAttribute(badgeTag, attributeName, expectedValue)) {
-      fail(
-        `preview-source-badge must keep ${attributeName}="${expectedValue}"`,
-      );
-    }
+  if (badgeTag.includes("aria-atomic") || badgeTag.includes("aria-live")) {
+    fail(
+      "preview-source-badge must not wrap interactive controls in a broad live region",
+    );
   }
 
   console.log("Web Preview native status badge smoke check passed.");

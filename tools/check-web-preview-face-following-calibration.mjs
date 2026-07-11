@@ -586,6 +586,57 @@ const FACE_FOLLOWING_PRESETS = [{ id: "balanced" }, { id: "steady" }, { id: "res
   if (!avatarPreviewSource.includes("!isObsMode &&")) {
     fail("calibration controls must remain excluded from OBS mode");
   }
+
+  for (const expectedCopy of [
+    "preview-source-panel",
+    "preview-calibration-panel",
+    "Renderer calibration",
+    "Active preset",
+    "Neutral center",
+    "Custom",
+    "Preset default",
+    `role="status"`,
+    "CALIBRATION_FEEDBACK_CLEAR_DELAY_MS",
+    "getNeutralPoseCaptureGuidance",
+    "Switch to the native source to capture a neutral pose.",
+    "Opening the localhost MotionFrame connection.",
+    "Reconnecting to the localhost MotionFrame connection.",
+    "Waiting for the first valid native MotionFrame.",
+    "Native frames are stale; waiting for a fresh tracking frame.",
+    "Connected, but no current native MotionFrame is available.",
+    "Native tracking has not started yet.",
+    "Tracking is currently lost.",
+    "Ready to capture the current native tracking pose.",
+    "Neutral pose captured and saved locally.",
+    "the custom neutral pose was preserved",
+    "using the preset default center",
+  ]) {
+    if (!avatarPreviewSource.includes(expectedCopy)) {
+      fail(
+        `AvatarPreview is missing calibration panel coverage copy: ${expectedCopy}`,
+      );
+    }
+  }
+  if (avatarPreviewSource.includes('aria-atomic="true"')) {
+    fail(
+      "interactive controls must not be wrapped in a broad atomic live region",
+    );
+  }
+  if (!avatarPreviewSource.includes("disabled={resetNeutralPoseDisabled}")) {
+    fail("reset must be disabled when no custom neutral center exists");
+  }
+  if (!avatarPreviewSource.includes("disabled={!canCaptureNeutralPose}")) {
+    fail("capture button must remain connected to canCaptureNativeNeutralPose");
+  }
+  if (
+    !avatarPreviewSource.includes("aria-describedby={CALIBRATION_GUIDANCE_ID}")
+  ) {
+    fail("disabled capture must reference nearby availability guidance");
+  }
+  if (!avatarPreviewSource.includes("setCalibrationFeedback(null)")) {
+    fail("calibration action feedback must be transient and clear locally");
+  }
+
   if (!avatarPreviewSource.includes("Uses current MotionFrame fields only")) {
     fail("UI copy must say presets use current MotionFrame fields only");
   }
