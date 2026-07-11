@@ -274,6 +274,12 @@ requireMatch(
 
 requireMatch(
   source,
+  /<button[\s\S]*?onClick=\{.*?openPreviewUrl\(runtimeStatus\.previewObsDummyUrl\).*?\}[\s\S]*?disabled=\{isPreviewOpenPending\}/u,
+  "OBS dummy source Open button must bind disabled={isPreviewOpenPending}",
+);
+
+requireMatch(
+  source,
   /\{openError\s*\?\s*\(\s*<p[\s\S]*?role=['"]alert['"][\s\S]*?aria-labelledby=['"]preview-open-error-label['"]/u,
   'openError block must have role="alert" and aria-labelledby="preview-open-error-label"',
 );
@@ -389,7 +395,7 @@ console.log(
     "openPreviewUrl clears previewOpenFeedback before setting it; " +
     "isPreviewOpenPending state declared; openPreviewUrl sets isPreviewOpenPending before openExternalUrl and clears in finally; " +
     "preview open pending message renders with role=status while pending; " +
-    "all three preview open buttons bind disabled={isPreviewOpenPending}; " +
+    "all four preview open buttons (dummy, native, OBS native, OBS dummy) bind disabled={isPreviewOpenPending}; " +
     "openError block has role=alert, aria-labelledby=preview-open-error-label, and visible Preview open error label; " +
     "openPreviewUrl clears openError before each attempt so stale errors do not persist on retry or after success; " +
     "startNativePipelineAndOpenPreview clears openError before starting; " +

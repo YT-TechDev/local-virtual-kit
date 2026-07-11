@@ -17,9 +17,11 @@ const allowedPreviewUrls = new Set([
   'http://localhost:5173/?source=dummy',
   'http://localhost:5173/?source=native',
   'http://localhost:5173/?mode=obs&source=native',
+  'http://localhost:5173/?mode=obs&source=dummy',
   'http://127.0.0.1:5173/?source=dummy',
   'http://127.0.0.1:5173/?source=native',
-  'http://127.0.0.1:5173/?mode=obs&source=native'
+  'http://127.0.0.1:5173/?mode=obs&source=native',
+  'http://127.0.0.1:5173/?mode=obs&source=dummy'
 ])
 
 function isSafeLocalPreviewUrl(url: string): boolean {
