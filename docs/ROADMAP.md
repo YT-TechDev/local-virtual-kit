@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.6.0 is the Local backend candidate validation spike after the v0.5.0 Native Core backend evaluation foundation. Keep changes small, preserve local camera / OBS / packaged Electron validation boundaries, and do not change the `MotionFrame` schema unless explicitly planned. Future work should continue toward evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning while keeping Web Preview and Electron runtime boundaries clear.
+For current release-prep work, v0.7.0 is the MediaPipe local feasibility foundation after the v0.6.0 local backend candidate validation spike. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.7.0 establishes a conservative dependency/build feasibility boundary without integrating MediaPipe or approving task/model assets, runtime downloads, inference, or production backend selection.
 
 ---
 
@@ -181,10 +181,13 @@ v0.5.0 followed up with Native Core backend evaluation foundation work: a `Track
 
 v0.6.0 followed up with Local backend candidate validation spike work: OpenCV cascade-backed baseline evidence, a first local backend candidate route decision choosing MediaPipe Face Landmarker as a feasibility spike route, a no-dependency fail-closed MediaPipe candidate scaffold behind the Native Core boundary, and MotionFrame compatibility evidence for default vs explicit face-pipeline behavior. v0.6.0 does not select a production backend/model/runtime, add MediaPipe or ONNX dependencies, add runtime downloads, change MotionFrame or Motion Protocol, or claim new webcam / OBS / Electron GUI / packaged Electron / hardware readiness validation.
 
-Future post-v0.6.0 direction should focus on evidence-based local backend candidate evaluation, calibration polish, and avatar integration planning without weakening LVK's local-first privacy boundary.
+v0.7.0 followed up with MediaPipe local feasibility foundation work: a source-grounded dependency and task/model asset route decision, a disabled-by-default CMake feasibility option that fails fast at configure time when enabled, and automated checker evidence for that boundary. v0.7.0 does not integrate or enable MediaPipe, add dependencies or task/model assets, add runtime downloads or inference, change MotionFrame or Motion Protocol, or claim new webcam / OBS / Electron GUI / packaged Electron / hardware readiness validation.
+
+Future post-v0.7.0 direction should prioritize visible implementation work such as calibration polish, avatar preview polish, visible local tracking UX improvements, or renderer/avatar integration planning backed by actual UI implementation, without weakening LVK's local-first privacy boundary. Any real MediaPipe integration must be separately approved and scoped rather than folded into another docs-only Gate cycle by default.
 
 ## Release Entry Points
 
+- v0.7.0 release-readiness notes: `docs/releases/v0.7.0.md`.
 - v0.6.0 release-readiness notes: `docs/releases/v0.6.0.md`.
 - v0.5.0 release-readiness notes: `docs/releases/v0.5.0.md`.
 - v0.4.0 release-readiness notes: `docs/releases/v0.4.0.md`.
