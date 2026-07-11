@@ -1051,6 +1051,20 @@ function App(): React.JSX.Element {
                   Open
                 </button>
               </div>
+
+              <div className="url-row">
+                <div>
+                  <span className="url-label">OBS dummy source</span>
+                  <code>{runtimeStatus.previewObsDummyUrl}</code>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openPreviewUrl(runtimeStatus.previewObsDummyUrl)}
+                  disabled={isPreviewOpenPending}
+                >
+                  Open
+                </button>
+              </div>
             </div>
 
             {isPreviewOpenPending ? (

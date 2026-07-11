@@ -87,6 +87,12 @@ requireMatch(
 
 requireMatch(
   preloadSrc,
+  /previewObsDummyUrl:\s*string/u,
+  "LvkRuntimeStatus must include previewObsDummyUrl: string",
+);
+
+requireMatch(
+  preloadSrc,
   /motionEndpoint:\s*string/u,
   "LvkRuntimeStatus must include motionEndpoint: string",
 );
@@ -261,6 +267,8 @@ const expectedLocalUrls = [
   "http://127.0.0.1:5173/?source=dummy",
   "http://127.0.0.1:5173/?source=native",
   "http://127.0.0.1:5173/?mode=obs&source=native",
+  "http://localhost:5173/?mode=obs&source=dummy",
+  "http://127.0.0.1:5173/?mode=obs&source=dummy",
 ];
 
 for (const expected of expectedLocalUrls) {
@@ -297,6 +305,7 @@ const expectedConstants = [
   ["PREVIEW_DUMMY_URL", "http://localhost:5173/?source=dummy"],
   ["PREVIEW_NATIVE_URL", "http://localhost:5173/?source=native"],
   ["PREVIEW_OBS_NATIVE_URL", "http://localhost:5173/?mode=obs&source=native"],
+  ["PREVIEW_OBS_DUMMY_URL", "http://localhost:5173/?mode=obs&source=dummy"],
   ["MOTION_ENDPOINT", "ws://127.0.0.1:45731/motion"],
 ];
 
@@ -347,6 +356,12 @@ requireMatch(
   pipelineSrc,
   /previewObsNativeUrl:\s*PREVIEW_OBS_NATIVE_URL/u,
   "createInitialStatus must set previewObsNativeUrl from PREVIEW_OBS_NATIVE_URL",
+);
+
+requireMatch(
+  pipelineSrc,
+  /previewObsDummyUrl:\s*PREVIEW_OBS_DUMMY_URL/u,
+  "createInitialStatus must set previewObsDummyUrl from PREVIEW_OBS_DUMMY_URL",
 );
 
 requireMatch(
@@ -428,10 +443,10 @@ console.log(
     "  B. Main IPC registration — all six LVK_IPC_CHANNELS handlers registered; " +
     "openExternalUrl guard calls isSafeLocalPreviewUrl before shell.openExternal " +
     "and throws for non-local URLs; registerLvkIpcHandlers is called at startup.\n" +
-    "  C. Local preview URL allowlist — all six expected localhost/127.0.0.1 URLs " +
+    "  C. Local preview URL allowlist — all eight expected localhost/127.0.0.1 URLs " +
     "present; no non-local hosts detected.\n" +
     "  D. Initial pipeline status — PREVIEW_DUMMY_URL, PREVIEW_NATIVE_URL, " +
-    "PREVIEW_OBS_NATIVE_URL, MOTION_ENDPOINT constants match expected values; " +
+    "PREVIEW_OBS_NATIVE_URL, PREVIEW_OBS_DUMMY_URL, MOTION_ENDPOINT constants match expected values; " +
     "DEFAULT_CAMERA_FPS=60, DEFAULT_CAMERA_WIDTH=640, DEFAULT_CAMERA_HEIGHT=480; " +
     "createInitialStatus returns not_started/not_started with dummy/noop defaults " +
     "and cameraIndex 0; NativePipelineManager.getStatus returns a shallow copy.",

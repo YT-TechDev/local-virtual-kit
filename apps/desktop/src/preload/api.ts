@@ -55,6 +55,7 @@ export interface LvkRuntimeStatus {
   previewDummyUrl: string
   previewNativeUrl: string
   previewObsNativeUrl: string
+  previewObsDummyUrl: string
   motionEndpoint: string
   nativeTrackerStatus: NativeTrackerStatus
   motionBridgeStatus: MotionBridgeStatus
