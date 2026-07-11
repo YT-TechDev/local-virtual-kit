@@ -2,9 +2,9 @@
 
 Local Virtual Kit is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
 
-LVK is currently in early development. The current public baseline is **v0.7.0: MediaPipe local feasibility foundation** after the v0.6.0 local backend candidate validation spike. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
+LVK is currently in early development. The current public baseline is **v0.8.0: Renderer Calibration Workflow**. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
 
-v0.7.0 records a source-grounded MediaPipe dependency and asset feasibility decision, adds a disabled-by-default CMake feasibility option that fails fast when enabled, and adds automated checker evidence for that boundary. It does not add or enable MediaPipe, ONNX Runtime, model/task assets, runtime downloads, inference, production backend selection, MotionFrame schema changes, Motion Protocol changes, telemetry, cloud upload, remote inference, external frame processing, or hidden network behavior. v0.6.0 remains the previous local backend candidate validation spike.
+v0.8.0 adds the first user-facing Web Preview renderer calibration workflow: persistent Balanced / Steady / Responsive renderer presets, safe browser-local versioned calibration state, native neutral-pose capture/reset, and a separated calibration panel with source diagnostics. Calibration controls remain excluded from OBS mode, persisted renderer calibration can still affect avatar rendering, and the MotionFrame contract plus local-first privacy boundary remain unchanged. v0.7.0 remains the previous MediaPipe feasibility foundation; v0.8.0 does not add a new tracking backend, telemetry, cloud upload, remote inference, runtime downloads, or new network behavior.
 
 ## Core principles
 
@@ -124,13 +124,14 @@ LVK is local-first. Raw camera frames must remain local. Telemetry, analytics, c
 
 For the post-v0.2 entrypoint, use these current source-of-truth documents first:
 
-- `docs/releases/v0.7.0.md` - current MediaPipe local feasibility foundation release-readiness notes.
-- `docs/releases/v0.6.0.md` - previous Local backend candidate validation spike release-readiness notes.
+- `docs/releases/v0.8.0.md` - current Renderer Calibration Workflow release-readiness notes.
+- `docs/releases/v0.7.0.md` - previous MediaPipe local feasibility foundation release-readiness notes.
+- `docs/releases/v0.6.0.md` - Local backend candidate validation spike release-readiness notes.
 - `docs/releases/v0.5.0.md` - Native Core backend evaluation foundation release-readiness notes.
 - `docs/releases/v0.4.0.md` - local runtime confidence and native pipeline readiness notes.
 - `docs/releases/v0.3.0.md` - local tracking quality and release-readiness notes.
 - `docs/releases/v0.2.0.md` - Local OpenCV Face-Following MVP baseline and known limitations.
-- `docs/ROADMAP.md` - implementation sequence and v0.7+ direction.
+- `docs/ROADMAP.md` - implementation sequence and v0.8/post-v0.8 direction.
 - `docs/LOCAL_RUNTIME_CHECKLIST.md` - local/manual validation boundaries and runtime checklist.
 
 Start contributor or agent work with `docs/AGENTS.md`, then read only the focused document relevant to the task.
