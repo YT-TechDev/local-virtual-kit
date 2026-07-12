@@ -124,6 +124,9 @@ export function useLocalGlbAvatar(): LocalGlbAvatarController {
 
   const loadFile = useCallback(
     async (file: File) => {
+      const requestGeneration = requestGenerationRef.current + 1;
+      requestGenerationRef.current = requestGeneration;
+
       if (!hasGlbExtension(file.name)) {
         setErrorMessage(UNSUPPORTED_FILE_ERROR);
         setPendingFileName(null);
@@ -131,8 +134,6 @@ export function useLocalGlbAvatar(): LocalGlbAvatarController {
         return;
       }
 
-      const requestGeneration = requestGenerationRef.current + 1;
-      requestGenerationRef.current = requestGeneration;
       setErrorMessage(null);
       setPendingFileName(file.name);
       setStatus("loading");
