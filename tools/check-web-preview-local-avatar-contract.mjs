@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 const ROOT_PACKAGE_URL = new URL("../package.json", import.meta.url);
 const WEB_PACKAGE_URL = new URL(
@@ -19,6 +23,13 @@ const AVATAR_PREVIEW_URL = new URL(
   import.meta.url,
 );
 const APP_CSS_URL = new URL("../apps/web-preview/src/App.css", import.meta.url);
+const LOCAL_AVATAR_WORKSPACE_URL = new URL(
+  "../apps/web-preview/src/avatar/localAvatarWorkspace.ts",
+  import.meta.url,
+);
+
+const requireFromWebPreview = createRequire(WEB_PACKAGE_URL);
+const ts = requireFromWebPreview("typescript");
 
 const fail = (message) => {
   throw new Error(`Web Preview local avatar contract check failed: ${message}`);
@@ -87,6 +98,78 @@ const assertOrdered = (source, needles, label) => {
   }
 };
 
+const loadWorkspaceModule = async () => {
+  const source = await readFile(LOCAL_AVATAR_WORKSPACE_URL, "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+      verbatimModuleSyntax: true,
+    },
+    fileName: "localAvatarWorkspace.ts",
+  });
+  const tempDir = await mkdtemp(join(tmpdir(), "lvk-local-avatar-workspace-"));
+  const tempModulePath = join(tempDir, "localAvatarWorkspace.mjs");
+  await writeFile(tempModulePath, output.outputText, "utf8");
+  try {
+    return await import(pathToFileURL(tempModulePath).href);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+};
+
+const assertEqual = (actual, expected, label) => {
+  assert(
+    Object.is(actual, expected),
+    `${label}: expected ${expected}, received ${actual}`,
+  );
+};
+
+const assertArrayBufferBytes = (buffer, expected, label) => {
+  const actual = Array.from(new Uint8Array(buffer));
+  assert(
+    JSON.stringify(actual) === JSON.stringify(expected),
+    `${label}: expected bytes ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
+  );
+};
+
+const createMemoryRecordStoreOpener = (initialRecord, options = {}) => {
+  let storedRecord = initialRecord;
+  const openedStores = [];
+  const opener = async () => {
+    if (options.openThrows) throw new Error("open failed");
+    const store = {
+      closed: false,
+      readCalls: 0,
+      writeCalls: 0,
+      deleteCalls: 0,
+      async read() {
+        this.readCalls += 1;
+        if (options.readThrows) throw new Error("read failed");
+        return storedRecord;
+      },
+      async write(value) {
+        this.writeCalls += 1;
+        if (options.writeThrows) throw new Error("write failed");
+        storedRecord = value;
+      },
+      async delete() {
+        this.deleteCalls += 1;
+        if (options.deleteThrows) throw new Error("delete failed");
+        storedRecord = undefined;
+      },
+      close() {
+        this.closed = true;
+      },
+    };
+    openedStores.push(store);
+    return store;
+  };
+  opener.openedStores = openedStores;
+  opener.getStoredRecord = () => storedRecord;
+  return opener;
+};
+
 const runCheck = async () => {
   const [
     rootPackageSource,
@@ -95,6 +178,7 @@ const runCheck = async () => {
     loadedSource,
     previewSource,
     cssSource,
+    workspaceSource,
   ] = await Promise.all([
     readFile(ROOT_PACKAGE_URL, "utf8"),
     readFile(WEB_PACKAGE_URL, "utf8"),
@@ -102,7 +186,9 @@ const runCheck = async () => {
     readFile(LOADED_GLB_URL, "utf8"),
     readFile(AVATAR_PREVIEW_URL, "utf8"),
     readFile(APP_CSS_URL, "utf8"),
+    readFile(LOCAL_AVATAR_WORKSPACE_URL, "utf8"),
   ]);
+  const workspaceModule = await loadWorkspaceModule();
   const rootPackage = JSON.parse(rootPackageSource);
   const webPackage = JSON.parse(webPackageSource);
   const rootTest = rootPackage.scripts.test;
@@ -151,23 +237,33 @@ const runCheck = async () => {
   );
 
   for (const constantNeedle of [
-    "const DEFAULT_LOCAL_AVATAR_SCALE = 1",
-    "const MIN_LOCAL_AVATAR_SCALE = 0.25",
-    "const MAX_LOCAL_AVATAR_SCALE = 3",
-    "const LOCAL_AVATAR_SCALE_STEP = 0.05",
-    "const DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET = 0",
-    "const MIN_LOCAL_AVATAR_VERTICAL_OFFSET = -2",
-    "const MAX_LOCAL_AVATAR_VERTICAL_OFFSET = 2",
-    "const LOCAL_AVATAR_VERTICAL_OFFSET_STEP = 0.05",
-    "const DEFAULT_LOCAL_AVATAR_YAW_DEGREES = 0",
-    "const MIN_LOCAL_AVATAR_YAW_DEGREES = -180",
-    "const MAX_LOCAL_AVATAR_YAW_DEGREES = 180",
-    "const LOCAL_AVATAR_YAW_STEP_DEGREES = 1",
+    "export const DEFAULT_LOCAL_AVATAR_SCALE = 1",
+    "export const MIN_LOCAL_AVATAR_SCALE = 0.25",
+    "export const MAX_LOCAL_AVATAR_SCALE = 3",
+    "export const LOCAL_AVATAR_SCALE_STEP = 0.05",
+    "export const DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET = 0",
+    "export const MIN_LOCAL_AVATAR_VERTICAL_OFFSET = -2",
+    "export const MAX_LOCAL_AVATAR_VERTICAL_OFFSET = 2",
+    "export const LOCAL_AVATAR_VERTICAL_OFFSET_STEP = 0.05",
+    "export const DEFAULT_LOCAL_AVATAR_YAW_DEGREES = 0",
+    "export const MIN_LOCAL_AVATAR_YAW_DEGREES = -180",
+    "export const MAX_LOCAL_AVATAR_YAW_DEGREES = 180",
+    "export const LOCAL_AVATAR_YAW_STEP_DEGREES = 1",
   ])
     assert(
-      previewSource.includes(constantNeedle),
-      `local avatar scale control: missing ${constantNeedle}`,
+      workspaceSource.includes(constantNeedle),
+      `extracted framing contract: missing ${constantNeedle}`,
     );
+  assert(
+    previewSource.includes('from "../avatar/localAvatarWorkspace"'),
+    "extracted framing contract: AvatarPreview must import shared constants",
+  );
+  assert(
+    !previewSource.includes("const DEFAULT_LOCAL_AVATAR_SCALE = 1") &&
+      !previewSource.includes("const MIN_LOCAL_AVATAR_SCALE = 0.25") &&
+      !previewSource.includes("const MAX_LOCAL_AVATAR_YAW_DEGREES = 180"),
+    "extracted framing contract: old local constant definitions must be removed from AvatarPreview",
+  );
   assert(
     previewSource.includes(
       "const [localAvatarScale, setLocalAvatarScale] = useState(\n    DEFAULT_LOCAL_AVATAR_SCALE,\n  );",
@@ -1010,8 +1106,471 @@ const runCheck = async () => {
     "OBS transparency/full viewport: OBS canvas must be transparent",
   );
 
+  const {
+    DEFAULT_LOCAL_AVATAR_SCALE,
+    MIN_LOCAL_AVATAR_SCALE,
+    MAX_LOCAL_AVATAR_SCALE,
+    DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,
+    MIN_LOCAL_AVATAR_VERTICAL_OFFSET,
+    MAX_LOCAL_AVATAR_VERTICAL_OFFSET,
+    DEFAULT_LOCAL_AVATAR_YAW_DEGREES,
+    MIN_LOCAL_AVATAR_YAW_DEGREES,
+    MAX_LOCAL_AVATAR_YAW_DEGREES,
+    LOCAL_AVATAR_WORKSPACE_SCHEMA_VERSION,
+    LOCAL_AVATAR_WORKSPACE_DATABASE_NAME,
+    LOCAL_AVATAR_WORKSPACE_DATABASE_VERSION,
+    LOCAL_AVATAR_WORKSPACE_STORE_NAME,
+    LOCAL_AVATAR_WORKSPACE_ACTIVE_KEY,
+    MAX_LOCAL_AVATAR_GLB_BYTES,
+    createDefaultLocalAvatarFraming,
+    parseLocalAvatarFraming,
+    sanitizeLocalAvatarFileName,
+    createLocalAvatarWorkspace,
+    parsePersistedLocalAvatarWorkspace,
+    cloneLocalAvatarWorkspace,
+    createLocalAvatarWorkspaceStorage,
+  } = workspaceModule;
+
+  assertEqual(
+    DEFAULT_LOCAL_AVATAR_SCALE,
+    1,
+    "extracted framing value: default scale",
+  );
+  assertEqual(
+    MIN_LOCAL_AVATAR_SCALE,
+    0.25,
+    "extracted framing value: min scale",
+  );
+  assertEqual(MAX_LOCAL_AVATAR_SCALE, 3, "extracted framing value: max scale");
+  assertEqual(
+    DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,
+    0,
+    "extracted framing value: default vertical offset",
+  );
+  assertEqual(
+    MIN_LOCAL_AVATAR_VERTICAL_OFFSET,
+    -2,
+    "extracted framing value: min vertical offset",
+  );
+  assertEqual(
+    MAX_LOCAL_AVATAR_VERTICAL_OFFSET,
+    2,
+    "extracted framing value: max vertical offset",
+  );
+  assertEqual(
+    DEFAULT_LOCAL_AVATAR_YAW_DEGREES,
+    0,
+    "extracted framing value: default yaw",
+  );
+  assertEqual(
+    MIN_LOCAL_AVATAR_YAW_DEGREES,
+    -180,
+    "extracted framing value: min yaw",
+  );
+  assertEqual(
+    MAX_LOCAL_AVATAR_YAW_DEGREES,
+    180,
+    "extracted framing value: max yaw",
+  );
+  assertEqual(
+    LOCAL_AVATAR_WORKSPACE_SCHEMA_VERSION,
+    1,
+    "workspace schema version",
+  );
+  assertEqual(
+    LOCAL_AVATAR_WORKSPACE_DATABASE_NAME,
+    "lvk-web-preview",
+    "workspace database name",
+  );
+  assertEqual(
+    LOCAL_AVATAR_WORKSPACE_DATABASE_VERSION,
+    1,
+    "workspace database version",
+  );
+  assertEqual(
+    LOCAL_AVATAR_WORKSPACE_STORE_NAME,
+    "local-avatar-workspace",
+    "workspace store name",
+  );
+  assertEqual(
+    LOCAL_AVATAR_WORKSPACE_ACTIVE_KEY,
+    "active",
+    "workspace active key",
+  );
+  assertEqual(
+    MAX_LOCAL_AVATAR_GLB_BYTES,
+    50 * 1024 * 1024,
+    "workspace 50 MiB byte limit",
+  );
+
+  const defaultFramingA = createDefaultLocalAvatarFraming();
+  const defaultFramingB = createDefaultLocalAvatarFraming();
+  defaultFramingA.uniformScale = 2;
+  assertEqual(
+    defaultFramingB.uniformScale,
+    1,
+    "framing defaults are fresh objects",
+  );
+  for (const framing of [
+    { uniformScale: 1, verticalOffset: 0, yawDegrees: 0 },
+    { uniformScale: 0.25, verticalOffset: -2, yawDegrees: -180 },
+    { uniformScale: 3, verticalOffset: 2, yawDegrees: 180 },
+  ])
+    assert(
+      parseLocalAvatarFraming(framing) !== null,
+      "framing parser accepts valid boundary values",
+    );
+  for (const framing of [
+    { uniformScale: 0.24, verticalOffset: 0, yawDegrees: 0 },
+    { uniformScale: 3.01, verticalOffset: 0, yawDegrees: 0 },
+    { uniformScale: 1, verticalOffset: -2.01, yawDegrees: 0 },
+    { uniformScale: 1, verticalOffset: 2.01, yawDegrees: 0 },
+    { uniformScale: 1, verticalOffset: 0, yawDegrees: -181 },
+    { uniformScale: 1, verticalOffset: 0, yawDegrees: 181 },
+    { uniformScale: Number.NaN, verticalOffset: 0, yawDegrees: 0 },
+    {
+      uniformScale: Number.POSITIVE_INFINITY,
+      verticalOffset: 0,
+      yawDegrees: 0,
+    },
+    {
+      uniformScale: Number.NEGATIVE_INFINITY,
+      verticalOffset: 0,
+      yawDegrees: 0,
+    },
+    { uniformScale: "1", verticalOffset: 0, yawDegrees: 0 },
+    { uniformScale: 1, verticalOffset: 0 },
+    [1, 0, 0],
+    null,
+  ])
+    assert(
+      parseLocalAvatarFraming(framing) === null,
+      "framing parser rejects invalid values",
+    );
+
+  for (const [input, expected] of [
+    ["avatar.glb", "avatar.glb"],
+    ["avatar.GLB", "avatar.GLB"],
+    [" C:\\private\\models\\a.glb ", "a.glb"],
+    ["/home/user/model.glb", "model.glb"],
+    ["  trimmed.glb  ", "trimmed.glb"],
+  ])
+    assertEqual(
+      sanitizeLocalAvatarFileName(input),
+      expected,
+      `file-name sanitizer ${input}`,
+    );
+  for (const invalidName of [
+    "avatar.vrm",
+    ".glb",
+    "bad\u0000name.glb",
+    `${"a".repeat(256)}.glb`,
+    null,
+  ])
+    assert(
+      sanitizeLocalAvatarFileName(invalidName) === null,
+      "file-name sanitizer rejects unsafe input",
+    );
+
+  const bytes = new ArrayBuffer(4);
+  new Uint8Array(bytes).set([1, 2, 3, 4]);
+  const validWorkspace = createLocalAvatarWorkspace({
+    fileName: "avatar.glb",
+    mimeType: "model/gltf-binary",
+    glbBytes: bytes,
+    framing: { uniformScale: 1, verticalOffset: 0, yawDegrees: 0 },
+  });
+  assert(
+    validWorkspace !== null,
+    "workspace parser accepts a valid v1 candidate",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: "application/octet-stream",
+      glbBytes: bytes,
+      framing: validWorkspace.framing,
+    }) !== null,
+    "workspace parser accepts octet-stream MIME",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: null,
+      glbBytes: bytes,
+      framing: validWorkspace.framing,
+    }) !== null,
+    "workspace parser accepts null MIME",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: "text/plain",
+      glbBytes: bytes,
+      framing: validWorkspace.framing,
+    }) === null,
+    "workspace parser rejects unsupported MIME",
+  );
+  assert(
+    parsePersistedLocalAvatarWorkspace({ ...validWorkspace, version: 2 }) ===
+      null,
+    "workspace parser rejects unknown version",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: null,
+      framing: validWorkspace.framing,
+    }) === null,
+    "workspace parser rejects missing bytes",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: null,
+      glbBytes: [1],
+      framing: validWorkspace.framing,
+    }) === null,
+    "workspace parser rejects wrong byte type",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: null,
+      glbBytes: new ArrayBuffer(0),
+      framing: validWorkspace.framing,
+    }) === null,
+    "workspace parser rejects zero bytes",
+  );
+  assert(
+    parsePersistedLocalAvatarWorkspace({
+      ...validWorkspace,
+      byteLength: 99,
+    }) === null,
+    "workspace parser rejects byte-length mismatch",
+  );
+  let oversizeBytes = new ArrayBuffer(MAX_LOCAL_AVATAR_GLB_BYTES + 1);
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: null,
+      glbBytes: oversizeBytes,
+      framing: validWorkspace.framing,
+    }) === null,
+    "workspace parser rejects oversized bytes",
+  );
+  oversizeBytes = null;
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.vrm",
+      mimeType: null,
+      glbBytes: bytes,
+      framing: validWorkspace.framing,
+    }) === null,
+    "workspace parser rejects unsafe file name",
+  );
+  assert(
+    createLocalAvatarWorkspace({
+      fileName: "a.glb",
+      mimeType: null,
+      glbBytes: bytes,
+      framing: { uniformScale: 9, verticalOffset: 0, yawDegrees: 0 },
+    }) === null,
+    "workspace parser rejects invalid framing",
+  );
+  new Uint8Array(bytes)[0] = 9;
+  assertArrayBufferBytes(
+    validWorkspace.glbBytes,
+    [1, 2, 3, 4],
+    "workspace creation defensively clones input bytes",
+  );
+  const clonedWorkspace = cloneLocalAvatarWorkspace(validWorkspace);
+  new Uint8Array(clonedWorkspace.glbBytes)[1] = 9;
+  clonedWorkspace.framing.uniformScale = 3;
+  assertArrayBufferBytes(
+    validWorkspace.glbBytes,
+    [1, 2, 3, 4],
+    "workspace clone defensively clones bytes",
+  );
+  assertEqual(
+    validWorkspace.framing.uniformScale,
+    1,
+    "workspace clone defensively clones framing",
+  );
+
+  let opener = createMemoryRecordStoreOpener(undefined);
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).load()).status,
+    "empty",
+    "storage load empty result",
+  );
+  assert(
+    opener.openedStores[0].closed,
+    "storage load closes store on empty result",
+  );
+  opener = createMemoryRecordStoreOpener(validWorkspace);
+  const readyResult = await createLocalAvatarWorkspaceStorage(opener).load();
+  assertEqual(readyResult.status, "ready", "storage load ready result");
+  new Uint8Array(readyResult.workspace.glbBytes)[0] = 7;
+  assertArrayBufferBytes(
+    opener.getStoredRecord().glbBytes,
+    [1, 2, 3, 4],
+    "storage load returns defensive byte clone",
+  );
+  opener = createMemoryRecordStoreOpener({ version: 1 });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).load()).status,
+    "invalid",
+    "storage load invalid result",
+  );
+  opener = createMemoryRecordStoreOpener(undefined, { openThrows: true });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).load()).status,
+    "unavailable",
+    "storage load opener failure result",
+  );
+  opener = createMemoryRecordStoreOpener(validWorkspace, { readThrows: true });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).load()).status,
+    "failed",
+    "storage load read failure result",
+  );
+  assert(
+    opener.openedStores[0].closed,
+    "storage load closes store on read failure",
+  );
+
+  opener = createMemoryRecordStoreOpener(undefined);
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).save(validWorkspace))
+      .status,
+    "saved",
+    "storage save success result",
+  );
+  assert(opener.openedStores[0].closed, "storage save closes store on success");
+  assertArrayBufferBytes(
+    opener.getStoredRecord().glbBytes,
+    [1, 2, 3, 4],
+    "storage save writes cloned normalized bytes",
+  );
+  new Uint8Array(validWorkspace.glbBytes)[2] = 8;
+  assertArrayBufferBytes(
+    opener.getStoredRecord().glbBytes,
+    [1, 2, 3, 4],
+    "storage save is not mutable through retained workspace bytes",
+  );
+  opener = createMemoryRecordStoreOpener(undefined);
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).save({ version: 1 }))
+      .status,
+    "invalid",
+    "storage save invalid result",
+  );
+  assertEqual(
+    opener.openedStores.length,
+    0,
+    "storage save invalid input does not open store",
+  );
+  opener = createMemoryRecordStoreOpener(undefined, { openThrows: true });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).save(validWorkspace))
+      .status,
+    "unavailable",
+    "storage save opener failure result",
+  );
+  opener = createMemoryRecordStoreOpener(validWorkspace, { writeThrows: true });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).save(validWorkspace))
+      .status,
+    "failed",
+    "storage save write failure result",
+  );
+  assert(
+    opener.getStoredRecord() === validWorkspace,
+    "storage failed replacement preserves previous record",
+  );
+  assert(
+    opener.openedStores[0].closed,
+    "storage save closes store on write failure",
+  );
+
+  opener = createMemoryRecordStoreOpener(validWorkspace);
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).clear()).status,
+    "cleared",
+    "storage clear success result",
+  );
+  assertEqual(
+    opener.getStoredRecord(),
+    undefined,
+    "storage clear removes active record",
+  );
+  assert(
+    opener.openedStores[0].closed,
+    "storage clear closes store on success",
+  );
+  opener = createMemoryRecordStoreOpener(validWorkspace, { openThrows: true });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).clear()).status,
+    "unavailable",
+    "storage clear opener failure result",
+  );
+  opener = createMemoryRecordStoreOpener(validWorkspace, {
+    deleteThrows: true,
+  });
+  assertEqual(
+    (await createLocalAvatarWorkspaceStorage(opener).clear()).status,
+    "failed",
+    "storage clear delete failure result",
+  );
+  assert(
+    opener.getStoredRecord() === validWorkspace,
+    "storage failed clear preserves previous record",
+  );
+  assert(
+    opener.openedStores[0].closed,
+    "storage clear closes store on delete failure",
+  );
+
+  assert(
+    workspaceSource.includes("globalThis.indexedDB") &&
+      workspaceSource.includes("indexedDBFactory.open"),
+    "workspace module references built-in IndexedDB",
+  );
+  assertNotContainsAny(
+    workspaceSource,
+    [
+      "react",
+      "@react-three/fiber",
+      "three",
+      "@lvk/motion-protocol",
+      "MotionFrame",
+      "localStorage",
+      "sessionStorage",
+      "fetch(",
+      "WebSocket(",
+      "BroadcastChannel",
+      "FileSystemFileHandle",
+      "window.electron",
+      "ipcRenderer",
+      "http://",
+      "https://",
+    ],
+    "local-only dependency-free workspace boundary",
+  );
+  assertNotContainsAny(
+    JSON.stringify(webPackage.dependencies) +
+      JSON.stringify(webPackage.devDependencies),
+    ["fake-indexeddb", '"idb"', "dexie"],
+    "no storage dependency added",
+  );
+
   console.log(
-    `Web Preview local avatar contract check passed.\n  - scale, vertical offset, yaw degree controls, and reset framing remain wired to renderer-owned memory-only state\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - manual ownership is preserved across the root, static framing, head motion, scale, and primitive nodes\n  - local .glb lifecycle preservation remains covered: local-only loading, fallback, replacement retention, stale cleanup, reset invalidation, and unmount disposal\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  - automated source/contract evidence only\n  NOTE: source/behavior checker evidence only; NOT browser, representative GLB, GPU, OBS application, webcam, Electron GUI, or native runtime validation.`,
+    `Web Preview local avatar contract check passed.\n  - extracted framing contract remains shared with AvatarPreview and keeps exact v0.11.0 bounds
+  - versioned v1 workspace validation, defensive cloning, and the 50 MiB GLB byte limit are covered
+  - bounded IndexedDB load/save/clear results are covered with an injected dependency-free record store
+  - local-only and dependency-free storage boundary assertions are present
+  - scale, vertical offset, yaw degree controls, and reset framing remain wired to renderer-owned memory-only state\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - manual ownership is preserved across the root, static framing, head motion, scale, and primitive nodes\n  - local .glb lifecycle preservation remains covered: local-only loading, fallback, replacement retention, stale cleanup, reset invalidation, and unmount disposal\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  - automated source/unit evidence only\n  NOTE: source/unit checker evidence only; NOT real browser IndexedDB persistence, reload restoration, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
   );
 };
 
