@@ -39,6 +39,7 @@ import { smoothTrackingMotion } from "../motion/trackingSmoothing";
 import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
+import { useLocalGlbAvatar } from "../avatar/useLocalGlbAvatar";
 
 type AvatarPreviewProps = {
   debugMode: PreviewDebugMode;
@@ -197,6 +198,9 @@ const CALIBRATION_GUIDANCE_ID = "web-preview-calibration-guidance";
 const CALIBRATION_FEEDBACK_ID = "web-preview-calibration-feedback";
 const CALIBRATION_COPY_ID = "web-preview-calibration-copy";
 const RESET_NEUTRAL_NOTE_ID = "web-preview-reset-neutral-note";
+const LOCAL_AVATAR_GUIDANCE_ID = "web-preview-local-avatar-guidance";
+const LOCAL_AVATAR_STATUS_ID = "web-preview-local-avatar-status";
+const LOCAL_AVATAR_ERROR_ID = "web-preview-local-avatar-error";
 
 type EndpointCopyFeedbackState = {
   message: string;
@@ -523,7 +527,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
         selectedPreset,
         rendererCalibrationState,
       ),
-    [rendererCalibrationState.neutralCenter, selectedPreset],
+    [rendererCalibrationState, selectedPreset],
   );
   const canCaptureNeutralPose = canCaptureNativeNeutralPose({
     nativeFrame,
@@ -549,6 +553,21 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
       : null;
+  const localGlbAvatar = useLocalGlbAvatar();
+  const localAvatarStatusText = (() => {
+    switch (localGlbAvatar.status) {
+      case "idle":
+        return "Idle · using the built-in primitive avatar.";
+      case "loading":
+        return `Loading ${localGlbAvatar.pendingFileName ?? "selected GLB"} locally...`;
+      case "ready":
+        return `Ready · ${localGlbAvatar.asset?.fileName ?? "local GLB"} is loaded in memory. Primitive avatar remains rendered.`;
+      case "error":
+        return localGlbAvatar.asset === null
+          ? "Error · using the built-in primitive avatar."
+          : `Error · keeping ${localGlbAvatar.asset.fileName} loaded in memory.`;
+    }
+  })();
 
   const showCalibrationFeedback = (message: string) => {
     calibrationFeedbackRevisionRef.current += 1;
@@ -655,6 +674,19 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     showCalibrationFeedback(
       `Neutral pose reset to the ${selectedPreset.label} preset default.`,
     );
+  };
+
+  const handleLocalAvatarFileChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFile = event.target.files?.item(0) ?? null;
+    event.target.value = "";
+
+    if (selectedFile === null) {
+      return;
+    }
+
+    void localGlbAvatar.loadFile(selectedFile);
   };
 
   const handleCopyEndpoint = () => {
@@ -771,6 +803,80 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
                 )}
               </span>
             )}
+          </section>
+
+          <section
+            className="preview-local-avatar-panel"
+            aria-labelledby="local-avatar-heading"
+          >
+            <h2
+              id="local-avatar-heading"
+              className="preview-controls__heading preview-local-avatar-panel__heading"
+            >
+              Local avatar
+            </h2>
+            <p
+              id={LOCAL_AVATAR_GUIDANCE_ID}
+              className="preview-local-avatar-panel__guidance"
+            >
+              Select one local .glb file. Bytes and parsed resources stay in
+              memory only; external resources are blocked. This slice keeps the
+              built-in primitive avatar rendered.
+            </p>
+            <label className="preview-local-avatar-panel__field">
+              <span className="preview-local-avatar-panel__label">
+                Local GLB file
+              </span>
+              <input
+                className="preview-local-avatar-panel__input"
+                type="file"
+                accept=".glb,model/gltf-binary"
+                onChange={handleLocalAvatarFileChange}
+                aria-describedby={`${LOCAL_AVATAR_GUIDANCE_ID} ${LOCAL_AVATAR_STATUS_ID}`}
+              />
+            </label>
+            <dl className="preview-local-avatar-panel__state">
+              <div>
+                <dt>Status</dt>
+                <dd>{localGlbAvatar.status}</dd>
+              </div>
+              <div>
+                <dt>File</dt>
+                <dd>
+                  {localGlbAvatar.pendingFileName ??
+                    localGlbAvatar.asset?.fileName ??
+                    "None"}
+                </dd>
+              </div>
+            </dl>
+            <p
+              id={LOCAL_AVATAR_STATUS_ID}
+              className="preview-local-avatar-panel__status"
+              role="status"
+              aria-live="polite"
+            >
+              {localAvatarStatusText}
+            </p>
+            {localGlbAvatar.errorMessage !== null && (
+              <p
+                id={LOCAL_AVATAR_ERROR_ID}
+                className="preview-local-avatar-panel__error"
+                role="alert"
+              >
+                {localGlbAvatar.errorMessage}
+              </p>
+            )}
+            <button
+              className="preview-local-avatar-panel__button"
+              type="button"
+              onClick={localGlbAvatar.reset}
+              disabled={
+                localGlbAvatar.status === "idle" &&
+                localGlbAvatar.asset === null
+              }
+            >
+              Reset local avatar
+            </button>
           </section>
 
           <section
