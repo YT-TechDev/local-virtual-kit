@@ -42,6 +42,20 @@ import type { PreviewDebugMode } from "../preview/previewDebug";
 import type { PreviewMode } from "../preview/previewMode";
 import type { PreviewSource } from "../preview/previewSource";
 import { useLocalGlbAvatar } from "../avatar/useLocalGlbAvatar";
+import {
+  DEFAULT_LOCAL_AVATAR_SCALE,
+  DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,
+  DEFAULT_LOCAL_AVATAR_YAW_DEGREES,
+  LOCAL_AVATAR_SCALE_STEP,
+  LOCAL_AVATAR_VERTICAL_OFFSET_STEP,
+  LOCAL_AVATAR_YAW_STEP_DEGREES,
+  MAX_LOCAL_AVATAR_SCALE,
+  MAX_LOCAL_AVATAR_VERTICAL_OFFSET,
+  MAX_LOCAL_AVATAR_YAW_DEGREES,
+  MIN_LOCAL_AVATAR_SCALE,
+  MIN_LOCAL_AVATAR_VERTICAL_OFFSET,
+  MIN_LOCAL_AVATAR_YAW_DEGREES,
+} from "../avatar/localAvatarWorkspace";
 
 type AvatarPreviewProps = {
   debugMode: PreviewDebugMode;
@@ -215,18 +229,6 @@ const LOCAL_AVATAR_SCALE_ID = "web-preview-local-avatar-scale";
 const LOCAL_AVATAR_VERTICAL_OFFSET_ID =
   "web-preview-local-avatar-vertical-offset";
 const LOCAL_AVATAR_YAW_ID = "web-preview-local-avatar-yaw";
-const DEFAULT_LOCAL_AVATAR_SCALE = 1;
-const MIN_LOCAL_AVATAR_SCALE = 0.25;
-const MAX_LOCAL_AVATAR_SCALE = 3;
-const LOCAL_AVATAR_SCALE_STEP = 0.05;
-const DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET = 0;
-const MIN_LOCAL_AVATAR_VERTICAL_OFFSET = -2;
-const MAX_LOCAL_AVATAR_VERTICAL_OFFSET = 2;
-const LOCAL_AVATAR_VERTICAL_OFFSET_STEP = 0.05;
-const DEFAULT_LOCAL_AVATAR_YAW_DEGREES = 0;
-const MIN_LOCAL_AVATAR_YAW_DEGREES = -180;
-const MAX_LOCAL_AVATAR_YAW_DEGREES = 180;
-const LOCAL_AVATAR_YAW_STEP_DEGREES = 1;
 
 type EndpointCopyFeedbackState = {
   message: string;
