@@ -52,6 +52,7 @@ type AvatarPreviewProps = {
 type AvatarSceneProps = {
   calibration: FaceFollowingCalibration;
   localAvatarScene: THREE.Group | null;
+  localAvatarScale: number;
   nativeFrame: MotionFrame | null;
   smoothing: TrackingSmoothingOptions;
   source: PreviewSource;
@@ -204,6 +205,11 @@ const RESET_NEUTRAL_NOTE_ID = "web-preview-reset-neutral-note";
 const LOCAL_AVATAR_GUIDANCE_ID = "web-preview-local-avatar-guidance";
 const LOCAL_AVATAR_STATUS_ID = "web-preview-local-avatar-status";
 const LOCAL_AVATAR_ERROR_ID = "web-preview-local-avatar-error";
+const LOCAL_AVATAR_SCALE_ID = "web-preview-local-avatar-scale";
+const DEFAULT_LOCAL_AVATAR_SCALE = 1;
+const MIN_LOCAL_AVATAR_SCALE = 0.25;
+const MAX_LOCAL_AVATAR_SCALE = 3;
+const LOCAL_AVATAR_SCALE_STEP = 0.05;
 
 type EndpointCopyFeedbackState = {
   message: string;
@@ -399,6 +405,7 @@ function getSourceBadgeContent(
 function AvatarScene({
   calibration,
   localAvatarScene,
+  localAvatarScale,
   nativeFrame,
   smoothing,
   source,
@@ -494,6 +501,7 @@ function AvatarScene({
         <LoadedGlbAvatar
           motion={fallbackState.renderedMotion}
           scene={localAvatarScene}
+          uniformScale={localAvatarScale}
         />
       )}
     </>
@@ -565,6 +573,10 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
       ? endpointCopyFeedback.message
       : null;
   const localGlbAvatar = useLocalGlbAvatar();
+  const [localAvatarScale, setLocalAvatarScale] = useState(
+    DEFAULT_LOCAL_AVATAR_SCALE,
+  );
+  const localAvatarScaleValueText = `${localAvatarScale.toFixed(2)}×`;
   const localAvatarStatusText = (() => {
     switch (localGlbAvatar.status) {
       case "idle":
@@ -687,6 +699,16 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     showCalibrationFeedback(
       `Neutral pose reset to the ${selectedPreset.label} preset default.`,
     );
+  };
+
+  const handleLocalAvatarScaleChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setLocalAvatarScale(event.target.valueAsNumber);
+  };
+
+  const handleResetLocalAvatarFraming = () => {
+    setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE);
   };
 
   const handleLocalAvatarFileChange = (
@@ -848,6 +870,32 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
                 aria-describedby={`${LOCAL_AVATAR_GUIDANCE_ID} ${LOCAL_AVATAR_STATUS_ID}`}
               />
             </label>
+            <label className="preview-local-avatar-panel__field">
+              <span className="preview-local-avatar-panel__label">
+                Avatar scale
+              </span>
+              <span className="preview-local-avatar-panel__range-row">
+                <input
+                  id={LOCAL_AVATAR_SCALE_ID}
+                  className="preview-local-avatar-panel__range"
+                  type="range"
+                  min={MIN_LOCAL_AVATAR_SCALE}
+                  max={MAX_LOCAL_AVATAR_SCALE}
+                  step={LOCAL_AVATAR_SCALE_STEP}
+                  value={localAvatarScale}
+                  onChange={handleLocalAvatarScaleChange}
+                  disabled={localGlbAvatar.asset === null}
+                  aria-valuetext={localAvatarScaleValueText}
+                  aria-describedby={LOCAL_AVATAR_STATUS_ID}
+                />
+                <output
+                  className="preview-local-avatar-panel__output"
+                  htmlFor={LOCAL_AVATAR_SCALE_ID}
+                >
+                  {localAvatarScaleValueText}
+                </output>
+              </span>
+            </label>
             <dl className="preview-local-avatar-panel__state">
               <div>
                 <dt>Status</dt>
@@ -879,17 +927,27 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
                 {localGlbAvatar.errorMessage}
               </p>
             )}
-            <button
-              className="preview-local-avatar-panel__button"
-              type="button"
-              onClick={localGlbAvatar.reset}
-              disabled={
-                localGlbAvatar.status === "idle" &&
-                localGlbAvatar.asset === null
-              }
-            >
-              Reset local avatar
-            </button>
+            <div className="preview-local-avatar-panel__actions">
+              <button
+                className="preview-local-avatar-panel__button"
+                type="button"
+                onClick={handleResetLocalAvatarFraming}
+                disabled={localAvatarScale === DEFAULT_LOCAL_AVATAR_SCALE}
+              >
+                Reset framing
+              </button>
+              <button
+                className="preview-local-avatar-panel__button"
+                type="button"
+                onClick={localGlbAvatar.reset}
+                disabled={
+                  localGlbAvatar.status === "idle" &&
+                  localGlbAvatar.asset === null
+                }
+              >
+                Reset local avatar
+              </button>
+            </div>
           </section>
 
           <section
@@ -1005,6 +1063,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
             key={calibrationRevision}
             calibration={effectiveCalibration}
             localAvatarScene={localGlbAvatar.asset?.scene ?? null}
+            localAvatarScale={localAvatarScale}
             nativeFrame={nativeFrame}
             smoothing={selectedPreset.smoothing}
             source={source}
