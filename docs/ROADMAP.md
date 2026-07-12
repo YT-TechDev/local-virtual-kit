@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.8.0 is the completed first user-facing Web Preview renderer calibration workflow. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.8.0 keeps calibration renderer-owned, browser-local, OBS-control-excluded, and compatible with the existing Native Core and MotionFrame boundaries.
+For current release-prep work, v0.9.0 is the completed OBS Browser Source Workflow Polish release. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.9.0 keeps OBS routes localhost-based, camera frames local, renderer calibration browser-local, and Native Core / MotionFrame ownership boundaries unchanged.
 
 ---
 
@@ -151,6 +151,15 @@ Goal:
 - improve setup docs
 - prepare public demo workflow
 
+Implementation outcome for v0.9.0:
+
+- typed Electron runtime-status exposure for the OBS dummy URL
+- dedicated Desktop OBS Browser Source setup panels with Copy/Open actions for dummy and native routes
+- recommended `1920 × 1080` starting dimensions and localhost/privacy guidance
+- focused Web Preview OBS route-contract checker coverage
+- persisted renderer calibration remains compatible with OBS rendering
+- no MotionFrame, Motion Protocol, Native Core, dependency, telemetry, cloud, remote inference, runtime download, or network-behavior expansion
+
 ---
 
 ## Phase 10 - Optional Flow Avatar Example
@@ -185,10 +194,13 @@ v0.7.0 followed up with MediaPipe local feasibility foundation work: a source-gr
 
 v0.8.0 followed up with the first user-facing Web Preview renderer calibration workflow: persistent Balanced / Steady / Responsive preset selection, versioned fail-safe browser-local renderer calibration state, native neutral-pose capture/reset, calibration panel UX/accessibility improvements, and OBS control exclusion. v0.8.0 does not expand MotionFrame, Motion Protocol, Native Core, localhost transport, camera access, tracking backend selection, network behavior, telemetry, cloud upload, remote inference, or privacy scope.
 
-Future post-v0.8.0 direction should not begin another docs-only Gate cycle by default. Inspect the current repository state and open issues before selecting work, and prefer one visible implementation milestone. Possible categories include avatar preview/renderer integration, visible local tracking UX or tracking-quality improvement, or calibration validation with owner-side runtime evidence; this roadmap does not approve any one category as the next milestone. Any real MediaPipe integration must remain separately approved and scoped.
+v0.9.0 followed up with OBS Browser Source workflow polish: Electron OBS dummy URL exposure, Desktop OBS setup Copy/Open actions for dummy and native routes, focused Web Preview OBS route-contract checker coverage, and renderer calibration compatibility with OBS rendering. v0.9.0 keeps architecture and privacy boundaries unchanged: no MotionFrame or Motion Protocol changes, no Native Core behavior changes, no dependencies, no telemetry, no cloud upload, no remote inference, no runtime downloads, and no new network behavior.
+
+Future post-v0.9.0 direction should not begin another docs-only Gate cycle by default. Inspect the current repository state and open issues before selecting work, and prefer one visible implementation milestone. Possible categories include avatar preview/renderer integration, visible local tracking UX or tracking-quality improvement, or calibration validation with owner-side runtime evidence; this roadmap does not approve any one category as the next milestone. Any real MediaPipe integration must remain separately approved and scoped.
 
 ## Release Entry Points
 
+- v0.9.0 release-readiness notes: `docs/releases/v0.9.0.md`.
 - v0.8.0 release-readiness notes: `docs/releases/v0.8.0.md`.
 - v0.7.0 release-readiness notes: `docs/releases/v0.7.0.md`.
 - v0.6.0 release-readiness notes: `docs/releases/v0.6.0.md`.
