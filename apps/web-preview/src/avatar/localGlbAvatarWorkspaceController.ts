@@ -2,14 +2,21 @@ import {
   MAX_LOCAL_AVATAR_GLB_BYTES,
   createDefaultLocalAvatarFraming,
   createLocalAvatarWorkspace,
+  parseLocalAvatarFraming,
+  type LocalAvatarFraming,
   type LocalAvatarWorkspace,
   type LocalAvatarWorkspaceStorage,
 } from "./localAvatarWorkspace";
 
-// Lifecycle of the standard (non-OBS) Web Preview local avatar workspace. The
-// controller stays framework-independent so lifecycle ordering can be exercised
-// without mounting React or opening real browser IndexedDB. React ownership,
-// Three.js parsing, and IndexedDB adapters are injected.
+// Lifecycle of the Web Preview local avatar workspace. The controller stays
+// framework-independent so lifecycle ordering can be exercised without mounting
+// React or opening real browser IndexedDB. React ownership, Three.js parsing,
+// IndexedDB adapters, and the debounce scheduler are injected.
+//
+// The controller owns the durable avatar asset AND its framing (uniform scale,
+// vertical offset, yaw) so a restored GLB and its stored framing commit in one
+// coherent state transition, and so framing edits persist through the same
+// serialized durable mutation queue that protects asset saves and clears.
 
 export type LocalGlbAvatarLifecycleStatus =
   | "checking"
@@ -30,11 +37,35 @@ export type LocalGlbAvatarPersistenceStatus =
   | "invalid"
   | "clear_failed";
 
+// Explicit bounded status for the latest framing edit, kept separate from the
+// asset persistence status so honest framing states are never conflated with
+// asset lifecycle transitions.
+//   none        : no active avatar / default fallback
+//   saved       : current framing matches the confirmed durable workspace
+//   dirty       : in-memory framing changed and a trailing save is pending
+//   saving      : a durable framing save is executing
+//   save_failed : latest framing remains in memory but is not durable
+//   memory_only : the active avatar itself is unsaved, so framing cannot persist
+export type LocalAvatarFramingPersistenceStatus =
+  | "none"
+  | "saved"
+  | "dirty"
+  | "saving"
+  | "save_failed"
+  | "memory_only";
+
+// Interactive: standard Preview may restore, select, save, update framing, reset
+// framing, and clear. Restore-only: OBS may load and render the durable GLB and
+// apply its persisted framing, but never saves, clears, or schedules writes.
+export type LocalAvatarWorkspaceAccessMode = "interactive" | "restore-only";
+
 export type LocalGlbAvatarWorkspaceState<Asset> = {
   asset: Asset | null;
   pendingFileName: string | null;
   lifecycleStatus: LocalGlbAvatarLifecycleStatus;
   persistenceStatus: LocalGlbAvatarPersistenceStatus;
+  framing: LocalAvatarFraming;
+  framingStatus: LocalAvatarFramingPersistenceStatus;
   errorMessage: string | null;
 };
 
@@ -52,17 +83,37 @@ export type ParseLocalGlbAvatarBytes<Asset> = (
   glbBytes: ArrayBuffer,
 ) => Promise<Asset>;
 
+// Injected scheduler so the trailing framing debounce stays deterministic in
+// Node tests. The hook supplies window.setTimeout / window.clearTimeout; the
+// contract checker supplies a manual scheduler with no fake timers.
+export type LocalGlbAvatarTimeoutHandle = unknown;
+export type ScheduleLocalGlbAvatarTimeout = (
+  callback: () => void,
+  delayMs: number,
+) => LocalGlbAvatarTimeoutHandle;
+export type CancelLocalGlbAvatarTimeout = (
+  handle: LocalGlbAvatarTimeoutHandle,
+) => void;
+
+// Trailing debounce window for durable framing saves. One explicit constant.
+export const LOCAL_AVATAR_FRAMING_SAVE_DEBOUNCE_MS = 200;
+
 export type LocalGlbAvatarWorkspaceControllerOptions<Asset extends object> = {
   storage: LocalAvatarWorkspaceStorage;
   parseBytes: ParseLocalGlbAvatarBytes<Asset>;
   disposeAsset: (asset: Asset) => void;
   onStateChange: (state: LocalGlbAvatarWorkspaceState<Asset>) => void;
+  accessMode: LocalAvatarWorkspaceAccessMode;
+  scheduleTimeout: ScheduleLocalGlbAvatarTimeout;
+  cancelTimeout: CancelLocalGlbAvatarTimeout;
 };
 
 export type LocalGlbAvatarWorkspaceController<Asset extends object> = {
   getState: () => LocalGlbAvatarWorkspaceState<Asset>;
   start: () => void;
   loadFile: (file: LocalGlbAvatarFileInput) => Promise<void>;
+  setFraming: (nextFraming: LocalAvatarFraming) => void;
+  resetFraming: () => void;
   clearAvatar: () => Promise<void>;
   dispose: () => void;
 };
@@ -95,6 +146,11 @@ const normalizeFileMimeType = (
     ? type
     : null;
 
+const framingEquals = (a: LocalAvatarFraming, b: LocalAvatarFraming) =>
+  a.uniformScale === b.uniformScale &&
+  a.verticalOffset === b.verticalOffset &&
+  a.yawDegrees === b.yawDegrees;
+
 const replacementFailureMessage = (
   fileName: string,
   unavailable: boolean,
@@ -106,11 +162,22 @@ const replacementFailureMessage = (
 export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
   options: LocalGlbAvatarWorkspaceControllerOptions<Asset>,
 ): LocalGlbAvatarWorkspaceController<Asset> => {
-  const { storage, parseBytes, disposeAsset, onStateChange } = options;
+  const {
+    storage,
+    parseBytes,
+    disposeAsset,
+    onStateChange,
+    accessMode,
+    scheduleTimeout,
+    cancelTimeout,
+  } = options;
 
-  // Every distinct operation (restore start, selection, clear, dispose) claims a
-  // new generation. Async results check their captured generation before
-  // committing so stale restores/selections/clears cannot mutate live state.
+  const isInteractive = accessMode === "interactive";
+
+  // Every distinct asset operation (restore start, selection, clear, dispose)
+  // claims a new generation. Async results check their captured generation
+  // before committing so stale restores/selections/clears cannot mutate live
+  // state.
   let generation = 0;
   let disposed = false;
 
@@ -119,6 +186,18 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
   let lifecycleStatus: LocalGlbAvatarLifecycleStatus = "checking";
   let persistenceStatus: LocalGlbAvatarPersistenceStatus = "none";
   let errorMessage: string | null = null;
+
+  // Renderer-owned framing lives here so a restored asset and its stored framing
+  // commit together, and so framing edits reconcile through the same durable
+  // queue as asset saves/clears.
+  let framing: LocalAvatarFraming = createDefaultLocalAvatarFraming();
+  let framingStatus: LocalAvatarFramingPersistenceStatus = "none";
+
+  // A monotonically increasing revision for framing writes. Each valid framing
+  // change bumps this; scheduled and in-flight framing saves only commit while
+  // their captured revision is still current, so newer framing always wins.
+  let framingSaveRevision = 0;
+  let framingTimer: LocalGlbAvatarTimeoutHandle | null = null;
 
   // The durable workspace that SHOULD be in storage for the current committed
   // avatar. It is tracked separately from the parsed asset so a stale async
@@ -148,6 +227,8 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     pendingFileName,
     lifecycleStatus,
     persistenceStatus,
+    framing: { ...framing },
+    framingStatus,
     errorMessage,
   });
 
@@ -159,6 +240,17 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
   const isStale = (operationGeneration: number) =>
     disposed || operationGeneration !== generation;
 
+  // Cancel any scheduled framing write and invalidate in-flight framing saves by
+  // bumping the revision. Called whenever a newer operation (selection, clear,
+  // reset, restore commit, dispose) supersedes pending framing work.
+  const cancelScheduledFramingSave = () => {
+    if (framingTimer !== null) {
+      cancelTimeout(framingTimer);
+      framingTimer = null;
+    }
+    framingSaveRevision += 1;
+  };
+
   const enqueue = <T>(task: () => Promise<T>): Promise<T> => {
     const result = mutationQueue.then(task);
     mutationQueue = result.then(
@@ -168,12 +260,10 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     return result;
   };
 
-  // After a queued mutation runs, if a newer operation has superseded it the
-  // durable record may now be wrong. Reconcile storage back to the intended
-  // durable workspace before the queue advances to later work.
-  const reconcile = async (operationGeneration: number) => {
+  // After a queued mutation writes stale data, reconcile storage back to the
+  // latest confirmed durable workspace before the queue advances to later work.
+  const reconcileToConfirmedWorkspace = async () => {
     if (disposed) return;
-    if (operationGeneration === generation) return;
     const desired = persistedWorkspaceRef;
     try {
       if (desired === null) {
@@ -184,6 +274,12 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     } catch {
       // Best-effort reconciliation; storage errors are non-fatal here.
     }
+  };
+
+  const reconcile = async (operationGeneration: number) => {
+    if (disposed) return;
+    if (operationGeneration === generation) return;
+    await reconcileToConfirmedWorkspace();
   };
 
   const runSave = (
@@ -204,11 +300,28 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     });
 
   const settleInvalidPersistedRecord = async (operationGeneration: number) => {
+    // Restore-only access never mutates storage: keep the primitive and default
+    // framing without clearing another page's durable record.
+    if (!isInteractive) {
+      if (isStale(operationGeneration)) return;
+      activeAsset = null;
+      pendingFileName = null;
+      lifecycleStatus = "empty";
+      persistenceStatus = "invalid";
+      framing = createDefaultLocalAvatarFraming();
+      framingStatus = "none";
+      errorMessage = RESTORE_INVALID_CLEARED_MESSAGE;
+      emit();
+      return;
+    }
+
     const clearResult = await runClear(operationGeneration);
     if (isStale(operationGeneration)) return;
     activeAsset = null;
     pendingFileName = null;
     lifecycleStatus = "empty";
+    framing = createDefaultLocalAvatarFraming();
+    framingStatus = "none";
     if (clearResult.status === "cleared") {
       persistedWorkspaceRef = null;
       persistenceStatus = "invalid";
@@ -227,6 +340,8 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     pendingFileName = null;
     lifecycleStatus = "checking";
     persistenceStatus = "none";
+    framing = createDefaultLocalAvatarFraming();
+    framingStatus = "none";
     errorMessage = null;
     emit();
 
@@ -267,6 +382,8 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
       lifecycleStatus = "restoring";
       pendingFileName = workspace.fileName;
       persistenceStatus = "none";
+      // Framing stays at its default while the matching GLB parses; the stored
+      // framing is applied only in the single coherent commit below.
       errorMessage = null;
       emit();
 
@@ -288,27 +405,59 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
         return;
       }
 
+      // Coherent commit: parsed asset and its validated stored framing together
+      // in one emitted state. The storage boundary already rejected corrupt
+      // framing, so the stored value is trusted here without re-clamping.
       activeAsset = restoredAsset;
       persistedWorkspaceRef = workspace;
       pendingFileName = null;
       lifecycleStatus = "ready";
       persistenceStatus = "persisted";
+      framing = { ...workspace.framing };
+      framingStatus = "saved";
       errorMessage = null;
       emit();
     })();
   };
 
+  const resumeFramingPersistence = () => {
+    if (disposed || !isInteractive) return;
+    if (activeAsset === null) {
+      framingStatus = "none";
+      return;
+    }
+    if (persistedWorkspaceRef === null) {
+      framingStatus = "memory_only";
+      return;
+    }
+    if (framingEquals(framing, persistedWorkspaceRef.framing)) {
+      framingStatus = "saved";
+      return;
+    }
+    if (framingTimer !== null) {
+      cancelTimeout(framingTimer);
+      framingTimer = null;
+    }
+    framingSaveRevision += 1;
+    framingStatus = "dirty";
+    scheduleFramingSave(framingSaveRevision, generation);
+  };
+
   const failSelectionValidation = (message: string) => {
-    // Preserve any current asset; only surface the validation error.
+    // Preserve any current asset and framing; only surface the validation error.
     pendingFileName = null;
     lifecycleStatus = "error";
     errorMessage = message;
+    resumeFramingPersistence();
     emit();
   };
 
   const loadFile = async (file: LocalGlbAvatarFileInput) => {
+    if (!isInteractive) return;
     generation += 1;
     const operationGeneration = generation;
+    // A new selection supersedes any pending framing write for the old avatar.
+    cancelScheduledFramingSave();
 
     if (!hasGlbExtension(file.name)) {
       failSelectionValidation(UNSUPPORTED_FILE_MESSAGE);
@@ -323,7 +472,7 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
       return;
     }
 
-    // Keep the current asset rendered while a replacement is pending.
+    // Keep the current asset and framing rendered while a replacement pends.
     pendingFileName = file.name;
     lifecycleStatus = "loading";
     errorMessage = null;
@@ -370,11 +519,14 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     }
     pendingCandidates.add(candidate);
 
+    // Persist the candidate GLB with the current in-memory framing so framing is
+    // stable across a replacement; framing is captured here at save time.
+    const capturedFraming: LocalAvatarFraming = { ...framing };
     const workspace = createLocalAvatarWorkspace({
       fileName: file.name,
       mimeType: normalizeFileMimeType(file.type),
       glbBytes,
-      framing: createDefaultLocalAvatarFraming(),
+      framing: capturedFraming,
     });
     if (workspace === null) {
       retireAsset(candidate);
@@ -404,6 +556,16 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
       pendingFileName = null;
       lifecycleStatus = "ready";
       persistenceStatus = "persisted";
+      // The saved workspace holds capturedFraming. If the user changed framing
+      // while the save was pending, in-memory framing has moved on: keep the
+      // asset durable but honestly schedule the newer framing for this avatar.
+      if (framingEquals(framing, workspace.framing)) {
+        framingStatus = "saved";
+      } else {
+        framingStatus = "dirty";
+        framingSaveRevision += 1;
+        scheduleFramingSave(framingSaveRevision, operationGeneration);
+      }
       errorMessage = null;
       emit();
       return;
@@ -413,33 +575,169 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
 
     if (!hadActiveAvatar && !hadDurableAvatar) {
       // First valid selection with no prior avatar: keep it explicitly unsaved
-      // rather than discarding the user's work. No durable record is created.
+      // rather than discarding the user's work. No durable record is created,
+      // so framing changes stay memory-only and never claim to survive reload.
       activeAsset = candidate;
       persistedWorkspaceRef = null;
       pendingCandidates.delete(candidate);
       pendingFileName = null;
       lifecycleStatus = "ready";
       persistenceStatus = "unsaved";
+      framingStatus = "memory_only";
       errorMessage = null;
       emit();
       return;
     }
 
-    // Failed replacement: preserve the active avatar and its durable record.
+    // Failed replacement: preserve the active avatar, its framing, and its
+    // durable record.
     retireAsset(candidate);
     pendingFileName = null;
     lifecycleStatus = "error";
     persistenceStatus = unavailable ? "unavailable" : "write_failed";
     errorMessage = replacementFailureMessage(file.name, unavailable);
+    resumeFramingPersistence();
     emit();
   };
 
+  // Build the durable workspace for a framing-only save from the existing
+  // durable GLB metadata/bytes plus the captured framing. Parsed Three.js
+  // objects are never persisted.
+  const buildFramingWorkspace = (
+    durable: LocalAvatarWorkspace,
+    capturedFraming: LocalAvatarFraming,
+  ): LocalAvatarWorkspace | null =>
+    createLocalAvatarWorkspace({
+      fileName: durable.fileName,
+      mimeType: durable.mimeType,
+      glbBytes: durable.glbBytes,
+      framing: capturedFraming,
+    });
+
+  // Serialized framing save. Both the pre-save decision and the durable-
+  // reference commit happen inside the queued task, guarded by the operation
+  // generation (selection/clear) and the framing revision, so a later queued
+  // task never observes an obsolete durable workspace and a stale save can never
+  // recreate or overwrite a newer record.
+  const runFramingSave = (
+    workspace: LocalAvatarWorkspace,
+    operationGeneration: number,
+    revision: number,
+  ) =>
+    enqueue(async () => {
+      const superseded = () =>
+        disposed ||
+        operationGeneration !== generation ||
+        revision !== framingSaveRevision ||
+        persistedWorkspaceRef === null;
+      if (superseded()) {
+        return { superseded: true as const };
+      }
+      const result = await storage.save(workspace);
+      if (result.status === "saved" && !superseded()) {
+        // Commit the durable reference before the queue advances so later
+        // queued mutations read the intended record.
+        persistedWorkspaceRef = workspace;
+        return { superseded: false as const, status: result.status };
+      }
+      if (result.status === "saved" && superseded()) {
+        await reconcileToConfirmedWorkspace();
+      } else {
+        await reconcile(operationGeneration);
+      }
+      return { superseded: false as const, status: result.status };
+    });
+
+  const commitFramingSave = async (
+    revision: number,
+    operationGeneration: number,
+  ) => {
+    framingTimer = null;
+    if (disposed || !isInteractive) return;
+    if (revision !== framingSaveRevision) return;
+    if (operationGeneration !== generation) return;
+    const durable = persistedWorkspaceRef;
+    if (durable === null || activeAsset === null) return;
+
+    const capturedFraming: LocalAvatarFraming = { ...framing };
+    const workspace = buildFramingWorkspace(durable, capturedFraming);
+    if (workspace === null) return;
+
+    framingStatus = "saving";
+    emit();
+
+    const result = await runFramingSave(
+      workspace,
+      operationGeneration,
+      revision,
+    );
+
+    if (disposed) return;
+    if (revision !== framingSaveRevision) return;
+    if (operationGeneration !== generation) return;
+    if (result.superseded) return;
+
+    if (result.status === "saved") {
+      framingStatus = "saved";
+    } else {
+      // Retain safe in-memory framing and the last confirmed durable workspace;
+      // never claim the failed values will reach OBS/reload.
+      framingStatus = "save_failed";
+    }
+    emit();
+  };
+
+  function scheduleFramingSave(revision: number, operationGeneration: number) {
+    framingTimer = scheduleTimeout(() => {
+      void commitFramingSave(revision, operationGeneration);
+    }, LOCAL_AVATAR_FRAMING_SAVE_DEBOUNCE_MS);
+  }
+
+  // Apply a validated framing update immediately, then decide persistence. Only
+  // a durable avatar under interactive access schedules a trailing write.
+  const applyFraming = (validated: LocalAvatarFraming) => {
+    framing = validated;
+    cancelScheduledFramingSave();
+    const revision = framingSaveRevision;
+
+    if (!isInteractive || activeAsset === null) {
+      framingStatus = activeAsset === null ? "none" : "memory_only";
+      emit();
+      return;
+    }
+    if (persistedWorkspaceRef === null) {
+      // Active but unsaved avatar: framing stays memory-only.
+      framingStatus = "memory_only";
+      emit();
+      return;
+    }
+    framingStatus = "dirty";
+    scheduleFramingSave(revision, generation);
+    emit();
+  };
+
+  const setFraming = (nextFraming: LocalAvatarFraming) => {
+    if (disposed || !isInteractive) return;
+    const validated = parseLocalAvatarFraming(nextFraming);
+    if (validated === null) return;
+    applyFraming(validated);
+  };
+
+  const resetFraming = () => {
+    if (disposed || !isInteractive) return;
+    applyFraming(createDefaultLocalAvatarFraming());
+  };
+
   const clearAvatar = async () => {
+    if (!isInteractive) return;
     generation += 1;
     const operationGeneration = generation;
+    // A clear supersedes any pending framing write; no stale framing save may
+    // recreate the record after a successful clear.
+    cancelScheduledFramingSave();
 
     const assetToRetire = activeAsset;
-    // Keep the current asset rendered while the durable clear is pending.
+    // Keep the current asset and framing rendered while the durable clear pends.
     lifecycleStatus = "clearing";
     errorMessage = null;
     emit();
@@ -453,16 +751,19 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
       pendingFileName = null;
       lifecycleStatus = "empty";
       persistenceStatus = "none";
+      framing = createDefaultLocalAvatarFraming();
+      framingStatus = "none";
       errorMessage = null;
       emit();
       if (assetToRetire !== null) retireAsset(assetToRetire);
       return;
     }
 
-    // Clear failed: preserve the active asset and durable record.
+    // Clear failed: preserve the active asset, framing, and durable record.
     lifecycleStatus = "error";
     persistenceStatus = "clear_failed";
     errorMessage = CLEAR_FAILED_MESSAGE;
+    resumeFramingPersistence();
     emit();
   };
 
@@ -470,6 +771,10 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     if (disposed) return;
     disposed = true;
     generation += 1;
+    if (framingTimer !== null) {
+      cancelTimeout(framingTimer);
+      framingTimer = null;
+    }
     const owned = new Set<Asset>(pendingCandidates);
     if (activeAsset !== null) owned.add(activeAsset);
     activeAsset = null;
@@ -477,5 +782,13 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     for (const asset of owned) retireAsset(asset);
   };
 
-  return { getState, start, loadFile, clearAvatar, dispose };
+  return {
+    getState,
+    start,
+    loadFile,
+    setFraming,
+    resetFraming,
+    clearAvatar,
+    dispose,
+  };
 };

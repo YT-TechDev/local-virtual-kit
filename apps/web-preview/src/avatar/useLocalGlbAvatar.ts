@@ -3,12 +3,18 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   createLocalGlbAvatarWorkspaceController,
+  type LocalAvatarWorkspaceAccessMode,
   type LocalGlbAvatarLifecycleStatus,
   type LocalGlbAvatarPersistenceStatus,
+  type LocalAvatarFramingPersistenceStatus,
   type LocalGlbAvatarWorkspaceController,
   type LocalGlbAvatarWorkspaceState,
 } from "./localGlbAvatarWorkspaceController";
-import { createLocalAvatarWorkspaceStorage } from "./localAvatarWorkspace";
+import {
+  createDefaultLocalAvatarFraming,
+  createLocalAvatarWorkspaceStorage,
+  type LocalAvatarFraming,
+} from "./localAvatarWorkspace";
 
 export type LocalGlbAvatarAsset = {
   fileName: string;
@@ -21,12 +27,16 @@ export type LocalGlbAvatarController = {
   pendingFileName: string | null;
   lifecycleStatus: LocalGlbAvatarLifecycleStatus;
   persistenceStatus: LocalGlbAvatarPersistenceStatus;
+  framing: LocalAvatarFraming;
+  framingStatus: LocalAvatarFramingPersistenceStatus;
   loadFile: (file: File) => Promise<void>;
+  setFraming: (nextFraming: LocalAvatarFraming) => void;
+  resetFraming: () => void;
   clearAvatar: () => Promise<void>;
 };
 
 export type UseLocalGlbAvatarOptions = {
-  workspaceEnabled: boolean;
+  accessMode: LocalAvatarWorkspaceAccessMode;
 };
 
 const LOCAL_ONLY_RESOURCE_ERROR =
@@ -133,20 +143,13 @@ const createInitialControllerState =
     pendingFileName: null,
     lifecycleStatus: "checking",
     persistenceStatus: "none",
+    framing: createDefaultLocalAvatarFraming(),
+    framingStatus: "none",
     errorMessage: null,
   });
 
-const DISABLED_CONTROLLER_STATE: LocalGlbAvatarWorkspaceState<LocalGlbAvatarAsset> =
-  {
-    asset: null,
-    pendingFileName: null,
-    lifecycleStatus: "empty",
-    persistenceStatus: "none",
-    errorMessage: null,
-  };
-
 export function useLocalGlbAvatar({
-  workspaceEnabled,
+  accessMode,
 }: UseLocalGlbAvatarOptions): LocalGlbAvatarController {
   const [state, setState] = useState<
     LocalGlbAvatarWorkspaceState<LocalGlbAvatarAsset>
@@ -155,13 +158,10 @@ export function useLocalGlbAvatar({
     useRef<LocalGlbAvatarWorkspaceController<LocalGlbAvatarAsset> | null>(null);
 
   useEffect(() => {
-    // Persistence is scoped to the standard non-OBS Preview. OBS routes keep the
-    // built-in primitive and never touch browser-local storage for this issue.
-    if (!workspaceEnabled) {
-      controllerRef.current = null;
-      return undefined;
-    }
-
+    // Both the standard Preview (interactive) and OBS routes (restore-only)
+    // hydrate from the same browser-local workspace. Access mode determines
+    // whether the controller may write; restore-only never mutates storage.
+    //
     // Create a fresh controller for each Strict Mode setup so the simulated
     // cleanup disposes exactly this controller; the next setup starts a new one.
     // The controller pushes its initial state synchronously through start().
@@ -171,6 +171,12 @@ export function useLocalGlbAvatar({
         parseBytes: parseLocalGlbAvatarBytes,
         disposeAsset: disposeLocalGlbAvatarAsset,
         onStateChange: setState,
+        accessMode,
+        scheduleTimeout: (callback, delayMs) =>
+          window.setTimeout(callback, delayMs),
+        cancelTimeout: (handle) => {
+          window.clearTimeout(handle as number);
+        },
       });
     controllerRef.current = controller;
     controller.start();
@@ -179,27 +185,35 @@ export function useLocalGlbAvatar({
       controllerRef.current = null;
       controller.dispose();
     };
-  }, [workspaceEnabled]);
+  }, [accessMode]);
 
   const loadFile = useCallback(async (file: File) => {
     await controllerRef.current?.loadFile(file);
+  }, []);
+
+  const setFraming = useCallback((nextFraming: LocalAvatarFraming) => {
+    controllerRef.current?.setFraming(nextFraming);
+  }, []);
+
+  const resetFraming = useCallback(() => {
+    controllerRef.current?.resetFraming();
   }, []);
 
   const clearAvatar = useCallback(async () => {
     await controllerRef.current?.clearAvatar();
   }, []);
 
-  // When the workspace is disabled (OBS), ignore any controller state and keep
-  // the built-in primitive without a synchronous in-effect state update.
-  const effectiveState = workspaceEnabled ? state : DISABLED_CONTROLLER_STATE;
-
   return {
-    asset: effectiveState.asset,
-    errorMessage: effectiveState.errorMessage,
-    pendingFileName: effectiveState.pendingFileName,
-    lifecycleStatus: effectiveState.lifecycleStatus,
-    persistenceStatus: effectiveState.persistenceStatus,
+    asset: state.asset,
+    errorMessage: state.errorMessage,
+    pendingFileName: state.pendingFileName,
+    lifecycleStatus: state.lifecycleStatus,
+    persistenceStatus: state.persistenceStatus,
+    framing: state.framing,
+    framingStatus: state.framingStatus,
     loadFile,
+    setFraming,
+    resetFraming,
     clearAvatar,
   };
 }

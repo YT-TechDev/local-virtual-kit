@@ -351,9 +351,9 @@ const runCheck = async () => {
   );
   assert(
     previewSource.includes(
-      "const [localAvatarScale, setLocalAvatarScale] = useState(\n    DEFAULT_LOCAL_AVATAR_SCALE,\n  );",
+      "const localAvatarScale = localGlbAvatar.framing.uniformScale;",
     ),
-    "local avatar scale control: scale state must be renderer-owned React state initialized to default",
+    "local avatar scale control: scale must be read from the workspace controller framing",
   );
   assert(
     previewSource.includes(
@@ -362,8 +362,8 @@ const runCheck = async () => {
     "local avatar scale control: current value text must format scale as multiplier",
   );
   for (const stateNeedle of [
-    "const [localAvatarVerticalOffset, setLocalAvatarVerticalOffset] = useState(\n    DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,\n  );",
-    "const [localAvatarYawDegrees, setLocalAvatarYawDegrees] = useState(\n    DEFAULT_LOCAL_AVATAR_YAW_DEGREES,\n  );",
+    "const localAvatarVerticalOffset = localGlbAvatar.framing.verticalOffset;",
+    "const localAvatarYawDegrees = localGlbAvatar.framing.yawDegrees;",
     "localAvatarVerticalOffset.toFixed(2)",
     "const localAvatarYawValueText = `${localAvatarYawDegrees}°`;",
     "const degreesToRadians = (degrees: number) =>",
@@ -462,8 +462,9 @@ const runCheck = async () => {
     "local avatar scale control",
   ).slice;
   assert(
-    scaleHandler.includes("setLocalAvatarScale(event.target.valueAsNumber)"),
-    "local avatar scale control: range handler must update renderer-owned scale state",
+    scaleHandler.includes("localGlbAvatar.setFraming({") &&
+      scaleHandler.includes("uniformScale: event.target.valueAsNumber,"),
+    "local avatar scale control: range handler must update framing scale through the controller",
   );
   const verticalOffsetHandler = sliceBetween(
     previewSource,
@@ -472,10 +473,11 @@ const runCheck = async () => {
     "local avatar vertical offset control",
   ).slice;
   assert(
-    verticalOffsetHandler.includes(
-      "setLocalAvatarVerticalOffset(event.target.valueAsNumber)",
-    ),
-    "local avatar vertical offset control: range handler must update renderer-owned vertical offset state",
+    verticalOffsetHandler.includes("localGlbAvatar.setFraming({") &&
+      verticalOffsetHandler.includes(
+        "verticalOffset: event.target.valueAsNumber,",
+      ),
+    "local avatar vertical offset control: range handler must update framing vertical offset through the controller",
   );
   const yawHandler = sliceBetween(
     previewSource,
@@ -484,8 +486,9 @@ const runCheck = async () => {
     "local avatar yaw control",
   ).slice;
   assert(
-    yawHandler.includes("setLocalAvatarYawDegrees(event.target.valueAsNumber)"),
-    "local avatar yaw control: range handler must update renderer-owned yaw degree state",
+    yawHandler.includes("localGlbAvatar.setFraming({") &&
+      yawHandler.includes("yawDegrees: event.target.valueAsNumber,"),
+    "local avatar yaw control: range handler must update framing yaw through the controller",
   );
   const resetFramingDisabled = sliceBetween(
     previewSource,
@@ -512,29 +515,21 @@ const runCheck = async () => {
   const resetFramingHandler = sliceBetween(
     previewSource,
     "const handleResetLocalAvatarFraming",
-    "const handleLocalAvatarFileChange",
+    "const handleClearLocalAvatar",
     "local avatar scale control",
   ).slice;
   assert(
-    resetFramingHandler.includes(
-      "setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE)",
-    ) &&
-      resetFramingHandler.includes(
-        "setLocalAvatarVerticalOffset(DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET)",
-      ) &&
-      resetFramingHandler.includes(
-        "setLocalAvatarYawDegrees(DEFAULT_LOCAL_AVATAR_YAW_DEGREES)",
-      ),
-    "local avatar framing controls: reset framing must restore scale, vertical offset, and yaw defaults",
+    resetFramingHandler.includes("localGlbAvatar.resetFraming()"),
+    "local avatar framing controls: reset framing must restore defaults through the controller reset action",
   );
   assert(
     panel.includes("disabled={resetLocalAvatarFramingDisabled}"),
     "local avatar framing controls: reset button must use the resetLocalAvatarFramingDisabled expression",
   );
   assert(
-    resetFramingHandler.includes("DEFAULT_LOCAL_AVATAR_SCALE") &&
-      !resetFramingHandler.includes("localGlbAvatar.reset"),
-    "local avatar scale control: reset framing must remain separate from asset reset",
+    resetFramingHandler.includes("localGlbAvatar.resetFraming()") &&
+      !resetFramingHandler.includes("clearAvatar"),
+    "local avatar framing controls: reset framing must stay separate from the durable clear action",
   );
 
   assert(
@@ -578,9 +573,9 @@ const runCheck = async () => {
 
   assert(
     previewSource.includes(
-      "useLocalGlbAvatar({ workspaceEnabled: !isObsMode })",
+      'accessMode: isObsMode ? "restore-only" : "interactive"',
     ),
-    "standard/OBS scope: persistence must be enabled only for the standard non-OBS Preview",
+    "standard/OBS scope: standard Preview uses interactive access and OBS uses restore-only access",
   );
   const guidance = sliceBetween(
     panel,
@@ -679,9 +674,9 @@ const runCheck = async () => {
 
   // ---- Strict Mode-safe workspace hook wiring ----
   assert(
-    loaderSource.includes("workspaceEnabled") &&
+    loaderSource.includes("accessMode") &&
       loaderSource.includes("UseLocalGlbAvatarOptions"),
-    "standard/OBS scope: hook must accept a workspaceEnabled option",
+    "standard/OBS scope: hook must accept an accessMode option",
   );
   const hookEffect = sliceBetween(
     loaderSource,
@@ -690,9 +685,19 @@ const runCheck = async () => {
     "Strict Mode-safe controller lifecycle",
   ).slice;
   assert(
-    hookEffect.includes("if (!workspaceEnabled)") &&
-      loaderSource.includes("DISABLED_CONTROLLER_STATE"),
-    "standard/OBS scope: disabled workspace must keep the primitive and skip the controller",
+    hookEffect.includes("accessMode,") &&
+      hookEffect.includes("scheduleTimeout:") &&
+      hookEffect.includes("cancelTimeout:"),
+    "standard/OBS scope: controller must receive the access mode and an injected debounce scheduler",
+  );
+  assert(
+    !loaderSource.includes("DISABLED_CONTROLLER_STATE"),
+    "standard/OBS scope: OBS now restores through the controller, so no disabled-state shortcut remains",
+  );
+  assert(
+    /\[accessMode\]\)/.test(hookEffect) ||
+      loaderSource.includes("}, [accessMode]);"),
+    "standard/OBS scope: controller lifecycle effect must depend on accessMode",
   );
   assert(
     hookEffect.includes(
@@ -746,7 +751,11 @@ const runCheck = async () => {
     "pendingFileName",
     "lifecycleStatus",
     "persistenceStatus",
+    "framing",
+    "framingStatus",
     "loadFile",
+    "setFraming",
+    "resetFraming",
     "clearAvatar",
   ])
     assert(
@@ -794,7 +803,30 @@ const runCheck = async () => {
   );
   assert(
     controllerSource.includes("createDefaultLocalAvatarFraming()"),
-    "framing scope: newly selected assets must be saved with default framing only",
+    "framing ownership: controller must build default framing through the shared workspace helper",
+  );
+  assert(
+    controllerSource.includes("parseLocalAvatarFraming") &&
+      controllerSource.includes("setFraming") &&
+      controllerSource.includes("resetFraming") &&
+      controllerSource.includes("framingStatus"),
+    "framing ownership: controller must own validated framing state with set and reset actions",
+  );
+  assert(
+    controllerSource.includes("LOCAL_AVATAR_FRAMING_SAVE_DEBOUNCE_MS = 200"),
+    "framing debounce: controller must define the ~200 ms trailing debounce constant",
+  );
+  assert(
+    controllerSource.includes("scheduleTimeout") &&
+      controllerSource.includes("cancelTimeout") &&
+      !controllerSource.includes("setTimeout(") &&
+      !controllerSource.includes("setInterval(") &&
+      !controllerSource.includes("clearTimeout("),
+    "framing debounce: controller must use injected scheduler functions rather than real timers",
+  );
+  assert(
+    controllerSource.includes("framingSaveRevision"),
+    "framing debounce: controller must track a framing save revision to invalidate stale writes",
   );
   assert(
     controllerSource.includes("persistedWorkspaceRef") &&
@@ -859,11 +891,6 @@ const runCheck = async () => {
       "https://",
     ],
     "controller boundary: pure controller must stay framework- and network-free",
-  );
-  assertNotContainsAny(
-    controllerSource,
-    ["uniformScale", "verticalOffset", "yawDegrees"],
-    "framing scope: controller must not read, persist, or restore live framing values",
   );
 
   for (const framingIdentifier of [
@@ -1728,7 +1755,44 @@ const runCheck = async () => {
   // ---- Pure lifecycle controller behavioral tests ----
   // Fakes, counted disposal, and deferred Promises exercise lifecycle ordering
   // without React or real browser IndexedDB.
-  const { createLocalGlbAvatarWorkspaceController } = controllerModule;
+  const {
+    createLocalGlbAvatarWorkspaceController,
+    LOCAL_AVATAR_FRAMING_SAVE_DEBOUNCE_MS,
+  } = controllerModule;
+
+  assertEqual(
+    LOCAL_AVATAR_FRAMING_SAVE_DEBOUNCE_MS,
+    200,
+    "framing debounce: exported trailing debounce constant is 200 ms",
+  );
+
+  // Manual, dependency-free scheduler standing in for window.setTimeout /
+  // clearTimeout so the trailing framing debounce is deterministic. No fake
+  // timers, jsdom, or test dependency is introduced.
+  const createManualScheduler = () => {
+    let nextId = 1;
+    let lastDelay = null;
+    const timers = new Map();
+    return {
+      schedule: (callback, delayMs) => {
+        const id = nextId;
+        nextId += 1;
+        lastDelay = delayMs;
+        timers.set(id, callback);
+        return id;
+      },
+      cancel: (handle) => {
+        timers.delete(handle);
+      },
+      pending: () => timers.size,
+      lastDelay: () => lastDelay,
+      flush: () => {
+        const callbacks = [...timers.values()];
+        timers.clear();
+        for (const callback of callbacks) callback();
+      },
+    };
+  };
 
   const createDeferred = () => {
     let resolve;
@@ -1828,15 +1892,36 @@ const runCheck = async () => {
     const storage = options.storage ?? createStorage(options.durable);
     const parser = options.parser ?? createParser();
     const disposer = options.disposer ?? createDisposer();
+    const scheduler = options.scheduler ?? createManualScheduler();
     const states = [];
     const controller = createLocalGlbAvatarWorkspaceController({
       storage,
       parseBytes: parser.parse,
       disposeAsset: disposer.dispose,
       onStateChange: (state) => states.push(state),
+      accessMode: options.accessMode ?? "interactive",
+      scheduleTimeout: scheduler.schedule,
+      cancelTimeout: scheduler.cancel,
     });
-    return { controller, storage, parser, disposer, states };
+    return { controller, storage, parser, disposer, states, scheduler };
   };
+  const isDefaultFraming = (framing) =>
+    framing.uniformScale === 1 &&
+    framing.verticalOffset === 0 &&
+    framing.yawDegrees === 0;
+  const framingsEqual = (a, b) =>
+    a.uniformScale === b.uniformScale &&
+    a.verticalOffset === b.verticalOffset &&
+    a.yawDegrees === b.yawDegrees;
+  const buildWorkspaceWithFraming = (fileName, framing, seed = 1) =>
+    createLocalAvatarWorkspace({
+      fileName,
+      mimeType: "model/gltf-binary",
+      glbBytes: buildBytes(seed),
+      framing,
+    });
+  const framingA = { uniformScale: 2, verticalOffset: 1, yawDegrees: 45 };
+  const framingB = { uniformScale: 0.5, verticalOffset: -1, yawDegrees: -90 };
 
   // Restoration --------------------------------------------------------------
   {
@@ -2746,6 +2831,978 @@ const runCheck = async () => {
     );
   }
 
+  // Framing restoration ------------------------------------------------------
+  {
+    const h = createHarness();
+    const loadDeferred = createDeferred();
+    h.storage.programLoad(() => loadDeferred.promise);
+    h.controller.start();
+    await settle();
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing restore: default framing while storage load pending",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "none",
+      "framing restore: framing status none while load pending",
+    );
+    loadDeferred.resolve({ status: "empty" });
+    await settle();
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing restore: empty storage keeps default framing",
+    );
+  }
+  for (const status of ["unavailable", "failed"]) {
+    const h = createHarness();
+    h.storage.programLoad(() => ({ status }));
+    h.controller.start();
+    await settle();
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      `framing restore: ${status} keeps default framing`,
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "none",
+      `framing restore: ${status} framing status none`,
+    );
+  }
+  {
+    const h = createHarness({
+      durable: buildWorkspaceWithFraming("x.glb", framingA),
+    });
+    h.storage.programLoad(() => ({ status: "invalid" }));
+    h.controller.start();
+    await settle();
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing restore: invalid record falls back to default framing",
+    );
+  }
+  {
+    // Coherent restore: asset and its stored framing commit together, and no
+    // emitted state ever shows the restored asset with default/stale framing.
+    const stored = buildWorkspaceWithFraming("a.glb", framingA, 5);
+    const h = createHarness({ durable: stored });
+    const parseDeferred = createDeferred();
+    const assetP = { tag: "P" };
+    h.parser.program(() => parseDeferred.promise.then(() => assetP));
+    h.controller.start();
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "restoring",
+      "framing restore: restoring while stored bytes parse",
+    );
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing restore: framing stays default until the coherent commit",
+    );
+    parseDeferred.resolve();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(s.asset, assetP, "framing restore: restored asset committed");
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing restore: stored framing committed with the asset",
+    );
+    assertEqual(
+      s.framingStatus,
+      "saved",
+      "framing restore: restored framing marked saved",
+    );
+    for (const state of h.states)
+      if (state.asset !== null)
+        assert(
+          framingsEqual(state.framing, framingA),
+          "framing restore: restored asset never emitted with default/stale framing",
+        );
+  }
+  {
+    // A newer selection supersedes both the restored asset and its framing.
+    const stored = buildWorkspaceWithFraming("a.glb", framingA, 5);
+    const h = createHarness({ durable: stored });
+    const parseDeferred = createDeferred();
+    const assetP = { tag: "P" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => parseDeferred.promise.then(() => assetP));
+    h.parser.program(() => assetB);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    parseDeferred.resolve();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetB,
+      "framing restore: selection supersedes the restored asset",
+    );
+    assert(
+      isDefaultFraming(s.framing),
+      "framing restore: superseded restore never applies the stored framing",
+    );
+    assertEqual(
+      h.disposer.countFor(assetP),
+      1,
+      "framing restore: superseded restore candidate disposed",
+    );
+    assert(
+      isDefaultFraming(h.storage.getDurable().framing),
+      "framing restore: selection persists with current (default) framing",
+    );
+  }
+  {
+    // A clear supersedes both the restored asset and its framing.
+    const stored = buildWorkspaceWithFraming("a.glb", framingA, 5);
+    const h = createHarness({ durable: stored });
+    const parseDeferred = createDeferred();
+    const assetP = { tag: "P" };
+    h.parser.program(() => parseDeferred.promise.then(() => assetP));
+    h.controller.start();
+    await settle();
+    const pendingClear = h.controller.clearAvatar();
+    parseDeferred.resolve();
+    await pendingClear;
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      null,
+      "framing restore: clear supersedes the restored asset",
+    );
+    assert(
+      isDefaultFraming(s.framing),
+      "framing restore: clear resets framing to defaults",
+    );
+    assertEqual(
+      s.framingStatus,
+      "none",
+      "framing restore: clear leaves framing status none",
+    );
+    assertEqual(
+      h.disposer.countFor(assetP),
+      1,
+      "framing restore: restore candidate disposed after clear",
+    );
+  }
+  {
+    // Restore-only (OBS) hydrates and applies framing without any write.
+    const stored = buildWorkspaceWithFraming("a.glb", framingA, 5);
+    const h = createHarness({ durable: stored, accessMode: "restore-only" });
+    const assetP = { tag: "P" };
+    h.parser.program(() => assetP);
+    h.controller.start();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(s.asset, assetP, "restore-only: valid durable record restored");
+    assert(
+      framingsEqual(s.framing, framingA),
+      "restore-only: stored framing applied",
+    );
+    assertEqual(
+      s.framingStatus,
+      "saved",
+      "restore-only: restored framing saved",
+    );
+    assertEqual(
+      h.storage.calls.save.length,
+      0,
+      "restore-only: restoration performs no save",
+    );
+    assertEqual(
+      h.storage.calls.clear,
+      0,
+      "restore-only: restoration performs no clear",
+    );
+    h.controller.setFraming(framingB);
+    h.controller.resetFraming();
+    await h.controller.loadFile(makeFile("c.glb", { seed: 3 }));
+    await h.controller.clearAvatar();
+    await settle();
+    assertEqual(
+      h.storage.calls.save.length,
+      0,
+      "restore-only: setFraming/loadFile perform no save",
+    );
+    assertEqual(
+      h.storage.calls.clear,
+      0,
+      "restore-only: clearAvatar performs no clear",
+    );
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "restore-only: framing unchanged by no-op mutating actions",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      0,
+      "restore-only: no framing write is ever scheduled",
+    );
+  }
+  {
+    // Restore-only never cleans up an invalid record.
+    const h = createHarness({
+      durable: buildWorkspaceWithFraming("x.glb", framingA),
+      accessMode: "restore-only",
+    });
+    h.storage.programLoad(() => ({ status: "invalid" }));
+    h.controller.start();
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      null,
+      "restore-only: invalid record renders the primitive",
+    );
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "restore-only: invalid record keeps default framing",
+    );
+    assertEqual(
+      h.storage.calls.clear,
+      0,
+      "restore-only: invalid record is not cleared",
+    );
+  }
+
+  // Framing selection --------------------------------------------------------
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing selection: setFraming updates in-memory framing immediately",
+    );
+    h.parser.program(() => assetB);
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    const durable = h.storage.getDurable();
+    assertEqual(
+      durable.fileName,
+      "b.glb",
+      "framing selection: replacement persisted",
+    );
+    assert(
+      framingsEqual(durable.framing, framingA),
+      "framing selection: replacement workspace includes current framing",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetB,
+      "framing selection: replacement committed",
+    );
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing selection: framing preserved across replacement",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saved",
+      "framing selection: replacement framing marked saved",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      0,
+      "framing selection: no framing timer lingers after coherent replacement",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing selection: framingA persisted for the active avatar",
+    );
+    h.parser.program(() => assetB);
+    h.storage.programSave(() => ({ status: "failed" }));
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "framing selection: failed replacement preserves the active asset",
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing selection: failed replacement preserves in-memory framing",
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing selection: failed replacement preserves durable framing",
+    );
+    assertEqual(
+      h.disposer.countFor(assetB),
+      1,
+      "framing selection: failed replacement candidate disposed",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.storage.programSave(() => ({ status: "unavailable" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    assertEqual(
+      h.controller.getState().persistenceStatus,
+      "unsaved",
+      "framing selection: first unsaved avatar",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "memory_only",
+      "framing selection: unsaved avatar framing is memory-only",
+    );
+    const savesBefore = h.storage.calls.save.length;
+    h.controller.setFraming(framingA);
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing selection: unsaved avatar framing updates in memory",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "memory_only",
+      "framing selection: unsaved avatar framing stays memory-only",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      0,
+      "framing selection: unsaved avatar schedules no framing save",
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.calls.save.length,
+      savesBefore,
+      "framing selection: unsaved avatar framing change writes nothing",
+    );
+  }
+
+  // Framing debounce ---------------------------------------------------------
+  {
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const savesAfterLoad = h.storage.calls.save.length;
+    h.controller.setFraming(framingA);
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing debounce: in-memory framing changes immediately",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "dirty",
+      "framing debounce: framing marked dirty while a save is pending",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing debounce: one change schedules exactly one timer",
+    );
+    assertEqual(
+      h.scheduler.lastDelay(),
+      200,
+      "framing debounce: trailing delay is 200 ms",
+    );
+    h.controller.setFraming(framingB);
+    h.controller.setFraming(framingA);
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing debounce: rapid changes cancel and replace the prior timer",
+    );
+    assertEqual(
+      h.storage.calls.save.length,
+      savesAfterLoad,
+      "framing debounce: no save occurs before the trailing callback",
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.calls.save.length,
+      savesAfterLoad + 1,
+      "framing debounce: exactly one framing save runs on the trailing callback",
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing debounce: only the latest framing is saved",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saved",
+      "framing debounce: framing saved after the trailing callback",
+    );
+  }
+  {
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing debounce: timer scheduled before dispose",
+    );
+    h.controller.dispose();
+    assertEqual(
+      h.scheduler.pending(),
+      0,
+      "framing debounce: disposed controller cancels the pending timer",
+    );
+  }
+
+  // Framing save results -----------------------------------------------------
+  for (const status of ["unavailable", "failed"]) {
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.storage.programSave(() => ({ status }));
+    h.scheduler.flush();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.framingStatus,
+      "save_failed",
+      `framing save: ${status} marks the framing save failed`,
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      `framing save: ${status} keeps the in-memory framing`,
+    );
+    assert(
+      isDefaultFraming(h.storage.getDurable().framing),
+      `framing save: ${status} preserves the last confirmed durable framing`,
+    );
+  }
+  {
+    // A stale save completion cannot mark a newer framing revision as saved, and
+    // an older save finishing after a newer change cannot become durable.
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferredA = createDeferred();
+    h.storage.programSave(() => saveDeferredA.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saving",
+      "framing save ordering: framing A save in flight",
+    );
+    h.controller.setFraming(framingB);
+    h.scheduler.flush();
+    saveDeferredA.resolve({ status: "saved" });
+    await settle();
+    const s = h.controller.getState();
+    assert(
+      framingsEqual(s.framing, framingB),
+      "framing save ordering: in-memory framing is the newest value",
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingB),
+      "framing save ordering: the newest framing wins the durable record",
+    );
+    assertEqual(
+      s.framingStatus,
+      "saved",
+      "framing save ordering: final framing status is saved for the newest value",
+    );
+  }
+
+  {
+    // A stale framing save that succeeds after a newer revision exists must be
+    // repaired back to the last confirmed durable workspace even when the asset
+    // generation has not changed; a later failed newest save must not leave the
+    // stale revision durable.
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferredA = createDeferred();
+    h.storage.programSave(() => saveDeferredA.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    h.storage.programSave(() => ({ status: "saved" }));
+    h.storage.programSave(() => ({ status: "failed" }));
+    h.controller.setFraming(framingB);
+    h.scheduler.flush();
+    saveDeferredA.resolve({ status: "saved" });
+    await settle();
+    const s = h.controller.getState();
+    assert(
+      framingsEqual(s.framing, framingB),
+      "framing stale repair: in-memory framing remains the newest value",
+    );
+    assertEqual(
+      s.framingStatus,
+      "save_failed",
+      "framing stale repair: failed newest save is reported",
+    );
+    assert(
+      isDefaultFraming(h.storage.getDurable().framing),
+      "framing stale repair: durable framing returns to confirmed defaults",
+    );
+    assert(
+      !framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing stale repair: stale framing A is not final durable state",
+    );
+  }
+  for (const invalidFile of [
+    makeFile("invalid.txt"),
+    makeFile("zero.glb", { size: 0 }),
+  ]) {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery invalid selection: precondition dirty timer",
+    );
+    await h.controller.loadFile(invalidFile);
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "framing recovery invalid selection: active asset remains",
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing recovery invalid selection: framing remains",
+    );
+    assertEqual(
+      s.framingStatus,
+      "dirty",
+      "framing recovery invalid selection: framing is dirty",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery invalid selection: exactly one retry timer",
+    );
+    h.scheduler.flush();
+    await settle();
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing recovery invalid selection: flush persists framing A",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saved",
+      "framing recovery invalid selection: flush marks saved",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.parser.program(() => {
+      throw new Error("bad replacement");
+    });
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "framing recovery parser failure: previous asset remains",
+    );
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing recovery parser failure: framing remains",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery parser failure: one framing retry scheduled",
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "a.glb",
+      "framing recovery parser failure: previous GLB remains durable",
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing recovery parser failure: previous workspace gets framing A",
+    );
+  }
+  for (const status of ["failed", "unavailable"]) {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.parser.program(() => assetB);
+    h.storage.programSave(() => ({ status }));
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      `framing recovery replacement ${status}: previous asset remains`,
+    );
+    assertEqual(
+      h.disposer.countFor(assetB),
+      1,
+      `framing recovery replacement ${status}: candidate disposed once`,
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      `framing recovery replacement ${status}: one framing retry scheduled`,
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "a.glb",
+      `framing recovery replacement ${status}: previous GLB remains durable`,
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      `framing recovery replacement ${status}: previous GLB persisted with framing A`,
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.storage.programClear(() => ({ status: "failed" }));
+    await h.controller.clearAvatar();
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "framing recovery clear failure: active asset remains",
+    );
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing recovery clear failure: framing remains",
+    );
+    assert(
+      h.controller.getState().framingStatus !== "saving",
+      "framing recovery clear failure: not stuck saving",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery clear failure: exactly one retry timer",
+    );
+    h.scheduler.flush();
+    await settle();
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing recovery clear failure: flush persists framing A",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saved",
+      "framing recovery clear failure: flush marks saved",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    const clearDeferred = createDeferred();
+    h.storage.programClear(() => clearDeferred.promise);
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    saveDeferred.resolve({ status: "saved" });
+    clearDeferred.resolve({ status: "failed" });
+    await pendingClear;
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "framing recovery in-flight clear failure: active asset remains",
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing recovery in-flight clear failure: framing remains coherent",
+    );
+    assert(
+      s.framingStatus !== "saving",
+      "framing recovery in-flight clear failure: not permanently saving",
+    );
+    assert(
+      h.scheduler.pending() <= 1,
+      "framing recovery in-flight clear failure: at most one retry timer",
+    );
+  }
+
+  // Framing reset ------------------------------------------------------------
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing reset: a framing change scheduled a timer",
+    );
+    h.controller.resetFraming();
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing reset: defaults apply immediately",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing reset: the older timer is invalidated and replaced",
+    );
+    h.scheduler.flush();
+    await settle();
+    assert(
+      isDefaultFraming(h.storage.getDurable().framing),
+      "framing reset: a durable avatar persists the defaults",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "framing reset: reset keeps the active avatar and stays separate from clear",
+    );
+    assertEqual(
+      h.storage.calls.clear,
+      0,
+      "framing reset: reset does not clear the durable record",
+    );
+  }
+  {
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.storage.programSave(() => ({ status: "unavailable" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    const savesBefore = h.storage.calls.save.length;
+    h.controller.resetFraming();
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing reset: unsaved avatar reset applies defaults in memory",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "memory_only",
+      "framing reset: unsaved avatar reset stays memory-only",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      0,
+      "framing reset: unsaved avatar reset schedules no write",
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.calls.save.length,
+      savesBefore,
+      "framing reset: unsaved avatar reset writes nothing",
+    );
+  }
+
+  // Framing clear + mutation ordering ----------------------------------------
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing clear: a framing save was scheduled before clear",
+    );
+    await h.controller.clearAvatar();
+    assertEqual(
+      h.scheduler.pending(),
+      0,
+      "framing clear: clear cancels the scheduled framing save",
+    );
+    const s = h.controller.getState();
+    assertEqual(s.asset, null, "framing clear: success removes the asset");
+    assert(
+      isDefaultFraming(s.framing),
+      "framing clear: success resets framing to defaults",
+    );
+    assertEqual(
+      s.framingStatus,
+      "none",
+      "framing clear: success sets framing status none",
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "framing clear: durable record removed",
+    );
+  }
+  {
+    // A stale in-flight framing save must not recreate a cleared workspace.
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saving",
+      "framing clear ordering: framing save is in flight",
+    );
+    const clearDeferred = createDeferred();
+    h.storage.programClear(() => clearDeferred.promise);
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    saveDeferred.resolve({ status: "saved" });
+    clearDeferred.resolve({ status: "cleared" });
+    await pendingClear;
+    await settle();
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "framing clear ordering: a stale framing save cannot recreate the cleared workspace",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      null,
+      "framing clear ordering: clear wins over the pending framing save",
+    );
+    assert(
+      isDefaultFraming(h.controller.getState().framing),
+      "framing clear ordering: framing is reset after the winning clear",
+    );
+  }
+  {
+    // A failed clear preserves a coherent current workspace.
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    const durableBefore = h.storage.getDurable();
+    assert(
+      framingsEqual(durableBefore.framing, framingA),
+      "framing clear failure: framingA persisted before clear",
+    );
+    h.storage.programClear(() => ({ status: "failed" }));
+    await h.controller.clearAvatar();
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "framing clear failure: active asset preserved",
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing clear failure: in-memory framing preserved",
+    );
+    assert(
+      h.storage.getDurable() === durableBefore,
+      "framing clear failure: durable record preserved",
+    );
+  }
+  {
+    // Pending framing save followed by a successful replacement ends with the
+    // replacement workspace carrying the current framing.
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    h.parser.program(() => assetB);
+    const pendingB = h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    await settle();
+    saveDeferred.resolve({ status: "saved" });
+    await pendingB;
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      assetB,
+      "framing ordering: replacement after a pending framing save wins",
+    );
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "b.glb",
+      "framing ordering: durable is the replacement workspace",
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing ordering: the replacement keeps the current framing",
+    );
+  }
+
   console.log(
     `Web Preview local avatar contract check passed.\n  - extracted framing contract remains shared with AvatarPreview and keeps exact v0.11.0 bounds
   - versioned v1 workspace validation, defensive cloning, and the 50 MiB GLB byte limit are covered
@@ -2754,7 +3811,7 @@ const runCheck = async () => {
   - local-only and dependency-free storage boundary assertions are present
   - the local-only GLB byte parser is shared by selected and restored bytes with user-safe error mapping
   - the pure lifecycle controller stays framework-free and reuses the versioned workspace module
-  - scale, vertical offset, yaw degree controls, and reset framing remain renderer-owned memory-only state; live framing is neither persisted nor restored\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - restore lifecycle, save-before-commit, first-selection unsaved fallback, failed-replacement preservation, durable mutation ordering with stale reconciliation, explicit durable clear, and Three.js resource ownership are behaviorally covered with fake storage/parser/assets and deferred Promises\n  - persistence is scoped to the standard non-OBS Preview; OBS keeps the built-in primitive and no final OBS restoration is added\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: automated lifecycle/source evidence only; NOT real browser IndexedDB reload persistence, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
+  - scale, vertical offset, and yaw framing are owned by the workspace controller and restored coherently with the GLB asset; framing persists through a 200 ms trailing debounce with an injected manual scheduler\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - restore lifecycle, save-before-commit, first-selection unsaved fallback, failed-replacement preservation, durable mutation ordering with stale reconciliation, explicit durable clear, and Three.js resource ownership are behaviorally covered with fake storage/parser/assets and deferred Promises\n  - framing debounce correctness, stale/superseded framing-save invalidation, reset-to-default persistence, and framing/replacement/clear ordering are behaviorally covered\n  - standard Preview uses interactive read/write access; OBS uses restore-only access that hydrates the durable GLB and framing without ever mutating storage\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: automated lifecycle/source evidence only; NOT real browser IndexedDB reload persistence, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
   );
 };
 
