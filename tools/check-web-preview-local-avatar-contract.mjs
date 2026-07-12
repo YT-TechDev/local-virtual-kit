@@ -331,6 +331,49 @@ const runCheck = async () => {
     "primitive fallback: unsupported selections must preserve current asset",
   );
 
+  const successfulLoad = sliceBetween(
+    loadFile,
+    "const nextAsset =",
+    "} catch (error) {",
+    "ready asset handoff",
+  ).slice;
+  const staleCheckIndex = successfulLoad.indexOf(
+    "requestGenerationRef.current !== requestGeneration",
+  );
+  const staleDisposeIndex = successfulLoad.indexOf(
+    "disposeLocalGlbAvatarAsset(nextAsset)",
+  );
+  const assetCommitIndex = successfulLoad.indexOf("replaceAsset(nextAsset)");
+  const readyStatusIndex = successfulLoad.indexOf('setStatus("ready")');
+  assert(
+    staleCheckIndex !== -1,
+    "ready asset handoff: successful parse must verify request generation",
+  );
+  assert(
+    staleDisposeIndex !== -1,
+    "stale asset cleanup: stale successful asset must be disposed",
+  );
+  assert(
+    assetCommitIndex !== -1,
+    "ready asset handoff: successful current load must commit nextAsset",
+  );
+  assert(
+    countOccurrences(successfulLoad, "replaceAsset(nextAsset)") === 1,
+    "ready asset handoff: successful current load must commit nextAsset exactly once",
+  );
+  assert(
+    readyStatusIndex !== -1,
+    "ready asset handoff: successful current load must set ready status",
+  );
+  assert(
+    staleCheckIndex < staleDisposeIndex && staleDisposeIndex < assetCommitIndex,
+    "ready asset handoff: stale assets must be rejected and disposed before current asset commit",
+  );
+  assert(
+    assetCommitIndex < readyStatusIndex,
+    "ready asset handoff: nextAsset must be committed before ready status",
+  );
+
   const catchBlock = sliceBetween(
     loadFile,
     "} catch (error) {",
@@ -404,7 +447,7 @@ const runCheck = async () => {
     "stale asset cleanup: texture disposal missing",
   );
   assert(
-    loadFile.includes("disposeLocalGlbAvatarAsset(nextAsset)"),
+    successfulLoad.includes("disposeLocalGlbAvatarAsset(nextAsset)"),
     "stale asset cleanup: stale successful assets must be disposed",
   );
   const replaceAsset = sliceBetween(
@@ -652,7 +695,7 @@ const runCheck = async () => {
   );
 
   console.log(
-    `Web Preview local avatar contract check passed.\n  - local .glb selection remains local-only and in memory\n  - external avatar resource resolution remains blocked\n  - idle/loading/ready/error/reset and resource cleanup contracts are present\n  - primitive fallback and retained replacement behavior remain wired\n  - ready GLBs consume the existing AvatarMotionState path\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output\n  - OBS transparency/full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: source/behavior checker evidence only; NOT browser, GLB, GPU, OBS, webcam, Electron, or native runtime validation.`,
+    `Web Preview local avatar contract check passed.\n  - local .glb selection remains local-only and in memory\n  - external avatar resource resolution remains blocked\n  - idle/loading/ready/error/reset and resource cleanup contracts are present\n  - primitive fallback and retained replacement behavior remain wired\n  - ready GLBs consume the existing AvatarMotionState path\n  - successful current loads commit the parsed GLB before ready status\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output\n  - OBS transparency/full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: source/behavior checker evidence only; NOT browser, GLB, GPU, OBS, webcam, Electron, or native runtime validation.`,
   );
 };
 
