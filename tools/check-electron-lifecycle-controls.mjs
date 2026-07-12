@@ -266,17 +266,9 @@ requireMatch(
   "Native source Open button must bind disabled={isPreviewOpenPending}",
 );
 
-requireMatch(
-  source,
-  /<button[\s\S]*?onClick=\{.*?openPreviewUrl\(runtimeStatus\.previewObsNativeUrl\).*?\}[\s\S]*?disabled=\{isPreviewOpenPending\}/u,
-  "OBS native source Open button must bind disabled={isPreviewOpenPending}",
-);
-
-requireMatch(
-  source,
-  /<button[\s\S]*?onClick=\{.*?openPreviewUrl\(runtimeStatus\.previewObsDummyUrl\).*?\}[\s\S]*?disabled=\{isPreviewOpenPending\}/u,
-  "OBS dummy source Open button must bind disabled={isPreviewOpenPending}",
-);
+// OBS dummy/native Open (and Copy) coverage now lives in the dedicated
+// check-electron-obs-setup-actions.mjs checker because the OBS rows moved out of
+// the generic Preview URLs card into the OBS Browser Source setup section.
 
 requireMatch(
   source,
@@ -395,7 +387,8 @@ console.log(
     "openPreviewUrl clears previewOpenFeedback before setting it; " +
     "isPreviewOpenPending state declared; openPreviewUrl sets isPreviewOpenPending before openExternalUrl and clears in finally; " +
     "preview open pending message renders with role=status while pending; " +
-    "all four preview open buttons (dummy, native, OBS native, OBS dummy) bind disabled={isPreviewOpenPending}; " +
+    "the generic Dummy and Native preview open buttons bind disabled={isPreviewOpenPending} " +
+    "(OBS dummy/native Copy and Open coverage lives in check-electron-obs-setup-actions.mjs); " +
     "openError block has role=alert, aria-labelledby=preview-open-error-label, and visible Preview open error label; " +
     "openPreviewUrl clears openError before each attempt so stale errors do not persist on retry or after success; " +
     "startNativePipelineAndOpenPreview clears openError before starting; " +

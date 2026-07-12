@@ -45,6 +45,20 @@ type PreviewOpenFeedback = {
   message: string
   nativeTrackerStatus: NativeTrackerStatus
 }
+type ObsPreviewSource = 'dummy' | 'native'
+type ObsPreviewAction = 'copy' | 'open'
+type ObsPreviewActionContext = {
+  source: ObsPreviewSource
+  action: ObsPreviewAction
+  url: string
+}
+type ObsPreviewActionPending = ObsPreviewActionContext | null
+type ObsPreviewActionFeedback = ObsPreviewActionContext & {
+  message: string
+  tone: 'success' | 'danger'
+  nativeTrackerStatus?: NativeTrackerStatus
+  motionBridgeStatus?: MotionBridgeStatus
+}
 
 const RUNTIME_STATUS_POLL_INTERVAL_MS = 1500
 const MIN_CAMERA_INDEX = 0
@@ -167,6 +181,37 @@ const pipelineActionPendingMessages: Record<Exclude<PipelineActionPending, null>
   start: 'Starting native pipeline...',
   'start-and-open': 'Starting native pipeline and opening preview...',
   stop: 'Stopping native pipeline...'
+}
+
+const buildObsPendingMessage = (context: ObsPreviewActionContext): string => {
+  if (context.action === 'open') {
+    return context.source === 'dummy'
+      ? 'Opening OBS dummy preview...'
+      : 'Opening OBS native preview...'
+  }
+
+  return context.source === 'dummy' ? 'Copying OBS dummy URL...' : 'Copying OBS native URL...'
+}
+
+const resolveObsSourceFeedback = (
+  feedback: ObsPreviewActionFeedback | null,
+  source: ObsPreviewSource,
+  url: string,
+  status: RuntimeStatus
+): ObsPreviewActionFeedback | null => {
+  if (!feedback || feedback.source !== source || feedback.url !== url) {
+    return null
+  }
+
+  if (
+    source === 'native' &&
+    (feedback.nativeTrackerStatus !== status.nativeTrackerStatus ||
+      feedback.motionBridgeStatus !== status.motionBridgeStatus)
+  ) {
+    return null
+  }
+
+  return feedback
 }
 
 const isNativePipelineRunning = (status: RuntimeStatus): boolean =>
@@ -397,6 +442,8 @@ function App(): React.JSX.Element {
   const [stopFeedback, setStopFeedback] = useState<StopFeedback | null>(null)
   const [startFeedback, setStartFeedback] = useState<StartFeedback | null>(null)
   const [previewOpenFeedback, setPreviewOpenFeedback] = useState<PreviewOpenFeedback | null>(null)
+  const [obsActionPending, setObsActionPending] = useState<ObsPreviewActionPending>(null)
+  const [obsActionFeedback, setObsActionFeedback] = useState<ObsPreviewActionFeedback | null>(null)
   const [pipelineActionPending, setPipelineActionPending] = useState<PipelineActionPending>(null)
   const [isPreviewOpenPending, setIsPreviewOpenPending] = useState(false)
   const [isRuntimeStatusRefreshPending, setIsRuntimeStatusRefreshPending] = useState(false)
@@ -583,6 +630,94 @@ function App(): React.JSX.Element {
       setOpenError(error instanceof Error ? error.message : 'Failed to open preview URL.')
     } finally {
       setIsPreviewOpenPending(false)
+    }
+  }
+
+  const copyObsPreviewUrl = async (source: ObsPreviewSource, url: string): Promise<void> => {
+    if (obsActionPending) {
+      return
+    }
+
+    setObsActionFeedback(null)
+    setObsActionPending({ source, action: 'copy', url })
+
+    const nativeStatusContext =
+      source === 'native'
+        ? {
+            nativeTrackerStatus: runtimeStatus?.nativeTrackerStatus,
+            motionBridgeStatus: runtimeStatus?.motionBridgeStatus
+          }
+        : {}
+
+    try {
+      if (!navigator.clipboard) {
+        throw new Error('Clipboard unavailable')
+      }
+
+      await navigator.clipboard.writeText(url)
+      setObsActionFeedback({
+        source,
+        action: 'copy',
+        url,
+        message: source === 'dummy' ? 'OBS dummy URL copied.' : 'OBS native URL copied.',
+        tone: 'success',
+        ...nativeStatusContext
+      })
+    } catch {
+      setObsActionFeedback({
+        source,
+        action: 'copy',
+        url,
+        message:
+          source === 'dummy' ? 'Failed to copy OBS dummy URL.' : 'Failed to copy OBS native URL.',
+        tone: 'danger',
+        ...nativeStatusContext
+      })
+    } finally {
+      setObsActionPending(null)
+    }
+  }
+
+  const openObsPreviewUrl = async (source: ObsPreviewSource, url: string): Promise<void> => {
+    if (!desktopApi || obsActionPending) {
+      return
+    }
+
+    setObsActionFeedback(null)
+    setObsActionPending({ source, action: 'open', url })
+
+    const nativeStatusContext =
+      source === 'native'
+        ? {
+            nativeTrackerStatus: runtimeStatus?.nativeTrackerStatus,
+            motionBridgeStatus: runtimeStatus?.motionBridgeStatus
+          }
+        : {}
+
+    try {
+      await desktopApi.openExternalUrl(url)
+      setObsActionFeedback({
+        source,
+        action: 'open',
+        url,
+        message: source === 'dummy' ? 'OBS dummy preview opened.' : 'OBS native preview opened.',
+        tone: 'success',
+        ...nativeStatusContext
+      })
+    } catch {
+      setObsActionFeedback({
+        source,
+        action: 'open',
+        url,
+        message:
+          source === 'dummy'
+            ? 'Failed to open OBS dummy preview.'
+            : 'Failed to open OBS native preview.',
+        tone: 'danger',
+        ...nativeStatusContext
+      })
+    } finally {
+      setObsActionPending(null)
     }
   }
 
@@ -847,6 +982,7 @@ function App(): React.JSX.Element {
       ['starting', 'running', 'stopping'].includes(runtimeStatus.motionBridgeStatus)
     : false
   const isPipelineActionPending = pipelineActionPending !== null
+  const isObsActionPending = obsActionPending !== null
   const canStartNativePipeline = Boolean(
     desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending
   )
@@ -1037,34 +1173,6 @@ function App(): React.JSX.Element {
                   Open
                 </button>
               </div>
-
-              <div className="url-row">
-                <div>
-                  <span className="url-label">OBS native source</span>
-                  <code>{runtimeStatus.previewObsNativeUrl}</code>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openPreviewUrl(runtimeStatus.previewObsNativeUrl)}
-                  disabled={isPreviewOpenPending}
-                >
-                  Open
-                </button>
-              </div>
-
-              <div className="url-row">
-                <div>
-                  <span className="url-label">OBS dummy source</span>
-                  <code>{runtimeStatus.previewObsDummyUrl}</code>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openPreviewUrl(runtimeStatus.previewObsDummyUrl)}
-                  disabled={isPreviewOpenPending}
-                >
-                  Open
-                </button>
-              </div>
             </div>
 
             {isPreviewOpenPending ? (
@@ -1089,6 +1197,155 @@ function App(): React.JSX.Element {
                 {currentPreviewOpenFeedback}
               </p>
             ) : null}
+          </section>
+
+          <section
+            className="card card--wide obs-setup-card"
+            aria-labelledby="obs-browser-source-heading"
+          >
+            <div className="card-header">
+              <div>
+                <p className="section-label">OBS</p>
+                <h2 id="obs-browser-source-heading">OBS Browser Source</h2>
+              </div>
+              <StatusPill label="Localhost only" />
+            </div>
+
+            <div className="obs-setup-intro">
+              <p>
+                Add LVK to OBS as a Browser Source. Recommended starting size:{' '}
+                <strong>1920 × 1080</strong>. This is a suggested starting point, not a required
+                resolution for every avatar, scene, or display.
+              </p>
+              <p>
+                Both URLs are localhost-only. Camera frames remain local and are never uploaded to
+                the cloud.
+              </p>
+            </div>
+
+            <div className="obs-setup-grid">
+              {(() => {
+                const obsDummyUrl = runtimeStatus.previewObsDummyUrl
+                const dummyPending = obsActionPending?.source === 'dummy' ? obsActionPending : null
+                const dummyFeedback = resolveObsSourceFeedback(
+                  obsActionFeedback,
+                  'dummy',
+                  obsDummyUrl,
+                  runtimeStatus
+                )
+
+                return (
+                  <div
+                    className="obs-source-panel obs-source-panel--dummy"
+                    aria-labelledby="obs-dummy-source-heading"
+                    aria-busy={dummyPending !== null}
+                  >
+                    <div className="obs-source-panel__header">
+                      <p id="obs-dummy-source-heading" className="section-label">
+                        OBS dummy source
+                      </p>
+                      <code>{obsDummyUrl}</code>
+                    </div>
+                    <p className="obs-source-description">
+                      Does not require Native Core, the webcam, or the MotionFrame bridge. Use it to
+                      inspect the OBS-friendly renderer layout.
+                    </p>
+                    <div className="obs-source-actions">
+                      <button
+                        type="button"
+                        aria-label="Copy OBS dummy Browser Source URL"
+                        onClick={() => copyObsPreviewUrl('dummy', obsDummyUrl)}
+                        disabled={isObsActionPending}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Open OBS dummy Browser Source preview"
+                        onClick={() => openObsPreviewUrl('dummy', obsDummyUrl)}
+                        disabled={isObsActionPending}
+                      >
+                        Open
+                      </button>
+                    </div>
+                    {dummyPending ? (
+                      <p className="obs-action-feedback" role="status">
+                        {buildObsPendingMessage(dummyPending)}
+                      </p>
+                    ) : dummyFeedback ? (
+                      <p
+                        className={`obs-action-feedback obs-action-feedback--${dummyFeedback.tone}`}
+                        role={dummyFeedback.tone === 'danger' ? 'alert' : 'status'}
+                      >
+                        {dummyFeedback.message}
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              })()}
+
+              {(() => {
+                const obsNativeUrl = runtimeStatus.previewObsNativeUrl
+                const nativePending =
+                  obsActionPending?.source === 'native' ? obsActionPending : null
+                const nativeFeedback = resolveObsSourceFeedback(
+                  obsActionFeedback,
+                  'native',
+                  obsNativeUrl,
+                  runtimeStatus
+                )
+
+                return (
+                  <div
+                    className="obs-source-panel obs-source-panel--native"
+                    aria-labelledby="obs-native-source-heading"
+                    aria-busy={nativePending !== null}
+                  >
+                    <div className="obs-source-panel__header">
+                      <p id="obs-native-source-heading" className="section-label">
+                        OBS native source
+                      </p>
+                      <code>{obsNativeUrl}</code>
+                    </div>
+                    <p className="obs-source-description">
+                      Requires the local native pipeline and the local MotionFrame bridge. Camera
+                      frames remain local, and the URL itself remains localhost-only. Open does not
+                      start the native pipeline.
+                    </p>
+                    <div className="obs-source-actions">
+                      <button
+                        type="button"
+                        aria-label="Copy OBS native Browser Source URL"
+                        onClick={() => copyObsPreviewUrl('native', obsNativeUrl)}
+                        disabled={isObsActionPending}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Open OBS native Browser Source preview"
+                        onClick={() => openObsPreviewUrl('native', obsNativeUrl)}
+                        disabled={isObsActionPending}
+                      >
+                        Open
+                      </button>
+                    </div>
+                    {nativePending ? (
+                      <p className="obs-action-feedback" role="status">
+                        {buildObsPendingMessage(nativePending)}
+                      </p>
+                    ) : nativeFeedback ? (
+                      <p
+                        className={`obs-action-feedback obs-action-feedback--${nativeFeedback.tone}`}
+                        role={nativeFeedback.tone === 'danger' ? 'alert' : 'status'}
+                      >
+                        {nativeFeedback.message}
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              })()}
+            </div>
           </section>
 
           <section
