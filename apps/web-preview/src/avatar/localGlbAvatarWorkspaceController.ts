@@ -260,12 +260,10 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     return result;
   };
 
-  // After a queued mutation runs, if a newer operation has superseded it the
-  // durable record may now be wrong. Reconcile storage back to the intended
-  // durable workspace before the queue advances to later work.
-  const reconcile = async (operationGeneration: number) => {
+  // After a queued mutation writes stale data, reconcile storage back to the
+  // latest confirmed durable workspace before the queue advances to later work.
+  const reconcileToConfirmedWorkspace = async () => {
     if (disposed) return;
-    if (operationGeneration === generation) return;
     const desired = persistedWorkspaceRef;
     try {
       if (desired === null) {
@@ -276,6 +274,12 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     } catch {
       // Best-effort reconciliation; storage errors are non-fatal here.
     }
+  };
+
+  const reconcile = async (operationGeneration: number) => {
+    if (disposed) return;
+    if (operationGeneration === generation) return;
+    await reconcileToConfirmedWorkspace();
   };
 
   const runSave = (
@@ -416,11 +420,35 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     })();
   };
 
+  const resumeFramingPersistence = () => {
+    if (disposed || !isInteractive) return;
+    if (activeAsset === null) {
+      framingStatus = "none";
+      return;
+    }
+    if (persistedWorkspaceRef === null) {
+      framingStatus = "memory_only";
+      return;
+    }
+    if (framingEquals(framing, persistedWorkspaceRef.framing)) {
+      framingStatus = "saved";
+      return;
+    }
+    if (framingTimer !== null) {
+      cancelTimeout(framingTimer);
+      framingTimer = null;
+    }
+    framingSaveRevision += 1;
+    framingStatus = "dirty";
+    scheduleFramingSave(framingSaveRevision, generation);
+  };
+
   const failSelectionValidation = (message: string) => {
     // Preserve any current asset and framing; only surface the validation error.
     pendingFileName = null;
     lifecycleStatus = "error";
     errorMessage = message;
+    resumeFramingPersistence();
     emit();
   };
 
@@ -568,6 +596,7 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     lifecycleStatus = "error";
     persistenceStatus = unavailable ? "unavailable" : "write_failed";
     errorMessage = replacementFailureMessage(file.name, unavailable);
+    resumeFramingPersistence();
     emit();
   };
 
@@ -602,7 +631,6 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
         revision !== framingSaveRevision ||
         persistedWorkspaceRef === null;
       if (superseded()) {
-        await reconcile(operationGeneration);
         return { superseded: true as const };
       }
       const result = await storage.save(workspace);
@@ -612,7 +640,11 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
         persistedWorkspaceRef = workspace;
         return { superseded: false as const, status: result.status };
       }
-      await reconcile(operationGeneration);
+      if (result.status === "saved" && superseded()) {
+        await reconcileToConfirmedWorkspace();
+      } else {
+        await reconcile(operationGeneration);
+      }
       return { superseded: false as const, status: result.status };
     });
 
@@ -731,6 +763,7 @@ export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
     lifecycleStatus = "error";
     persistenceStatus = "clear_failed";
     errorMessage = CLEAR_FAILED_MESSAGE;
+    resumeFramingPersistence();
     emit();
   };
 

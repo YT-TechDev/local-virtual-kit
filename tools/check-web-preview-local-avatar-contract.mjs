@@ -3335,6 +3335,252 @@ const runCheck = async () => {
     );
   }
 
+  {
+    // A stale framing save that succeeds after a newer revision exists must be
+    // repaired back to the last confirmed durable workspace even when the asset
+    // generation has not changed; a later failed newest save must not leave the
+    // stale revision durable.
+    const h = createHarness();
+    h.parser.program(() => ({ tag: "A" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferredA = createDeferred();
+    h.storage.programSave(() => saveDeferredA.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    h.storage.programSave(() => ({ status: "saved" }));
+    h.storage.programSave(() => ({ status: "failed" }));
+    h.controller.setFraming(framingB);
+    h.scheduler.flush();
+    saveDeferredA.resolve({ status: "saved" });
+    await settle();
+    const s = h.controller.getState();
+    assert(
+      framingsEqual(s.framing, framingB),
+      "framing stale repair: in-memory framing remains the newest value",
+    );
+    assertEqual(
+      s.framingStatus,
+      "save_failed",
+      "framing stale repair: failed newest save is reported",
+    );
+    assert(
+      isDefaultFraming(h.storage.getDurable().framing),
+      "framing stale repair: durable framing returns to confirmed defaults",
+    );
+    assert(
+      !framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing stale repair: stale framing A is not final durable state",
+    );
+  }
+  for (const invalidFile of [
+    makeFile("invalid.txt"),
+    makeFile("zero.glb", { size: 0 }),
+  ]) {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery invalid selection: precondition dirty timer",
+    );
+    await h.controller.loadFile(invalidFile);
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "framing recovery invalid selection: active asset remains",
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing recovery invalid selection: framing remains",
+    );
+    assertEqual(
+      s.framingStatus,
+      "dirty",
+      "framing recovery invalid selection: framing is dirty",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery invalid selection: exactly one retry timer",
+    );
+    h.scheduler.flush();
+    await settle();
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing recovery invalid selection: flush persists framing A",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saved",
+      "framing recovery invalid selection: flush marks saved",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.parser.program(() => {
+      throw new Error("bad replacement");
+    });
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "framing recovery parser failure: previous asset remains",
+    );
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing recovery parser failure: framing remains",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery parser failure: one framing retry scheduled",
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "a.glb",
+      "framing recovery parser failure: previous GLB remains durable",
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing recovery parser failure: previous workspace gets framing A",
+    );
+  }
+  for (const status of ["failed", "unavailable"]) {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.parser.program(() => assetB);
+    h.storage.programSave(() => ({ status }));
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      `framing recovery replacement ${status}: previous asset remains`,
+    );
+    assertEqual(
+      h.disposer.countFor(assetB),
+      1,
+      `framing recovery replacement ${status}: candidate disposed once`,
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      `framing recovery replacement ${status}: one framing retry scheduled`,
+    );
+    h.scheduler.flush();
+    await settle();
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "a.glb",
+      `framing recovery replacement ${status}: previous GLB remains durable`,
+    );
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      `framing recovery replacement ${status}: previous GLB persisted with framing A`,
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.setFraming(framingA);
+    h.storage.programClear(() => ({ status: "failed" }));
+    await h.controller.clearAvatar();
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "framing recovery clear failure: active asset remains",
+    );
+    assert(
+      framingsEqual(h.controller.getState().framing, framingA),
+      "framing recovery clear failure: framing remains",
+    );
+    assert(
+      h.controller.getState().framingStatus !== "saving",
+      "framing recovery clear failure: not stuck saving",
+    );
+    assertEqual(
+      h.scheduler.pending(),
+      1,
+      "framing recovery clear failure: exactly one retry timer",
+    );
+    h.scheduler.flush();
+    await settle();
+    assert(
+      framingsEqual(h.storage.getDurable().framing, framingA),
+      "framing recovery clear failure: flush persists framing A",
+    );
+    assertEqual(
+      h.controller.getState().framingStatus,
+      "saved",
+      "framing recovery clear failure: flush marks saved",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.setFraming(framingA);
+    h.scheduler.flush();
+    await settle();
+    const clearDeferred = createDeferred();
+    h.storage.programClear(() => clearDeferred.promise);
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    saveDeferred.resolve({ status: "saved" });
+    clearDeferred.resolve({ status: "failed" });
+    await pendingClear;
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "framing recovery in-flight clear failure: active asset remains",
+    );
+    assert(
+      framingsEqual(s.framing, framingA),
+      "framing recovery in-flight clear failure: framing remains coherent",
+    );
+    assert(
+      s.framingStatus !== "saving",
+      "framing recovery in-flight clear failure: not permanently saving",
+    );
+    assert(
+      h.scheduler.pending() <= 1,
+      "framing recovery in-flight clear failure: at most one retry timer",
+    );
+  }
+
   // Framing reset ------------------------------------------------------------
   {
     const h = createHarness();
