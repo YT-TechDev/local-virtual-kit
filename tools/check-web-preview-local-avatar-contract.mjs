@@ -343,6 +343,10 @@ const runCheck = async () => {
   const staleDisposeIndex = successfulLoad.indexOf(
     "disposeLocalGlbAvatarAsset(nextAsset)",
   );
+  const staleReturnIndex = successfulLoad.indexOf(
+    "return;",
+    staleDisposeIndex + "disposeLocalGlbAvatarAsset(nextAsset)".length,
+  );
   const assetCommitIndex = successfulLoad.indexOf("replaceAsset(nextAsset)");
   const readyStatusIndex = successfulLoad.indexOf('setStatus("ready")');
   assert(
@@ -352,6 +356,10 @@ const runCheck = async () => {
   assert(
     staleDisposeIndex !== -1,
     "stale asset cleanup: stale successful asset must be disposed",
+  );
+  assert(
+    staleReturnIndex !== -1,
+    "ready asset handoff: stale successful assets must return after disposal",
   );
   assert(
     assetCommitIndex !== -1,
@@ -366,8 +374,10 @@ const runCheck = async () => {
     "ready asset handoff: successful current load must set ready status",
   );
   assert(
-    staleCheckIndex < staleDisposeIndex && staleDisposeIndex < assetCommitIndex,
-    "ready asset handoff: stale assets must be rejected and disposed before current asset commit",
+    staleCheckIndex < staleDisposeIndex &&
+      staleDisposeIndex < staleReturnIndex &&
+      staleReturnIndex < assetCommitIndex,
+    "ready asset handoff: stale assets must be checked, disposed, and returned before current asset commit",
   );
   assert(
     assetCommitIndex < readyStatusIndex,
@@ -695,7 +705,7 @@ const runCheck = async () => {
   );
 
   console.log(
-    `Web Preview local avatar contract check passed.\n  - local .glb selection remains local-only and in memory\n  - external avatar resource resolution remains blocked\n  - idle/loading/ready/error/reset and resource cleanup contracts are present\n  - primitive fallback and retained replacement behavior remain wired\n  - ready GLBs consume the existing AvatarMotionState path\n  - successful current loads commit the parsed GLB before ready status\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output\n  - OBS transparency/full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: source/behavior checker evidence only; NOT browser, GLB, GPU, OBS, webcam, Electron, or native runtime validation.`,
+    `Web Preview local avatar contract check passed.\n  - local .glb selection remains local-only and in memory\n  - external avatar resource resolution remains blocked\n  - idle/loading/ready/error/reset and resource cleanup contracts are present\n  - primitive fallback and retained replacement behavior remain wired\n  - ready GLBs consume the existing AvatarMotionState path\n  - successful current loads commit the parsed GLB before ready status\n  - stale parsed assets are disposed and returned before current asset commit\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output\n  - OBS transparency/full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: source/behavior checker evidence only; NOT browser, GLB, GPU, OBS, webcam, Electron, or native runtime validation.`,
   );
 };
 
