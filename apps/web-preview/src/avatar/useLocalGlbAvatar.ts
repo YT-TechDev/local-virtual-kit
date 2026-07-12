@@ -102,16 +102,25 @@ export function useLocalGlbAvatar(): LocalGlbAvatarController {
   const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [status, setStatus] = useState<LocalGlbAvatarLoadStatus>("idle");
   const assetRef = useRef<LocalGlbAvatarAsset | null>(null);
+  const pendingDisposalsRef = useRef<LocalGlbAvatarAsset[]>([]);
   const requestGenerationRef = useRef(0);
+
+  const drainPendingDisposals = useCallback(() => {
+    const pendingDisposals = pendingDisposalsRef.current;
+    pendingDisposalsRef.current = [];
+
+    for (const retiredAsset of new Set(pendingDisposals)) {
+      disposeLocalGlbAvatarAsset(retiredAsset);
+    }
+  }, []);
 
   const replaceAsset = useCallback((nextAsset: LocalGlbAvatarAsset | null) => {
     const previousAsset = assetRef.current;
     assetRef.current = nextAsset;
-    setAsset(nextAsset);
-
-    if (previousAsset !== null) {
-      disposeLocalGlbAvatarAsset(previousAsset);
+    if (previousAsset !== null && previousAsset !== nextAsset) {
+      pendingDisposalsRef.current.push(previousAsset);
     }
+    setAsset(nextAsset);
   }, []);
 
   const reset = useCallback(() => {
@@ -171,11 +180,23 @@ export function useLocalGlbAvatar(): LocalGlbAvatarController {
   );
 
   useEffect(() => {
+    drainPendingDisposals();
+  }, [asset, drainPendingDisposals]);
+
+  useEffect(() => {
     return () => {
       requestGenerationRef.current += 1;
-      if (assetRef.current !== null) {
-        disposeLocalGlbAvatarAsset(assetRef.current);
-        assetRef.current = null;
+      const assetsToDispose = [
+        assetRef.current,
+        ...pendingDisposalsRef.current,
+      ].filter(
+        (candidate): candidate is LocalGlbAvatarAsset => candidate !== null,
+      );
+      assetRef.current = null;
+      pendingDisposalsRef.current = [];
+
+      for (const ownedAsset of new Set(assetsToDispose)) {
+        disposeLocalGlbAvatarAsset(ownedAsset);
       }
     };
   }, []);
