@@ -302,22 +302,39 @@ const runCheck = async () => {
   );
 
   // The debug overlay is a separate diagnostic component, rendered only under
-  // debugMode === "motion", after (outside) the standard-controls block.
-  const debugRenderIndex = avatarSource.indexOf('{debugMode === "motion" && (');
+  // debugMode === "motion", after (outside) the standard-controls block. Bound
+  // its render to the explicit debug gate so the source-prop assertion below
+  // cannot accidentally match a different component (e.g. AvatarScene).
+  const debugGate = sliceBetween(
+    avatarSource,
+    '{debugMode === "motion" && (',
+    "<section className={panelClassName}",
+  );
   assert(
-    avatarSource.indexOf("<MotionDebugOverlay", debugRenderIndex) !== -1,
+    debugGate.slice.includes("<MotionDebugOverlay"),
     'MotionDebugOverlay must render under the debugMode === "motion" gate',
+  );
+  assert(
+    !debugGate.slice.includes("<AvatarScene"),
+    "AvatarScene must not render inside the explicit debug overlay gate",
+  );
+  // Prove the debug overlay itself is source-aware: the source prop must appear
+  // on the MotionDebugOverlay invocation, not merely somewhere after the gate.
+  assert(
+    /<MotionDebugOverlay[\s\S]*?source=\{source\}[\s\S]*?\/>/.test(
+      debugGate.slice,
+    ),
+    "MotionDebugOverlay must receive source={source} inside the explicit debug gate",
   );
   assert(
     avatarSource.includes("function MotionDebugOverlay("),
     "MotionDebugOverlay must exist as a separate diagnostic component",
   );
 
-  // Standard controls hidden by JSX exclusion, not CSS-only hiding.
-  assert(
-    !/preview-source-panel[\s\S]{0,400}display:\s*none/i.test(avatarSource),
-    "standard controls must be excluded via JSX, not CSS display:none",
-  );
+  // The bounded !isObsMode JSX gate above is the contract: standard controls are
+  // not rendered in OBS mode rather than being conditionally styled inside the
+  // rendered OBS tree. (An earlier assertion scanned the TSX source for a
+  // `display: none` declaration, which proved nothing about CSS; it is removed.)
 
   // --- 4. Transparent OBS rendering path ------------------------------------
   assert(
@@ -408,40 +425,42 @@ const runCheck = async () => {
     avatarSource.includes("resolveRendererFaceFollowingCalibration("),
     "effectiveCalibration must be produced via resolveRendererFaceFollowingCalibration",
   );
-  assert(
-    avatarSource.includes("calibration={effectiveCalibration}"),
-    "AvatarScene must receive calibration={effectiveCalibration}",
-  );
-  assert(
-    avatarSource.includes("smoothing={selectedPreset.smoothing}"),
-    "AvatarScene must receive smoothing={selectedPreset.smoothing}",
-  );
-  assert(
-    avatarSource.includes("key={calibrationRevision}"),
-    "AvatarScene must key on calibrationRevision to reset incompatible state",
-  );
+
+  // Bound the AvatarScene invocation (up to its self-closing terminator) and tie
+  // each required prop to that exact component. This proves the rendered avatar —
+  // not some other element — receives the calibration data path and the
+  // independent source. sliceBetween excludes the end marker, so the slice still
+  // holds every prop before the `/>` terminator.
+  const avatarSceneBlock = sliceBetween(avatarSource, "<AvatarScene", "/>");
+  for (const expectedProp of [
+    "key={calibrationRevision}",
+    "calibration={effectiveCalibration}",
+    "nativeFrame={nativeFrame}",
+    "smoothing={selectedPreset.smoothing}",
+    "source={source}",
+  ]) {
+    assert(
+      avatarSceneBlock.slice.includes(expectedProp),
+      `AvatarScene invocation must include ${expectedProp}`,
+    );
+  }
 
   // AvatarScene must render outside the !isObsMode control block so calibration
-  // continues to affect avatar output even when the controls are hidden.
-  const avatarSceneIndex = avatarSource.indexOf("<AvatarScene");
+  // continues to affect avatar output even when the controls are hidden. This
+  // positional check protects a different requirement than the bounded block
+  // above: the rendered avatar stays available in OBS mode.
   assert(
-    avatarSceneIndex > obsGate.endIndex,
+    avatarSceneBlock.startIndex > obsGate.endIndex,
     "AvatarScene must render outside the !isObsMode control block",
   );
 
   // --- 8. Source independence in the renderer -------------------------------
+  // source drives native input selection; the independent source prop on the
+  // MotionDebugOverlay and AvatarScene invocations is asserted in their bounded
+  // component blocks above.
   assert(
     avatarSource.includes('useNativeMotionFrame(source === "native")'),
     'source must drive useNativeMotionFrame(source === "native")',
-  );
-  // MotionDebugOverlay and AvatarScene both receive the independent source prop.
-  assert(
-    avatarSource.indexOf("source={source}", debugRenderIndex) !== -1,
-    "MotionDebugOverlay must receive the source prop",
-  );
-  assert(
-    avatarSource.indexOf("source={source}", avatarSceneIndex) !== -1,
-    "AvatarScene must receive the source prop",
   );
 
   console.log(
