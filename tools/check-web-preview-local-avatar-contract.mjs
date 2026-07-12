@@ -137,6 +137,29 @@ const runCheck = async () => {
     "exact-once test registration: local avatar checker must be immediately before OBS checker",
   );
 
+  for (const constantNeedle of [
+    "const DEFAULT_LOCAL_AVATAR_SCALE = 1",
+    "const MIN_LOCAL_AVATAR_SCALE = 0.25",
+    "const MAX_LOCAL_AVATAR_SCALE = 3",
+    "const LOCAL_AVATAR_SCALE_STEP = 0.05",
+  ])
+    assert(
+      previewSource.includes(constantNeedle),
+      `local avatar scale control: missing ${constantNeedle}`,
+    );
+  assert(
+    previewSource.includes(
+      "const [localAvatarScale, setLocalAvatarScale] = useState(\n    DEFAULT_LOCAL_AVATAR_SCALE,\n  );",
+    ),
+    "local avatar scale control: scale state must be renderer-owned React state initialized to default",
+  );
+  assert(
+    previewSource.includes(
+      "const localAvatarScaleValueText = `${localAvatarScale.toFixed(2)}×`;",
+    ),
+    "local avatar scale control: current value text must format scale as multiplier",
+  );
+
   const controls = sliceBetween(
     previewSource,
     "{!isObsMode && (",
@@ -149,6 +172,55 @@ const runCheck = async () => {
     'className="preview-calibration-panel"',
     "local controls inside !isObsMode",
   ).slice;
+
+  for (const scaleNeedle of [
+    "Avatar scale",
+    'type="range"',
+    "min={MIN_LOCAL_AVATAR_SCALE}",
+    "max={MAX_LOCAL_AVATAR_SCALE}",
+    "step={LOCAL_AVATAR_SCALE_STEP}",
+    "value={localAvatarScale}",
+    "onChange={handleLocalAvatarScaleChange}",
+    "disabled={localGlbAvatar.asset === null}",
+    "aria-valuetext={localAvatarScaleValueText}",
+    "<output",
+    "htmlFor={LOCAL_AVATAR_SCALE_ID}",
+    "{localAvatarScaleValueText}",
+    "Reset framing",
+    "onClick={handleResetLocalAvatarFraming}",
+  ])
+    assert(
+      panel.includes(scaleNeedle),
+      `local avatar scale control: panel missing ${scaleNeedle}`,
+    );
+  const scaleHandler = sliceBetween(
+    previewSource,
+    "const handleLocalAvatarScaleChange",
+    "const handleResetLocalAvatarFraming",
+    "local avatar scale control",
+  ).slice;
+  assert(
+    scaleHandler.includes("setLocalAvatarScale(event.target.valueAsNumber)"),
+    "local avatar scale control: range handler must update renderer-owned scale state",
+  );
+  const resetFramingHandler = sliceBetween(
+    previewSource,
+    "const handleResetLocalAvatarFraming",
+    "const handleLocalAvatarFileChange",
+    "local avatar scale control",
+  ).slice;
+  assert(
+    resetFramingHandler.includes(
+      "setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE)",
+    ),
+    "local avatar scale control: reset framing must restore documented default",
+  );
+  assert(
+    resetFramingHandler.includes("DEFAULT_LOCAL_AVATAR_SCALE") &&
+      !resetFramingHandler.includes("localGlbAvatar.reset"),
+    "local avatar scale control: reset framing must remain separate from asset reset",
+  );
+
   assert(
     panel.includes("Local GLB file"),
     "local controls inside !isObsMode: local avatar panel label missing",
@@ -516,11 +588,21 @@ const runCheck = async () => {
     "coarse rotation: loaded GLB must use AvatarMotionState headRotation",
   );
   assert(
+    loadedSource.includes("<group scale={uniformScale} dispose={null}>") &&
+      loadedSource.indexOf("position={motion.rootPosition}") <
+        loadedSource.indexOf("rotation={motion.headRotation}") &&
+      loadedSource.indexOf("rotation={motion.headRotation}") <
+        loadedSource.indexOf("scale={uniformScale}") &&
+      loadedSource.indexOf("scale={uniformScale}") <
+        loadedSource.indexOf("<primitive object={scene}"),
+    "local avatar scale control: loaded GLB must use root, head, static scale, primitive hierarchy",
+  );
+  assert(
     loadedSource.includes("<primitive object={scene}"),
     "AvatarMotionState prop wiring: loaded GLB scene must render as primitive",
   );
   assert(
-    countOccurrences(loadedSource, "dispose={null}") >= 2,
+    countOccurrences(loadedSource, "dispose={null}") >= 3,
     "AvatarMotionState prop wiring: manual ownership must be protected with dispose={null}",
   );
   assertNotContainsAny(
@@ -599,6 +681,7 @@ const runCheck = async () => {
     "key={calibrationRevision}",
     "calibration={effectiveCalibration}",
     "nativeFrame={nativeFrame}",
+    "localAvatarScale={localAvatarScale}",
     "smoothing={selectedPreset.smoothing}",
     "source={source}",
     "localAvatarScene={localGlbAvatar.asset?.scene ?? null}",
@@ -660,6 +743,8 @@ const runCheck = async () => {
   assert(
     controls.slice.includes("preview-local-avatar-panel") &&
       controls.slice.includes('type="file"') &&
+      controls.slice.includes('type="range"') &&
+      controls.slice.includes("onClick={handleResetLocalAvatarFraming}") &&
       controls.slice.includes("onClick={localGlbAvatar.reset}"),
     "local controls inside !isObsMode: local controls must remain inside OBS exclusion gate",
   );
