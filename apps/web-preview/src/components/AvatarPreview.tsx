@@ -1,7 +1,9 @@
 import { Canvas, useFrame } from "@react-three/fiber";
+import type * as THREE from "three";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createDummyMotionFrame, type MotionFrame } from "@lvk/motion-protocol";
 import { DummyAvatar } from "./DummyAvatar";
+import { LoadedGlbAvatar } from "./LoadedGlbAvatar";
 import {
   NATIVE_FRAME_STALE_TIMEOUT_MS,
   NATIVE_MOTION_WS_URL,
@@ -49,6 +51,7 @@ type AvatarPreviewProps = {
 
 type AvatarSceneProps = {
   calibration: FaceFollowingCalibration;
+  localAvatarScene: THREE.Group | null;
   nativeFrame: MotionFrame | null;
   smoothing: TrackingSmoothingOptions;
   source: PreviewSource;
@@ -395,6 +398,7 @@ function getSourceBadgeContent(
 
 function AvatarScene({
   calibration,
+  localAvatarScene,
   nativeFrame,
   smoothing,
   source,
@@ -484,7 +488,14 @@ function AvatarScene({
     <>
       <ambientLight intensity={0.8} />
       <pointLight position={[3, 3, 4]} intensity={2} />
-      <DummyAvatar motion={fallbackState.renderedMotion} />
+      {localAvatarScene === null ? (
+        <DummyAvatar motion={fallbackState.renderedMotion} />
+      ) : (
+        <LoadedGlbAvatar
+          motion={fallbackState.renderedMotion}
+          scene={localAvatarScene}
+        />
+      )}
     </>
   );
 }
@@ -559,13 +570,15 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
       case "idle":
         return "Idle · using the built-in primitive avatar.";
       case "loading":
-        return `Loading ${localGlbAvatar.pendingFileName ?? "selected GLB"} locally...`;
+        return localGlbAvatar.asset === null
+          ? `Loading ${localGlbAvatar.pendingFileName ?? "selected GLB"} locally · built-in primitive remains rendered.`
+          : `Loading ${localGlbAvatar.pendingFileName ?? "replacement GLB"} locally · keeping ${localGlbAvatar.asset.fileName} rendered until replacement succeeds.`;
       case "ready":
-        return `Ready · ${localGlbAvatar.asset?.fileName ?? "local GLB"} is loaded in memory. Primitive avatar remains rendered.`;
+        return `Ready · ${localGlbAvatar.asset?.fileName ?? "local GLB"} is loaded and rendered locally.`;
       case "error":
         return localGlbAvatar.asset === null
-          ? "Error · using the built-in primitive avatar."
-          : `Error · keeping ${localGlbAvatar.asset.fileName} loaded in memory.`;
+          ? "Error · built-in primitive is rendered."
+          : `Error · keeping ${localGlbAvatar.asset.fileName} rendered locally.`;
     }
   })();
 
@@ -820,8 +833,8 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               className="preview-local-avatar-panel__guidance"
             >
               Select one local .glb file. Bytes and parsed resources stay in
-              memory only; external resources are blocked. This slice keeps the
-              built-in primitive avatar rendered.
+              memory only; external resources are blocked. Ready GLBs render
+              with root translation and coarse overall orientation only.
             </p>
             <label className="preview-local-avatar-panel__field">
               <span className="preview-local-avatar-panel__label">
@@ -991,6 +1004,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
           <AvatarScene
             key={calibrationRevision}
             calibration={effectiveCalibration}
+            localAvatarScene={localGlbAvatar.asset?.scene ?? null}
             nativeFrame={nativeFrame}
             smoothing={selectedPreset.smoothing}
             source={source}
