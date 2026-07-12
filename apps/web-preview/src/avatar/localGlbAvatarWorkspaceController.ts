@@ -52,14 +52,14 @@ export type ParseLocalGlbAvatarBytes<Asset> = (
   glbBytes: ArrayBuffer,
 ) => Promise<Asset>;
 
-export type LocalGlbAvatarWorkspaceControllerOptions<Asset> = {
+export type LocalGlbAvatarWorkspaceControllerOptions<Asset extends object> = {
   storage: LocalAvatarWorkspaceStorage;
   parseBytes: ParseLocalGlbAvatarBytes<Asset>;
   disposeAsset: (asset: Asset) => void;
   onStateChange: (state: LocalGlbAvatarWorkspaceState<Asset>) => void;
 };
 
-export type LocalGlbAvatarWorkspaceController<Asset> = {
+export type LocalGlbAvatarWorkspaceController<Asset extends object> = {
   getState: () => LocalGlbAvatarWorkspaceState<Asset>;
   start: () => void;
   loadFile: (file: LocalGlbAvatarFileInput) => Promise<void>;
@@ -103,7 +103,7 @@ const replacementFailureMessage = (
     ? "Browser-local storage is unavailable, so the current avatar is kept."
     : `Could not save "${fileName}" to browser-local storage, so the current avatar is kept.`;
 
-export const createLocalGlbAvatarWorkspaceController = <Asset>(
+export const createLocalGlbAvatarWorkspaceController = <Asset extends object>(
   options: LocalGlbAvatarWorkspaceControllerOptions<Asset>,
 ): LocalGlbAvatarWorkspaceController<Asset> => {
   const { storage, parseBytes, disposeAsset, onStateChange } = options;
@@ -126,9 +126,13 @@ export const createLocalGlbAvatarWorkspaceController = <Asset>(
   let persistedWorkspaceRef: LocalAvatarWorkspace | null = null;
 
   // Assets owned but not yet committed (in-flight parse candidates). Unmount
-  // disposes any leftover candidates alongside the active asset.
+  // disposes any leftover candidates alongside the active asset. This stays a
+  // strong Set because entries are actively owned and removed on commit/retire.
   const pendingCandidates = new Set<Asset>();
-  const disposedAssets = new Set<Asset>();
+  // Exact-once disposal guard. A WeakSet so retired assets are not strongly
+  // retained: once GPU resources are released the JS scene graph can be
+  // garbage-collected even though we still guard against double disposal.
+  const disposedAssets = new WeakSet<Asset>();
 
   let mutationQueue: Promise<void> = Promise.resolve();
 
@@ -334,6 +338,18 @@ export const createLocalGlbAvatarWorkspaceController = <Asset>(
       return;
     }
     if (isStale(operationGeneration)) return;
+
+    // Enforce the application limit on the actual returned buffer, not only the
+    // reported file.size, before parsing. Preserves the current active avatar
+    // and durable record.
+    if (glbBytes.byteLength === 0) {
+      failSelectionValidation(EMPTY_FILE_MESSAGE);
+      return;
+    }
+    if (glbBytes.byteLength > MAX_LOCAL_AVATAR_GLB_BYTES) {
+      failSelectionValidation(OVERSIZE_FILE_MESSAGE);
+      return;
+    }
 
     let candidate: Asset;
     try {

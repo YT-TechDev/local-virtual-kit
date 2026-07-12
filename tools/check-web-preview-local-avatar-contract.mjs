@@ -806,6 +806,38 @@ const runCheck = async () => {
     controllerSource.includes("disposedAssets"),
     "resource ownership: controller must guard against repeated disposal",
   );
+  assert(
+    controllerSource.includes("const disposedAssets = new WeakSet<Asset>()"),
+    "resource ownership: disposed registry must be a non-owning WeakSet so retired assets are not strongly retained",
+  );
+  assert(
+    !controllerSource.includes("const disposedAssets = new Set<Asset>()") &&
+      !controllerSource.includes("const disposedAssets = new Set("),
+    "resource ownership: disposed registry must not be a strong Set that retains retired assets",
+  );
+  assert(
+    controllerSource.includes("const pendingCandidates = new Set<Asset>()"),
+    "resource ownership: pending candidates remain a strong Set of actively owned assets",
+  );
+  assert(
+    controllerSource.includes("<Asset extends object>"),
+    "resource ownership: controller must constrain Asset to object so the WeakSet disposal guard is valid",
+  );
+  const actualByteGuardIndex = controllerSource.indexOf(
+    "glbBytes.byteLength > MAX_LOCAL_AVATAR_GLB_BYTES",
+  );
+  const emptyBufferGuardIndex = controllerSource.indexOf(
+    "glbBytes.byteLength === 0",
+  );
+  const parseBytesIndex = controllerSource.lastIndexOf("await parseBytes(");
+  assert(
+    emptyBufferGuardIndex !== -1 &&
+      actualByteGuardIndex !== -1 &&
+      parseBytesIndex !== -1 &&
+      emptyBufferGuardIndex < parseBytesIndex &&
+      actualByteGuardIndex < parseBytesIndex,
+    "file selection validation: the actual returned buffer length must be validated before parsing",
+  );
   assertNotContainsAny(
     controllerSource,
     [
@@ -2036,6 +2068,117 @@ const runCheck = async () => {
       h.storage.calls.save.length,
       0,
       "selection: oversized rejected before saving",
+    );
+  }
+  // The returned ArrayBuffer length is validated even when file.size looks OK.
+  {
+    const h = createHarness();
+    const assetPrior = { tag: "prior" };
+    h.parser.program(() => assetPrior);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("prior.glb"));
+    const durablePrior = h.storage.getDurable();
+    const parseCallsBefore = h.parser.calls.length;
+    const saveCallsBefore = h.storage.calls.save.length;
+    await h.controller.loadFile({
+      name: "empty-buffer.glb",
+      size: 8,
+      type: "",
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    assertEqual(
+      h.parser.calls.length,
+      parseCallsBefore,
+      "selection: empty returned buffer is not parsed",
+    );
+    assertEqual(
+      h.storage.calls.save.length,
+      saveCallsBefore,
+      "selection: empty returned buffer is not saved",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetPrior,
+      "selection: empty returned buffer preserves the active avatar",
+    );
+    assert(
+      h.storage.getDurable() === durablePrior,
+      "selection: empty returned buffer preserves the durable record",
+    );
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "error",
+      "selection: empty returned buffer surfaces a validation error",
+    );
+    assertEqual(
+      h.disposer.countFor(assetPrior),
+      0,
+      "selection: empty returned buffer disposes nothing",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetPrior = { tag: "prior" };
+    h.parser.program(() => assetPrior);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("prior.glb"));
+    const durablePrior = h.storage.getDurable();
+    const parseCallsBefore = h.parser.calls.length;
+    const saveCallsBefore = h.storage.calls.save.length;
+    // A single oversize allocation is sufficient to exercise the guard.
+    const oversizeBuffer = new ArrayBuffer(MAX_LOCAL_AVATAR_GLB_BYTES + 1);
+    await h.controller.loadFile({
+      name: "oversize-buffer.glb",
+      size: 8,
+      type: "",
+      arrayBuffer: async () => oversizeBuffer,
+    });
+    assertEqual(
+      h.parser.calls.length,
+      parseCallsBefore,
+      "selection: oversize returned buffer is not parsed",
+    );
+    assertEqual(
+      h.storage.calls.save.length,
+      saveCallsBefore,
+      "selection: oversize returned buffer is not saved",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetPrior,
+      "selection: oversize returned buffer preserves the active avatar",
+    );
+    assert(
+      h.storage.getDurable() === durablePrior,
+      "selection: oversize returned buffer preserves the durable record",
+    );
+    assertEqual(
+      h.disposer.countFor(assetPrior),
+      0,
+      "selection: oversize returned buffer disposes nothing",
+    );
+  }
+  // Exact-once disposal across two lifecycle end paths for the same asset.
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    await h.controller.clearAvatar();
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "resource ownership: cleared asset disposed exactly once",
+    );
+    h.controller.dispose();
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "resource ownership: an asset retired by clear is not disposed again on unmount",
     );
   }
   for (const [type, expected] of [
