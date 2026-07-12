@@ -38,6 +38,7 @@
     "test:electron-native-runtime-capabilities": "node tools/check-electron-native-runtime-capabilities.mjs",
     "test:electron-native-no-frame-startup-warning": "node tools/check-electron-native-no-frame-startup-warning.mjs",
     "test:web-preview-native-frame-status": "node tools/check-web-preview-native-frame-status.mjs",
+    "test:web-preview-obs-route-contract": "node tools/check-web-preview-obs-route-contract.mjs",
     "test:native-runtime-capabilities": "node tools/check-native-runtime-capabilities.mjs",
     "test:native-dummy-backend-boundary": "node tools/check-native-dummy-backend-boundary.mjs",
     "test:native-opencv-baseline-boundary": "node tools/check-native-opencv-baseline-boundary.mjs",
