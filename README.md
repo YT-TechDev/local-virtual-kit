@@ -2,9 +2,9 @@
 
 Local Virtual Kit is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
 
-LVK is currently in early development. The current public baseline is **v0.9.0: OBS Browser Source Workflow Polish**. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
+LVK is currently in early development. The current public baseline is **v0.10.0: Local Avatar Preview Foundation**. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
 
-v0.9.0 adds typed Electron OBS dummy URL exposure, focused Desktop Copy/Open actions for dummy and native OBS routes, recommended `1920 × 1080` starting dimensions, localhost-only and camera-frames-remain-local guidance, focused OBS route-contract checker coverage, and renderer calibration compatibility with OBS rendering. v0.8.0 remains the previous Renderer Calibration Workflow release. v0.9.0 does not add a new tracking backend, MotionFrame changes, telemetry, cloud upload, remote inference, runtime downloads, new dependencies, or new network behavior.
+v0.10.0 adds standard Web Preview selection for one local `.glb` file, keeps selected avatar bytes and parsed state local and in memory, renders a ready GLB through the existing renderer-owned `AvatarMotionState` path, preserves the built-in primitive avatar as the default and fail-safe fallback, and adds focused local-avatar contract checker coverage. v0.10.0 does not change privacy, MotionFrame, Native Core, Electron, dependency, persistence, or network boundaries.
 
 ## Core principles
 
@@ -125,15 +125,16 @@ LVK is local-first. Raw camera frames must remain local. Telemetry, analytics, c
 
 For the post-v0.2 entrypoint, use these current source-of-truth documents first:
 
-- `docs/releases/v0.9.0.md` - current OBS Browser Source Workflow Polish release-readiness notes.
-- `docs/releases/v0.8.0.md` - previous Renderer Calibration Workflow release-readiness notes.
+- `docs/releases/v0.10.0.md` - current Local Avatar Preview Foundation release-readiness notes.
+- `docs/releases/v0.9.0.md` - previous OBS Browser Source Workflow Polish release-readiness notes.
+- `docs/releases/v0.8.0.md` - Renderer Calibration Workflow release-readiness notes.
 - `docs/releases/v0.7.0.md` - MediaPipe local feasibility foundation release-readiness notes.
 - `docs/releases/v0.6.0.md` - Local backend candidate validation spike release-readiness notes.
 - `docs/releases/v0.5.0.md` - Native Core backend evaluation foundation release-readiness notes.
 - `docs/releases/v0.4.0.md` - local runtime confidence and native pipeline readiness notes.
 - `docs/releases/v0.3.0.md` - local tracking quality and release-readiness notes.
 - `docs/releases/v0.2.0.md` - Local OpenCV Face-Following MVP baseline and known limitations.
-- `docs/ROADMAP.md` - implementation sequence and v0.9/post-v0.9 direction.
+- `docs/ROADMAP.md` - implementation sequence and v0.10.0/post-v0.10 direction.
 - `docs/LOCAL_RUNTIME_CHECKLIST.md` - local/manual validation boundaries and runtime checklist.
 
 Start contributor or agent work with `docs/AGENTS.md`, then read only the focused document relevant to the task.

@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.9.0 is the completed OBS Browser Source Workflow Polish release. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.9.0 keeps OBS routes localhost-based, camera frames local, renderer calibration browser-local, and Native Core / MotionFrame ownership boundaries unchanged.
+For current release-prep work, v0.10.0 is the completed Local Avatar Preview Foundation release. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.10.0 keeps selected avatar files local, parsed avatar state in memory, camera frames local, OBS routes localhost-based, and Native Core / MotionFrame ownership boundaries unchanged.
 
 ---
 
@@ -176,6 +176,24 @@ Goal:
 
 ---
 
+## v0.10.0 - Local Avatar Preview Foundation
+
+Implementation outcome for v0.10.0:
+
+- local-only single-file `.glb` selection in the standard Web Preview
+- in-memory loader/controller state owned by the Web Preview renderer
+- external resource blocking while permitting generated local `blob:` and `data:` resources
+- explicit load, error, reset, unsupported-selection fallback, failed-load fallback, and primitive fallback behavior
+- loaded GLB rendering through the existing `AvatarMotionState` renderer path
+- preservation of the built-in primitive avatar as the default and fail-safe fallback
+- dummy and native MotionFrame source compatibility
+- renderer calibration compatibility
+- avatar-selection control exclusion from standard OBS output
+- focused automated local-avatar contract coverage
+- no MotionFrame, Native Core, Electron, dependency, persistence, privacy, or network expansion
+
+The merged implementation landed through Issue #507 / PR #511, Issue #508 / PR #512, and Issue #509 / PR #513. This roadmap does not approve VRM, Live2D, MediaPipe integration, a new tracking backend, or another major avatar format as the next milestone.
+
 ## v0.2.0 Release-Prep Target
 
 v0.2.0 is the Local OpenCV Face-Following MVP release-prep target. It covers local OpenCV Haar-style face detection, Native Core diagnostics and stabilization, native `MotionFrame.face.position.x/y/z` output from face bounds, Electron development native runtime root-resolution fixes, Web Preview native MotionFrame consumption, status/fallback improvements, and renderer-side smoothing.
@@ -196,10 +214,11 @@ v0.8.0 followed up with the first user-facing Web Preview renderer calibration w
 
 v0.9.0 followed up with OBS Browser Source workflow polish: Electron OBS dummy URL exposure, Desktop OBS setup Copy/Open actions for dummy and native routes, focused Web Preview OBS route-contract checker coverage, and renderer calibration compatibility with OBS rendering. v0.9.0 keeps architecture and privacy boundaries unchanged: no MotionFrame or Motion Protocol changes, no Native Core behavior changes, no dependencies, no telemetry, no cloud upload, no remote inference, no runtime downloads, and no new network behavior.
 
-Future post-v0.9.0 direction should not begin another docs-only Gate cycle by default. Inspect the current repository state and open issues before selecting work, and prefer one visible implementation milestone. Possible categories include avatar preview/renderer integration, visible local tracking UX or tracking-quality improvement, or calibration validation with owner-side runtime evidence; this roadmap does not approve any one category as the next milestone. Any real MediaPipe integration must remain separately approved and scoped.
+Future post-v0.10 direction should not begin another docs-only Gate cycle by default. After the v0.10.0 documentation PR merges, Issue #510 can close, parent Issue #506 can close after all child issues are confirmed complete, and the v0.10.0 milestone can close after final verification. The next visible implementation milestone must be selected from current repository and open issue state; do not invent v0.11.0 scope here. No avatar format, rig standard, tracking backend, MediaPipe integration, VRM direction, Live2D direction, or another major avatar format is implicitly approved.
 
 ## Release Entry Points
 
+- v0.10.0 release-readiness notes: `docs/releases/v0.10.0.md`.
 - v0.9.0 release-readiness notes: `docs/releases/v0.9.0.md`.
 - v0.8.0 release-readiness notes: `docs/releases/v0.8.0.md`.
 - v0.7.0 release-readiness notes: `docs/releases/v0.7.0.md`.
