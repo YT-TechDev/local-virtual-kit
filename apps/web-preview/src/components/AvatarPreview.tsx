@@ -595,16 +595,15 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
       : null;
-  const localGlbAvatar = useLocalGlbAvatar({ workspaceEnabled: !isObsMode });
-  const [localAvatarScale, setLocalAvatarScale] = useState(
-    DEFAULT_LOCAL_AVATAR_SCALE,
-  );
-  const [localAvatarVerticalOffset, setLocalAvatarVerticalOffset] = useState(
-    DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,
-  );
-  const [localAvatarYawDegrees, setLocalAvatarYawDegrees] = useState(
-    DEFAULT_LOCAL_AVATAR_YAW_DEGREES,
-  );
+  const localGlbAvatar = useLocalGlbAvatar({
+    accessMode: isObsMode ? "restore-only" : "interactive",
+  });
+  // Framing is owned by the workspace controller so a restored GLB and its
+  // stored framing arrive together; the Preview renders the controller values
+  // directly instead of holding independent framing state.
+  const localAvatarScale = localGlbAvatar.framing.uniformScale;
+  const localAvatarVerticalOffset = localGlbAvatar.framing.verticalOffset;
+  const localAvatarYawDegrees = localGlbAvatar.framing.yawDegrees;
   const localAvatarScaleValueText = `${localAvatarScale.toFixed(2)}×`;
   const localAvatarVerticalOffsetValueText =
     localAvatarVerticalOffset === 0
@@ -669,6 +668,22 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
         return "Clear failed";
       case "none":
         return "Not saved";
+    }
+  })();
+  const localAvatarFramingStatusText = (() => {
+    switch (localGlbAvatar.framingStatus) {
+      case "saved":
+        return "Framing saved · OBS may need a refresh or reopen to update.";
+      case "dirty":
+        return "Framing changed · waiting to save.";
+      case "saving":
+        return "Saving framing to browser-local storage.";
+      case "save_failed":
+        return "Framing kept locally · save failed, so it is not durable.";
+      case "memory_only":
+        return "Framing kept in memory · the avatar itself is not saved.";
+      case "none":
+        return "Framing defaults.";
     }
   })();
 
@@ -782,23 +797,30 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const handleLocalAvatarScaleChange = (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
-    setLocalAvatarScale(event.target.valueAsNumber);
+    localGlbAvatar.setFraming({
+      ...localGlbAvatar.framing,
+      uniformScale: event.target.valueAsNumber,
+    });
   };
 
   const handleLocalAvatarVerticalOffsetChange = (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
-    setLocalAvatarVerticalOffset(event.target.valueAsNumber);
+    localGlbAvatar.setFraming({
+      ...localGlbAvatar.framing,
+      verticalOffset: event.target.valueAsNumber,
+    });
   };
 
   const handleLocalAvatarYawChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setLocalAvatarYawDegrees(event.target.valueAsNumber);
+    localGlbAvatar.setFraming({
+      ...localGlbAvatar.framing,
+      yawDegrees: event.target.valueAsNumber,
+    });
   };
 
   const handleResetLocalAvatarFraming = () => {
-    setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE);
-    setLocalAvatarVerticalOffset(DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET);
-    setLocalAvatarYawDegrees(DEFAULT_LOCAL_AVATAR_YAW_DEGREES);
+    localGlbAvatar.resetFraming();
   };
 
   const handleClearLocalAvatar = () => {
@@ -952,7 +974,9 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               saved in browser-local storage on this device so it restores on
               reload; external resources are blocked and nothing is uploaded.
               Ready GLBs render with manual scale, vertical offset, yaw framing,
-              and MotionFrame transforms.
+              and MotionFrame transforms. Framing changes are saved with the
+              avatar; open OBS Browser Sources may need a refresh or reopen to
+              pick up a saved change.
             </p>
             <label className="preview-local-avatar-panel__field">
               <span className="preview-local-avatar-panel__label">
@@ -1053,6 +1077,10 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               <div>
                 <dt>Storage</dt>
                 <dd>{localAvatarPersistenceText}</dd>
+              </div>
+              <div>
+                <dt>Framing</dt>
+                <dd>{localAvatarFramingStatusText}</dd>
               </div>
               <div>
                 <dt>File</dt>

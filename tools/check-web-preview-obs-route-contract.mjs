@@ -463,6 +463,68 @@ const runCheck = async () => {
     'source must drive useNativeMotionFrame(source === "native")',
   );
 
+  // --- 9. Local avatar workspace access mode --------------------------------
+  // OBS uses restore-only access (hydrate the durable GLB + framing, no writes);
+  // the standard Preview uses interactive read/write access. Both share the same
+  // controller, so OBS restoration is never disabled.
+  assert(
+    avatarSource.includes(
+      'accessMode: isObsMode ? "restore-only" : "interactive"',
+    ),
+    "AvatarPreview must select restore-only workspace access in OBS and interactive access in the standard Preview",
+  );
+  assert(
+    !avatarSource.includes("workspaceEnabled"),
+    "OBS workspace restoration must not be disabled through a workspaceEnabled flag",
+  );
+
+  // The local avatar controls stay gated behind !isObsMode, so the file input,
+  // status/storage/framing text, framing ranges, reset, and clear never render
+  // in the OBS tree even though the durable workspace still restores.
+  for (const gatedControl of [
+    "preview-local-avatar-panel",
+    'type="file"',
+    "handleResetLocalAvatarFraming",
+    "handleClearLocalAvatar",
+    "localAvatarFramingStatusText",
+  ]) {
+    assert(
+      obsGate.slice.includes(gatedControl),
+      `local avatar control "${gatedControl}" must be gated behind !isObsMode`,
+    );
+  }
+
+  // AvatarScene receives controller-owned framing (not independent React state),
+  // so OBS renders the same restored framing as the standard Preview.
+  for (const framingDerivation of [
+    "const localAvatarScale = localGlbAvatar.framing.uniformScale;",
+    "const localAvatarVerticalOffset = localGlbAvatar.framing.verticalOffset;",
+    "const localAvatarYawDegrees = localGlbAvatar.framing.yawDegrees;",
+  ]) {
+    assert(
+      avatarSource.includes(framingDerivation),
+      `AvatarScene framing must come from the workspace controller: missing ${framingDerivation}`,
+    );
+  }
+  for (const framingProp of [
+    "localAvatarScale={localAvatarScale}",
+    "localAvatarVerticalOffset={localAvatarVerticalOffset}",
+    "localAvatarYawDegrees={localAvatarYawDegrees}",
+  ]) {
+    assert(
+      avatarSceneBlock.slice.includes(framingProp),
+      `AvatarScene invocation must pass controller-owned framing: ${framingProp}`,
+    );
+  }
+
+  // No live cross-window synchronization primitive may be introduced.
+  assert(
+    !avatarSource.includes("BroadcastChannel") &&
+      !avatarSource.includes('addEventListener("storage"') &&
+      !avatarSource.includes("postMessage("),
+    "OBS restoration must not add any live cross-window synchronization primitive",
+  );
+
   console.log(
     [
       "Web Preview OBS route contract check passed.",
@@ -473,6 +535,8 @@ const runCheck = async () => {
       "  - debug=motion remains an explicit, independent opt-in overlay",
       "  - persisted renderer calibration still flows into AvatarScene",
       "  - both dummy and native source routes remain supported and independent",
+      "  - OBS uses restore-only workspace access (no writes) and the standard Preview uses interactive access; controller-owned framing flows into AvatarScene",
+      "  - no live cross-window synchronization primitive is introduced",
       "  NOTE: source/behavior checker evidence only; NOT real OBS Browser Source validation.",
     ].join("\n"),
   );
