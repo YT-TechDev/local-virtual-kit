@@ -74,6 +74,19 @@ const assertNotContainsAny = (source, needles, label) => {
   }
 };
 
+const assertOrdered = (source, needles, label) => {
+  let previousIndex = -1;
+  for (const needle of needles) {
+    const index = source.indexOf(needle);
+    assert(index !== -1, `${label}: missing ${needle}`);
+    assert(
+      index > previousIndex,
+      `${label}: ${needle} must appear after the previous contract marker`,
+    );
+    previousIndex = index;
+  }
+};
+
 const runCheck = async () => {
   const [
     rootPackageSource,
@@ -241,16 +254,79 @@ const runCheck = async () => {
     countOccurrences(panel, 'type="range"') === 3,
     "local avatar framing controls: panel must expose exactly three range inputs",
   );
+  for (const { id, label } of [
+    { id: "LOCAL_AVATAR_SCALE_ID", label: "Avatar scale" },
+    {
+      id: "LOCAL_AVATAR_VERTICAL_OFFSET_ID",
+      label: "Vertical offset",
+    },
+    { id: "LOCAL_AVATAR_YAW_ID", label: "Yaw orientation" },
+  ]) {
+    const inputBlock = sliceBetween(
+      panel,
+      `id={${id}}`,
+      "/>",
+      `local avatar framing controls: ${label} range input`,
+    ).slice;
+    assert(
+      inputBlock.includes("disabled={localGlbAvatar.asset === null}"),
+      `local avatar framing controls: ${label} range input must be disabled until a local GLB asset is ready`,
+    );
+  }
 
   const scaleHandler = sliceBetween(
     previewSource,
     "const handleLocalAvatarScaleChange",
-    "const handleResetLocalAvatarFraming",
+    "const handleLocalAvatarVerticalOffsetChange",
     "local avatar scale control",
   ).slice;
   assert(
     scaleHandler.includes("setLocalAvatarScale(event.target.valueAsNumber)"),
     "local avatar scale control: range handler must update renderer-owned scale state",
+  );
+  const verticalOffsetHandler = sliceBetween(
+    previewSource,
+    "const handleLocalAvatarVerticalOffsetChange",
+    "const handleLocalAvatarYawChange",
+    "local avatar vertical offset control",
+  ).slice;
+  assert(
+    verticalOffsetHandler.includes(
+      "setLocalAvatarVerticalOffset(event.target.valueAsNumber)",
+    ),
+    "local avatar vertical offset control: range handler must update renderer-owned vertical offset state",
+  );
+  const yawHandler = sliceBetween(
+    previewSource,
+    "const handleLocalAvatarYawChange",
+    "const handleResetLocalAvatarFraming",
+    "local avatar yaw control",
+  ).slice;
+  assert(
+    yawHandler.includes("setLocalAvatarYawDegrees(event.target.valueAsNumber)"),
+    "local avatar yaw control: range handler must update renderer-owned yaw degree state",
+  );
+  const resetFramingDisabled = sliceBetween(
+    previewSource,
+    "const resetLocalAvatarFramingDisabled =",
+    "const localAvatarStatusText =",
+    "local avatar framing controls",
+  ).slice;
+  assert(
+    resetFramingDisabled.includes(
+      "localAvatarScale === DEFAULT_LOCAL_AVATAR_SCALE",
+    ) &&
+      resetFramingDisabled.includes(
+        "localAvatarVerticalOffset === DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET",
+      ) &&
+      resetFramingDisabled.includes(
+        "localAvatarYawDegrees === DEFAULT_LOCAL_AVATAR_YAW_DEGREES",
+      ),
+    "local avatar framing controls: reset disabled expression must compare scale, vertical offset, and yaw to defaults",
+  );
+  assert(
+    countOccurrences(resetFramingDisabled, "&&") === 2,
+    "local avatar framing controls: reset disabled expression must use AND semantics across all three framing defaults",
   );
   const resetFramingHandler = sliceBetween(
     previewSource,
@@ -271,14 +347,8 @@ const runCheck = async () => {
     "local avatar framing controls: reset framing must restore scale, vertical offset, and yaw defaults",
   );
   assert(
-    previewSource.includes("disabled={resetLocalAvatarFramingDisabled}") &&
-      previewSource.includes(
-        "localAvatarVerticalOffset === DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET",
-      ) &&
-      previewSource.includes(
-        "localAvatarYawDegrees === DEFAULT_LOCAL_AVATAR_YAW_DEGREES",
-      ),
-    "local avatar framing controls: reset disabled condition must consider all framing defaults",
+    panel.includes("disabled={resetLocalAvatarFramingDisabled}"),
+    "local avatar framing controls: reset button must use the resetLocalAvatarFramingDisabled expression",
   );
   assert(
     resetFramingHandler.includes("DEFAULT_LOCAL_AVATAR_SCALE") &&
@@ -424,6 +494,34 @@ const runCheck = async () => {
     ],
     "renderer-owned in-memory state",
   );
+  for (const framingIdentifier of [
+    "localAvatarScale",
+    "localAvatarVerticalOffset",
+    "localAvatarYawDegrees",
+  ]) {
+    const firstIndex = previewSource.indexOf(framingIdentifier);
+    const lastIndex = previewSource.lastIndexOf(framingIdentifier);
+    const framingScope = previewSource.slice(
+      Math.max(0, firstIndex - 500),
+      Math.min(
+        previewSource.length,
+        lastIndex + framingIdentifier.length + 500,
+      ),
+    );
+    assertNotContainsAny(
+      framingScope,
+      [
+        "localStorage",
+        "sessionStorage",
+        "indexedDB",
+        "ipcRenderer",
+        "window.electron",
+        "fetch(",
+        "WebSocket(",
+      ],
+      `renderer-owned memory-only framing: ${framingIdentifier}`,
+    );
+  }
 
   const loadFile = sliceBetween(
     loaderSource,
@@ -668,13 +766,41 @@ const runCheck = async () => {
         loadedSource.indexOf("<primitive object={scene}"),
     "local avatar framing controls: loaded GLB must use root, static vertical/yaw, head, static scale, primitive hierarchy",
   );
+  const rootMotionGroup = sliceBetween(
+    loadedSource,
+    "<group position={motion.rootPosition} dispose={null}>",
+    "</group>",
+    "local avatar framing controls: root motion group",
+  ).slice;
+  const staticFramingGroup = sliceBetween(
+    rootMotionGroup,
+    "<group\n        position={[0, verticalOffset, 0]}\n        rotation={[0, yawRadians, 0]}\n        dispose={null}\n      >",
+    "<primitive object={scene}",
+    "local avatar framing controls: static framing group",
+  ).slice;
+  assert(
+    staticFramingGroup.includes("rotation={motion.headRotation}"),
+    "local avatar framing controls: static position and yaw must share one explicit framing wrapper before MotionFrame head rotation",
+  );
+  assertOrdered(
+    loadedSource,
+    [
+      "position={motion.rootPosition}",
+      "position={[0, verticalOffset, 0]}",
+      "rotation={[0, yawRadians, 0]}",
+      "rotation={motion.headRotation}",
+      "scale={uniformScale}",
+      "<primitive object={scene}",
+    ],
+    "local avatar framing controls: loaded GLB transform hierarchy",
+  );
   assert(
     loadedSource.includes("<primitive object={scene}"),
     "AvatarMotionState prop wiring: loaded GLB scene must render as primitive",
   );
   assert(
-    countOccurrences(loadedSource, "dispose={null}") >= 3,
-    "AvatarMotionState prop wiring: manual ownership must be protected with dispose={null}",
+    countOccurrences(loadedSource, "dispose={null}") === 5,
+    "AvatarMotionState prop wiring: root, static framing, head motion, scale, and primitive ownership must all be protected with dispose={null}",
   );
   assertNotContainsAny(
     loadedSource,
@@ -747,6 +873,21 @@ const runCheck = async () => {
       ) &&
       scene.includes("yawRadians={degreesToRadians(localAvatarYawDegrees)}"),
     "AvatarMotionState prop wiring: both renderers must receive the same renderedMotion and loaded GLB must receive static framing props",
+  );
+  assert(
+    countOccurrences(scene, "degreesToRadians(") === 1 &&
+      scene.includes("yawRadians={degreesToRadians(localAvatarYawDegrees)}"),
+    "local avatar yaw control: AvatarScene loaded-GLB path must convert stored degrees to radians exactly once",
+  );
+  assertNotContainsAny(
+    loadedSource,
+    ["degreesToRadians", "Math.PI", "degToRad", "MathUtils"],
+    "local avatar yaw control: LoadedGlbAvatar must receive radians and must not convert degrees itself",
+  );
+  assertNotContainsAny(
+    previewSource,
+    ["MathUtils", "degToRad", "three/examples/jsm/math"],
+    "local avatar yaw control: yaw conversion must not add Three.js math helpers or runtime dependencies",
   );
 
   const invocation = sliceBetween(
@@ -823,10 +964,10 @@ const runCheck = async () => {
   assert(
     controls.slice.includes("preview-local-avatar-panel") &&
       controls.slice.includes('type="file"') &&
-      controls.slice.includes('type="range"') &&
+      countOccurrences(controls.slice, 'type="range"') === 3 &&
       controls.slice.includes("onClick={handleResetLocalAvatarFraming}") &&
       controls.slice.includes("onClick={localGlbAvatar.reset}"),
-    "local controls inside !isObsMode: local controls must remain inside OBS exclusion gate",
+    "local controls inside !isObsMode: file input, exactly three framing ranges, reset framing, and reset local avatar must remain inside OBS exclusion gate",
   );
   assert(
     !controls.slice.includes("<AvatarScene"),
@@ -870,7 +1011,7 @@ const runCheck = async () => {
   );
 
   console.log(
-    `Web Preview local avatar contract check passed.\n  - local .glb selection remains local-only and in memory\n  - external avatar resource resolution remains blocked\n  - idle/loading/ready/error/reset and resource cleanup contracts are present\n  - primitive fallback and retained replacement behavior remain wired\n  - ready GLBs consume the existing AvatarMotionState path\n  - successful current loads commit the parsed GLB before ready status\n  - stale parsed assets are disposed and returned before current asset commit\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output\n  - OBS transparency/full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: source/behavior checker evidence only; NOT browser, GLB, GPU, OBS, webcam, Electron, or native runtime validation.`,
+    `Web Preview local avatar contract check passed.\n  - scale, vertical offset, yaw degree controls, and reset framing remain wired to renderer-owned memory-only state\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - manual ownership is preserved across the root, static framing, head motion, scale, and primitive nodes\n  - local .glb lifecycle preservation remains covered: local-only loading, fallback, replacement retention, stale cleanup, reset invalidation, and unmount disposal\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  - automated source/contract evidence only\n  NOTE: source/behavior checker evidence only; NOT browser, representative GLB, GPU, OBS application, webcam, Electron GUI, or native runtime validation.`,
   );
 };
 
