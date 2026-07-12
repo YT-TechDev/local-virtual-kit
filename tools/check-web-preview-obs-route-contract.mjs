@@ -435,6 +435,7 @@ const runCheck = async () => {
   for (const expectedProp of [
     "key={calibrationRevision}",
     "calibration={effectiveCalibration}",
+    "localAvatarScene={localGlbAvatar.asset?.scene ?? null}",
     "nativeFrame={nativeFrame}",
     "smoothing={selectedPreset.smoothing}",
     "source={source}",
@@ -452,6 +453,22 @@ const runCheck = async () => {
   assert(
     avatarSceneBlock.startIndex > obsGate.endIndex,
     "AvatarScene must render outside the !isObsMode control block",
+  );
+  const avatarSceneComponent = sliceBetween(
+    avatarSource,
+    "function AvatarScene(",
+    "export function AvatarPreview",
+  ).slice;
+  assert(
+    avatarSceneComponent.includes("localAvatarScene === null ?") &&
+      avatarSceneComponent.includes("<DummyAvatar") &&
+      avatarSceneComponent.includes("<LoadedGlbAvatar"),
+    "AvatarScene must keep the primitive fallback renderable before/without a valid durable GLB",
+  );
+  assert(
+    avatarSceneComponent.includes("computeLostTrackingFallbackMotion({") &&
+      avatarSceneComponent.includes('mappedMotion.trackingStatus === "lost"'),
+    "AvatarScene must keep the tracking-lost fallback path active for OBS and standard rendering",
   );
 
   // --- 8. Source independence in the renderer -------------------------------
