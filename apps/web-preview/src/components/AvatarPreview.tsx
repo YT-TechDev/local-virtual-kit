@@ -595,7 +595,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     endpointCopyFeedback?.endpointNote === sourceBadgeContent.endpointNote
       ? endpointCopyFeedback.message
       : null;
-  const localGlbAvatar = useLocalGlbAvatar();
+  const localGlbAvatar = useLocalGlbAvatar({ workspaceEnabled: !isObsMode });
   const [localAvatarScale, setLocalAvatarScale] = useState(
     DEFAULT_LOCAL_AVATAR_SCALE,
   );
@@ -618,19 +618,57 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     localAvatarVerticalOffset === DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET &&
     localAvatarYawDegrees === DEFAULT_LOCAL_AVATAR_YAW_DEGREES;
   const localAvatarStatusText = (() => {
-    switch (localGlbAvatar.status) {
-      case "idle":
+    const { asset, pendingFileName, lifecycleStatus, persistenceStatus } =
+      localGlbAvatar;
+    switch (lifecycleStatus) {
+      case "checking":
+        return "Checking browser-local storage · built-in primitive avatar is rendered.";
+      case "restoring":
+        return `Restoring ${pendingFileName ?? "the saved GLB"} from browser-local storage · built-in primitive remains rendered.`;
+      case "empty":
+        if (persistenceStatus === "unavailable")
+          return "Browser-local storage is unavailable · using the built-in primitive avatar.";
+        if (persistenceStatus === "read_failed")
+          return "Could not read browser-local storage · using the built-in primitive avatar.";
+        if (persistenceStatus === "invalid")
+          return "Saved avatar data was invalid and was cleared · using the built-in primitive avatar.";
+        if (persistenceStatus === "clear_failed")
+          return "Saved avatar data was invalid · using the built-in primitive avatar.";
         return "Idle · using the built-in primitive avatar.";
       case "loading":
-        return localGlbAvatar.asset === null
-          ? `Loading ${localGlbAvatar.pendingFileName ?? "selected GLB"} locally · built-in primitive remains rendered.`
-          : `Loading ${localGlbAvatar.pendingFileName ?? "replacement GLB"} locally · keeping ${localGlbAvatar.asset.fileName} rendered until replacement succeeds.`;
+        return asset === null
+          ? `Loading ${pendingFileName ?? "selected GLB"} locally · built-in primitive remains rendered.`
+          : `Loading ${pendingFileName ?? "replacement GLB"} locally · keeping ${asset.fileName} rendered until replacement succeeds.`;
       case "ready":
-        return `Ready · ${localGlbAvatar.asset?.fileName ?? "local GLB"} is loaded and rendered locally.`;
+        return persistenceStatus === "unsaved"
+          ? `Ready · ${asset?.fileName ?? "local GLB"} is loaded and rendered locally, but browser-local storage could not save it.`
+          : `Ready · ${asset?.fileName ?? "local GLB"} is loaded, rendered, and saved in browser-local storage.`;
+      case "clearing":
+        return `Clearing the saved avatar · keeping ${asset?.fileName ?? "the local GLB"} rendered until the clear succeeds.`;
       case "error":
-        return localGlbAvatar.asset === null
+        return asset === null
           ? "Error · built-in primitive is rendered."
-          : `Error · keeping ${localGlbAvatar.asset.fileName} rendered locally.`;
+          : `Error · keeping ${asset.fileName} rendered locally.`;
+    }
+  })();
+  const localAvatarPersistenceText = (() => {
+    switch (localGlbAvatar.persistenceStatus) {
+      case "persisted":
+        return "Saved in browser-local storage";
+      case "unsaved":
+        return "Loaded locally · not saved";
+      case "unavailable":
+        return "Browser-local storage unavailable";
+      case "read_failed":
+        return "Browser-local storage read failed";
+      case "write_failed":
+        return "Browser-local storage save failed";
+      case "invalid":
+        return "Saved data was invalid · cleared";
+      case "clear_failed":
+        return "Clear failed";
+      case "none":
+        return "Not saved";
     }
   })();
 
@@ -761,6 +799,10 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE);
     setLocalAvatarVerticalOffset(DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET);
     setLocalAvatarYawDegrees(DEFAULT_LOCAL_AVATAR_YAW_DEGREES);
+  };
+
+  const handleClearLocalAvatar = () => {
+    void localGlbAvatar.clearAvatar();
   };
 
   const handleLocalAvatarFileChange = (
@@ -906,10 +948,11 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               id={LOCAL_AVATAR_GUIDANCE_ID}
               className="preview-local-avatar-panel__guidance"
             >
-              Select one local .glb file. Bytes and parsed resources stay in
-              memory only; external resources are blocked. Ready GLBs render
-              with manual scale, vertical offset, yaw framing, and MotionFrame
-              transforms.
+              Select one local .glb file. A valid avatar is parsed locally and
+              saved in browser-local storage on this device so it restores on
+              reload; external resources are blocked and nothing is uploaded.
+              Ready GLBs render with manual scale, vertical offset, yaw framing,
+              and MotionFrame transforms.
             </p>
             <label className="preview-local-avatar-panel__field">
               <span className="preview-local-avatar-panel__label">
@@ -1005,7 +1048,11 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
             <dl className="preview-local-avatar-panel__state">
               <div>
                 <dt>Status</dt>
-                <dd>{localGlbAvatar.status}</dd>
+                <dd>{localGlbAvatar.lifecycleStatus}</dd>
+              </div>
+              <div>
+                <dt>Storage</dt>
+                <dd>{localAvatarPersistenceText}</dd>
               </div>
               <div>
                 <dt>File</dt>
@@ -1045,13 +1092,13 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
               <button
                 className="preview-local-avatar-panel__button"
                 type="button"
-                onClick={localGlbAvatar.reset}
+                onClick={handleClearLocalAvatar}
                 disabled={
-                  localGlbAvatar.status === "idle" &&
-                  localGlbAvatar.asset === null
+                  localGlbAvatar.asset === null ||
+                  localGlbAvatar.lifecycleStatus === "clearing"
                 }
               >
-                Reset local avatar
+                Clear local avatar
               </button>
             </div>
           </section>

@@ -27,6 +27,10 @@ const LOCAL_AVATAR_WORKSPACE_URL = new URL(
   "../apps/web-preview/src/avatar/localAvatarWorkspace.ts",
   import.meta.url,
 );
+const LOCAL_GLB_CONTROLLER_URL = new URL(
+  "../apps/web-preview/src/avatar/localGlbAvatarWorkspaceController.ts",
+  import.meta.url,
+);
 
 const requireFromWebPreview = createRequire(WEB_PACKAGE_URL);
 const ts = requireFromWebPreview("typescript");
@@ -98,21 +102,42 @@ const assertOrdered = (source, needles, label) => {
   }
 };
 
-const loadWorkspaceModule = async () => {
-  const source = await readFile(LOCAL_AVATAR_WORKSPACE_URL, "utf8");
-  const output = ts.transpileModule(source, {
+const transpileToEsm = (source, fileName) =>
+  ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.ES2022,
       target: ts.ScriptTarget.ES2022,
       verbatimModuleSyntax: true,
     },
-    fileName: "localAvatarWorkspace.ts",
-  });
+    fileName,
+  }).outputText;
+
+// Transpile the dependency-free workspace module and the pure lifecycle
+// controller into a single temporary directory so both can be executed together
+// without React, Three.js, or real browser IndexedDB. The controller imports the
+// workspace module by extensionless bundler specifier, so it is rewritten to the
+// emitted .mjs sibling for Node ESM resolution.
+const loadModules = async () => {
+  const workspaceOut = transpileToEsm(
+    await readFile(LOCAL_AVATAR_WORKSPACE_URL, "utf8"),
+    "localAvatarWorkspace.ts",
+  );
+  const controllerOut = transpileToEsm(
+    await readFile(LOCAL_GLB_CONTROLLER_URL, "utf8"),
+    "localGlbAvatarWorkspaceController.ts",
+  ).replace(
+    /(["'])\.\/localAvatarWorkspace\1/g,
+    '"./localAvatarWorkspace.mjs"',
+  );
   const tempDir = await mkdtemp(join(tmpdir(), "lvk-local-avatar-workspace-"));
-  const tempModulePath = join(tempDir, "localAvatarWorkspace.mjs");
-  await writeFile(tempModulePath, output.outputText, "utf8");
+  const workspacePath = join(tempDir, "localAvatarWorkspace.mjs");
+  const controllerPath = join(tempDir, "localGlbAvatarWorkspaceController.mjs");
+  await writeFile(workspacePath, workspaceOut, "utf8");
+  await writeFile(controllerPath, controllerOut, "utf8");
   try {
-    return await import(pathToFileURL(tempModulePath).href);
+    const workspaceModule = await import(pathToFileURL(workspacePath).href);
+    const controllerModule = await import(pathToFileURL(controllerPath).href);
+    return { workspaceModule, controllerModule };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -237,6 +262,7 @@ const runCheck = async () => {
     previewSource,
     cssSource,
     workspaceSource,
+    controllerSource,
   ] = await Promise.all([
     readFile(ROOT_PACKAGE_URL, "utf8"),
     readFile(WEB_PACKAGE_URL, "utf8"),
@@ -245,8 +271,9 @@ const runCheck = async () => {
     readFile(AVATAR_PREVIEW_URL, "utf8"),
     readFile(APP_CSS_URL, "utf8"),
     readFile(LOCAL_AVATAR_WORKSPACE_URL, "utf8"),
+    readFile(LOCAL_GLB_CONTROLLER_URL, "utf8"),
   ]);
-  const workspaceModule = await loadWorkspaceModule();
+  const { workspaceModule, controllerModule } = await loadModules();
   const rootPackage = JSON.parse(rootPackageSource);
   const webPackage = JSON.parse(webPackageSource);
   const rootTest = rootPackage.scripts.test;
@@ -550,33 +577,60 @@ const runCheck = async () => {
   );
 
   assert(
+    previewSource.includes(
+      "useLocalGlbAvatar({ workspaceEnabled: !isObsMode })",
+    ),
+    "standard/OBS scope: persistence must be enabled only for the standard non-OBS Preview",
+  );
+  const guidance = sliceBetween(
+    panel,
+    "preview-local-avatar-panel__guidance",
+    "</p>",
+    "browser-local storage guidance",
+  ).slice;
+  assert(
+    !guidance.includes("memory only") && !guidance.includes("in memory"),
+    "browser-local storage guidance: memory-only wording must be removed",
+  );
+  assert(
+    guidance.includes("browser-local storage") &&
+      guidance.includes("external resources are blocked") &&
+      guidance.includes("nothing is uploaded"),
+    "browser-local storage guidance: must explain local persistence while keeping local-only and external-resource-blocking reassurance",
+  );
+
+  // ---- Local-only GLB byte parser (useLocalGlbAvatar.ts) ----
+  assert(
     loaderSource.includes('from "three/examples/jsm/loaders/GLTFLoader.js"'),
     "existing GLTFLoader path: must import Three.js GLTFLoader directly",
   );
   assert(
-    loaderSource.includes('fileName.toLowerCase().endsWith(".glb")'),
-    ".glb restriction: loader must validate .glb extension",
+    loaderSource.includes("export async function parseLocalGlbAvatarBytes("),
+    "reusable byte parser: must expose parseLocalGlbAvatarBytes for selected and restored bytes",
   );
-  assert(
-    loaderSource.includes("async (file: File)"),
-    "renderer-owned in-memory state: loader must consume a browser File",
-  );
-  assert(
-    loaderSource.includes("file.arrayBuffer()"),
-    "renderer-owned in-memory state: loader must read bytes from file.arrayBuffer()",
-  );
-  assert(
-    loaderSource.includes('loader.parseAsync(fileBytes, "")'),
-    "existing GLTFLoader path: loader must parse ArrayBuffer with parseAsync",
-  );
-  assertNotContainsAny(
+  const parseFn = sliceBetween(
     loaderSource,
-    ["loader.load(", "loader.loadAsync(", "fetch("],
-    "remote/external resource blocking",
+    "export async function parseLocalGlbAvatarBytes(",
+    "const createInitialControllerState",
+    "reusable byte parser",
+  ).slice;
+  assert(
+    parseFn.includes("fileName: string") &&
+      parseFn.includes("glbBytes: ArrayBuffer"),
+    "reusable byte parser: must accept a file name and already-read ArrayBuffer bytes",
   );
   assert(
-    !/https?:\/\//.test(loaderSource),
-    "remote/external resource blocking: loader must not introduce http(s) avatar-loading literals",
+    parseFn.includes('loader.parseAsync(glbBytes, "")'),
+    "existing GLTFLoader path: parser must parse ArrayBuffer bytes with parseAsync",
+  );
+  assert(
+    parseFn.includes("new GLTFLoader(createLocalOnlyLoadingManager())"),
+    "remote/external resource blocking: parser must use the local-only LoadingManager",
+  );
+  assert(
+    parseFn.includes("error.message === LOCAL_ONLY_RESOURCE_ERROR") &&
+      parseFn.includes("PARSE_ERROR"),
+    "reusable byte parser: parse failures must map to user-safe messages only",
   );
   assert(
     loaderSource.includes("new THREE.LoadingManager()"),
@@ -595,47 +649,78 @@ const runCheck = async () => {
     loaderSource.includes("throw new Error(LOCAL_ONLY_RESOURCE_ERROR)"),
     "remote/external resource blocking: disallowed URLs must throw local-only error",
   );
+  assertNotContainsAny(
+    loaderSource,
+    ["loader.load(", "loader.loadAsync(", "fetch("],
+    "remote/external resource blocking",
+  );
   assert(
-    loaderSource.includes("new GLTFLoader(createLocalOnlyLoadingManager())"),
-    "remote/external resource blocking: GLTFLoader must receive local-only LoadingManager",
+    !/https?:\/\//.test(loaderSource),
+    "remote/external resource blocking: parser must not introduce http(s) avatar-loading literals",
   );
 
-  const statusType = sliceBetween(
-    loaderSource,
-    "export type LocalGlbAvatarLoadStatus",
-    ";",
-    "renderer-owned in-memory state",
-  ).slice;
-  for (const state of ['"idle"', '"loading"', '"ready"', '"error"'])
-    assert(
-      statusType.includes(state),
-      `renderer-owned in-memory state: missing status ${state}`,
-    );
+  // ---- Disposal helpers preserved ----
   assert(
-    countOccurrences(statusType, '"') === 8,
-    "renderer-owned in-memory state: load status union must contain exactly four literals",
+    loaderSource.includes("asset.scene.traverse(disposeObjectResources)"),
+    "stale asset cleanup: disposal must traverse the scene",
   );
-  const controllerType = sliceBetween(
-    loaderSource,
-    "export type LocalGlbAvatarController",
-    "};",
-    "renderer-owned in-memory state",
-  ).slice;
-  for (const member of [
-    "asset",
-    "errorMessage",
-    "pendingFileName",
-    "status",
-    "loadFile",
-    "reset",
-  ])
-    assert(
-      controllerType.includes(member),
-      `renderer-owned in-memory state: controller missing ${member}`,
-    );
   assert(
-    countOccurrences(loaderSource, "useState<") >= 4,
-    "renderer-owned in-memory state: local avatar state must be React-owned through useState",
+    loaderSource.includes("maybeMesh.geometry?.dispose()"),
+    "stale asset cleanup: geometry disposal missing",
+  );
+  assert(
+    loaderSource.includes("material.dispose()"),
+    "stale asset cleanup: material disposal missing",
+  );
+  assert(
+    loaderSource.includes("texture.dispose()"),
+    "stale asset cleanup: texture disposal missing",
+  );
+
+  // ---- Strict Mode-safe workspace hook wiring ----
+  assert(
+    loaderSource.includes("workspaceEnabled") &&
+      loaderSource.includes("UseLocalGlbAvatarOptions"),
+    "standard/OBS scope: hook must accept a workspaceEnabled option",
+  );
+  const hookEffect = sliceBetween(
+    loaderSource,
+    "useEffect(() => {",
+    "const loadFile = useCallback",
+    "Strict Mode-safe controller lifecycle",
+  ).slice;
+  assert(
+    hookEffect.includes("if (!workspaceEnabled)") &&
+      loaderSource.includes("DISABLED_CONTROLLER_STATE"),
+    "standard/OBS scope: disabled workspace must keep the primitive and skip the controller",
+  );
+  assert(
+    hookEffect.includes(
+      "createLocalGlbAvatarWorkspaceController<LocalGlbAvatarAsset>",
+    ),
+    "Strict Mode-safe controller lifecycle: effect setup must create a fresh controller",
+  );
+  assert(
+    hookEffect.includes("storage: createLocalAvatarWorkspaceStorage()") &&
+      hookEffect.includes("parseBytes: parseLocalGlbAvatarBytes") &&
+      hookEffect.includes("disposeAsset: disposeLocalGlbAvatarAsset") &&
+      hookEffect.includes("onStateChange: setState"),
+    "Strict Mode-safe controller lifecycle: controller must be dependency-injected with storage, parser, disposer, and state sink",
+  );
+  assert(
+    hookEffect.includes("controller.start()"),
+    "restore lifecycle: hook effect must start restoration",
+  );
+  assert(
+    hookEffect.includes("return () => {") &&
+      hookEffect.includes("controller.dispose()") &&
+      hookEffect.indexOf("controller.start()") <
+        hookEffect.indexOf("controller.dispose()"),
+    "Strict Mode-safe controller lifecycle: cleanup must dispose the controller created during setup",
+  );
+  assert(
+    loaderSource.includes("clearAvatar") && !loaderSource.includes("reset:"),
+    "clear behavior: hook must expose an explicit clearAvatar action rather than a memory-only reset",
   );
   assertNotContainsAny(
     loaderSource,
@@ -646,8 +731,109 @@ const runCheck = async () => {
       "writeFile",
       "createWriteStream",
     ],
-    "renderer-owned in-memory state",
+    "renderer parser/hook must not embed storage adapters directly",
   );
+
+  const controllerSurface = sliceBetween(
+    loaderSource,
+    "export type LocalGlbAvatarController",
+    "};",
+    "renderer-owned controller surface",
+  ).slice;
+  for (const member of [
+    "asset",
+    "errorMessage",
+    "pendingFileName",
+    "lifecycleStatus",
+    "persistenceStatus",
+    "loadFile",
+    "clearAvatar",
+  ])
+    assert(
+      controllerSurface.includes(member),
+      `renderer-owned controller surface: controller missing ${member}`,
+    );
+
+  // ---- Pure lifecycle controller source boundary ----
+  assert(
+    controllerSource.includes('from "./localAvatarWorkspace"'),
+    "controller boundary: controller must reuse the versioned workspace module",
+  );
+  assert(
+    controllerSource.includes("createDefaultLocalAvatarFraming") &&
+      controllerSource.includes("createLocalAvatarWorkspace") &&
+      controllerSource.includes("MAX_LOCAL_AVATAR_GLB_BYTES"),
+    "controller boundary: controller must reuse workspace framing, normalization, and byte-limit helpers",
+  );
+  assert(
+    controllerSource.includes('fileName.toLowerCase().endsWith(".glb")'),
+    "file selection validation: controller must require a case-insensitive .glb suffix",
+  );
+  assert(
+    controllerSource.includes("file.size <= 0"),
+    "file selection validation: controller must reject zero-byte files",
+  );
+  assert(
+    controllerSource.includes("file.size > MAX_LOCAL_AVATAR_GLB_BYTES"),
+    "file selection validation: controller must reject oversized files before reading bytes",
+  );
+  const sizeGuardIndex = controllerSource.indexOf(
+    "file.size > MAX_LOCAL_AVATAR_GLB_BYTES",
+  );
+  const bytesReadIndex = controllerSource.indexOf("file.arrayBuffer()");
+  assert(
+    sizeGuardIndex !== -1 &&
+      bytesReadIndex !== -1 &&
+      sizeGuardIndex < bytesReadIndex,
+    "file selection validation: size guard must run before reading bytes",
+  );
+  assert(
+    controllerSource.includes('"model/gltf-binary"') &&
+      controllerSource.includes('"application/octet-stream"'),
+    "file selection validation: controller must preserve supported MIME metadata",
+  );
+  assert(
+    controllerSource.includes("createDefaultLocalAvatarFraming()"),
+    "framing scope: newly selected assets must be saved with default framing only",
+  );
+  assert(
+    controllerSource.includes("persistedWorkspaceRef") &&
+      controllerSource.includes("mutationQueue") &&
+      controllerSource.includes("const reconcile ="),
+    "durable mutation ordering: controller must serialize mutations and track the durable workspace for reconciliation",
+  );
+  assert(
+    controllerSource.includes("disposedAssets"),
+    "resource ownership: controller must guard against repeated disposal",
+  );
+  assertNotContainsAny(
+    controllerSource,
+    [
+      "react",
+      "@react-three/fiber",
+      "three",
+      "@lvk/motion-protocol",
+      "MotionFrame",
+      "localStorage",
+      "sessionStorage",
+      "fetch(",
+      "WebSocket(",
+      "BroadcastChannel",
+      "postMessage",
+      "FileSystemFileHandle",
+      "window.electron",
+      "ipcRenderer",
+      "http://",
+      "https://",
+    ],
+    "controller boundary: pure controller must stay framework- and network-free",
+  );
+  assertNotContainsAny(
+    controllerSource,
+    ["uniformScale", "verticalOffset", "yawDegrees"],
+    "framing scope: controller must not read, persist, or restore live framing values",
+  );
+
   for (const framingIdentifier of [
     "localAvatarScale",
     "localAvatarVerticalOffset",
@@ -676,216 +862,6 @@ const runCheck = async () => {
       `renderer-owned memory-only framing: ${framingIdentifier}`,
     );
   }
-
-  const loadFile = sliceBetween(
-    loaderSource,
-    "async (file: File) =>",
-    "[replaceAsset]",
-    ".glb restriction",
-  ).slice;
-  assert(
-    loadFile.indexOf("requestGenerationRef.current = requestGeneration") <
-      loadFile.indexOf("if (!hasGlbExtension(file.name))"),
-    ".glb restriction: request generation must advance before extension validation",
-  );
-  const unsupported = sliceBetween(
-    loadFile,
-    "if (!hasGlbExtension(file.name))",
-    "setErrorMessage(null)",
-    ".glb restriction",
-  ).slice;
-  assert(
-    unsupported.includes("setErrorMessage(UNSUPPORTED_FILE_ERROR)"),
-    ".glb restriction: unsupported file must set sanitized error",
-  );
-  assert(
-    unsupported.includes("setPendingFileName(null)"),
-    ".glb restriction: unsupported file must clear pending filename",
-  );
-  assert(
-    unsupported.includes('setStatus("error")'),
-    ".glb restriction: unsupported file must set error status",
-  );
-  assert(
-    unsupported.includes("return;"),
-    ".glb restriction: unsupported file must return before reading bytes",
-  );
-  assert(
-    !unsupported.includes("file.arrayBuffer()"),
-    ".glb restriction: unsupported file must not read bytes",
-  );
-  assert(
-    !unsupported.includes("replaceAsset(null)") &&
-      !unsupported.includes("disposeLocalGlbAvatarAsset(assetRef.current)"),
-    "primitive fallback: unsupported selections must preserve current asset",
-  );
-
-  const successfulLoad = sliceBetween(
-    loadFile,
-    "const nextAsset =",
-    "} catch (error) {",
-    "ready asset handoff",
-  ).slice;
-  const staleCheckIndex = successfulLoad.indexOf(
-    "requestGenerationRef.current !== requestGeneration",
-  );
-  const staleDisposeIndex = successfulLoad.indexOf(
-    "disposeLocalGlbAvatarAsset(nextAsset)",
-  );
-  const staleReturnIndex = successfulLoad.indexOf(
-    "return;",
-    staleDisposeIndex + "disposeLocalGlbAvatarAsset(nextAsset)".length,
-  );
-  const assetCommitIndex = successfulLoad.indexOf("replaceAsset(nextAsset)");
-  const readyStatusIndex = successfulLoad.indexOf('setStatus("ready")');
-  assert(
-    staleCheckIndex !== -1,
-    "ready asset handoff: successful parse must verify request generation",
-  );
-  assert(
-    staleDisposeIndex !== -1,
-    "stale asset cleanup: stale successful asset must be disposed",
-  );
-  assert(
-    staleReturnIndex !== -1,
-    "ready asset handoff: stale successful assets must return after disposal",
-  );
-  assert(
-    assetCommitIndex !== -1,
-    "ready asset handoff: successful current load must commit nextAsset",
-  );
-  assert(
-    countOccurrences(successfulLoad, "replaceAsset(nextAsset)") === 1,
-    "ready asset handoff: successful current load must commit nextAsset exactly once",
-  );
-  assert(
-    readyStatusIndex !== -1,
-    "ready asset handoff: successful current load must set ready status",
-  );
-  assert(
-    staleCheckIndex < staleDisposeIndex &&
-      staleDisposeIndex < staleReturnIndex &&
-      staleReturnIndex < assetCommitIndex,
-    "ready asset handoff: stale assets must be checked, disposed, and returned before current asset commit",
-  );
-  assert(
-    assetCommitIndex < readyStatusIndex,
-    "ready asset handoff: nextAsset must be committed before ready status",
-  );
-
-  const catchBlock = sliceBetween(
-    loadFile,
-    "} catch (error) {",
-    "}\n    },",
-    "primitive fallback",
-  ).slice;
-  assert(
-    catchBlock.includes("requestGenerationRef.current !== requestGeneration") &&
-      catchBlock.includes("return;"),
-    "primitive fallback: stale failures must return without feedback updates",
-  );
-  assert(
-    catchBlock.includes("LOCAL_ONLY_RESOURCE_ERROR") &&
-      catchBlock.includes("PARSE_ERROR"),
-    "primitive fallback: current errors must be sanitized",
-  );
-  assert(
-    catchBlock.includes("setPendingFileName(null)"),
-    "primitive fallback: failed replacement must clear pending filename",
-  );
-  assert(
-    catchBlock.includes('setStatus("error")'),
-    "primitive fallback: failed replacement must set error status",
-  );
-  assert(
-    !catchBlock.includes("replaceAsset") && !catchBlock.includes("setAsset"),
-    "primitive fallback: failed replacement must not clear existing asset",
-  );
-
-  const reset = sliceBetween(
-    loaderSource,
-    "const reset = useCallback(() =>",
-    "}, [replaceAsset]);",
-    "reset wiring",
-  ).slice;
-  assert(
-    reset.includes("requestGenerationRef.current += 1"),
-    "reset wiring: reset must advance request generation",
-  );
-  assert(
-    reset.includes("replaceAsset(null)"),
-    "reset wiring: reset must clear committed asset through replaceAsset",
-  );
-  assert(
-    reset.includes("setErrorMessage(null)") &&
-      reset.includes("setPendingFileName(null)"),
-    "reset wiring: reset must clear feedback state",
-  );
-  assert(
-    reset.includes('setStatus("idle")'),
-    "reset wiring: reset must return status to idle",
-  );
-  assert(
-    !reset.includes("disposeLocalGlbAvatarAsset"),
-    "reset wiring: reset must not synchronously dispose current asset before React commits fallback",
-  );
-  assert(
-    loaderSource.includes("asset.scene.traverse(disposeObjectResources)"),
-    "stale asset cleanup: disposal must traverse the scene",
-  );
-  assert(
-    loaderSource.includes("maybeMesh.geometry?.dispose()"),
-    "stale asset cleanup: geometry disposal missing",
-  );
-  assert(
-    loaderSource.includes("material.dispose()"),
-    "stale asset cleanup: material disposal missing",
-  );
-  assert(
-    loaderSource.includes("texture.dispose()"),
-    "stale asset cleanup: texture disposal missing",
-  );
-  assert(
-    successfulLoad.includes("disposeLocalGlbAvatarAsset(nextAsset)"),
-    "stale asset cleanup: stale successful assets must be disposed",
-  );
-  const replaceAsset = sliceBetween(
-    loaderSource,
-    "const replaceAsset = useCallback",
-    "const reset = useCallback",
-    "post-commit retired asset cleanup",
-  ).slice;
-  assert(
-    replaceAsset.includes("pendingDisposalsRef.current.push(previousAsset)"),
-    "post-commit retired asset cleanup: replaced assets must be queued",
-  );
-  assert(
-    replaceAsset.includes(
-      "previousAsset !== null && previousAsset !== nextAsset",
-    ),
-    "post-commit retired asset cleanup: only different previous assets should be queued",
-  );
-  assert(
-    loaderSource.includes(
-      "useEffect(() => {\n    drainPendingDisposals();\n  }, [asset, drainPendingDisposals]);",
-    ),
-    "post-commit retired asset cleanup: effect keyed by committed asset must drain pending disposals",
-  );
-  const unmount = sliceBetween(
-    loaderSource,
-    "return () => {",
-    "};\n  }, []);",
-    "post-commit retired asset cleanup",
-  ).slice;
-  assert(
-    unmount.includes("assetRef.current") &&
-      unmount.includes("...pendingDisposalsRef.current"),
-    "post-commit retired asset cleanup: unmount must include current and queued assets",
-  );
-  assert(
-    unmount.includes("new Set(assetsToDispose)"),
-    "post-commit retired asset cleanup: unmount must deduplicate owned assets",
-  );
 
   assert(
     loadedSource.includes("AvatarMotionState"),
@@ -1073,14 +1049,17 @@ const runCheck = async () => {
     "primitive fallback",
   ).slice;
   for (const caseNeedle of [
-    'case "idle"',
+    'case "checking"',
+    'case "restoring"',
+    'case "empty"',
     'case "loading"',
     'case "ready"',
+    'case "clearing"',
     'case "error"',
   ])
     assert(
       statusLogic.includes(caseNeedle),
-      `primitive fallback: missing ${caseNeedle}`,
+      `lifecycle status copy: missing ${caseNeedle}`,
     );
   for (const marker of [
     "built-in primitive avatar",
@@ -1088,14 +1067,38 @@ const runCheck = async () => {
     "Error · built-in primitive is rendered",
     "keeping",
     "replacement GLB",
+    "Checking browser-local storage",
+    "Restoring",
+    "saved in browser-local storage",
+    "could not save it",
+    "Clearing the saved avatar",
   ])
     assert(
       statusLogic.includes(marker),
-      `primitive fallback: status copy missing semantic marker ${marker}`,
+      `lifecycle status copy: status copy missing semantic marker ${marker}`,
     );
   assert(
-    panel.includes("onClick={localGlbAvatar.reset}"),
-    "reset wiring: reset button must call localGlbAvatar.reset",
+    panel.includes("onClick={handleClearLocalAvatar}") &&
+      panel.includes("Clear local avatar"),
+    "clear behavior: panel must expose an explicit Clear local avatar action",
+  );
+  assert(
+    !panel.includes("onClick={localGlbAvatar.reset}") &&
+      !panel.includes("Reset local avatar"),
+    "clear behavior: the memory-only Reset local avatar action must be replaced by the durable clear action",
+  );
+  const clearHandler = sliceBetween(
+    previewSource,
+    "const handleClearLocalAvatar",
+    "const handleLocalAvatarFileChange",
+    "clear behavior",
+  ).slice;
+  assert(
+    clearHandler.includes("localGlbAvatar.clearAvatar()") &&
+      !clearHandler.includes("setLocalAvatarScale") &&
+      !clearHandler.includes("setLocalAvatarVerticalOffset") &&
+      !clearHandler.includes("setLocalAvatarYawDegrees"),
+    "clear behavior: clear must run the durable clear and stay separate from framing reset",
   );
 
   assert(
@@ -1120,8 +1123,8 @@ const runCheck = async () => {
       controls.slice.includes('type="file"') &&
       countOccurrences(controls.slice, 'type="range"') === 3 &&
       controls.slice.includes("onClick={handleResetLocalAvatarFraming}") &&
-      controls.slice.includes("onClick={localGlbAvatar.reset}"),
-    "local controls inside !isObsMode: file input, exactly three framing ranges, reset framing, and reset local avatar must remain inside OBS exclusion gate",
+      controls.slice.includes("onClick={handleClearLocalAvatar}"),
+    "local controls inside !isObsMode: file input, exactly three framing ranges, reset framing, and clear local avatar must remain inside OBS exclusion gate",
   );
   assert(
     !controls.slice.includes("<AvatarScene"),
@@ -1679,13 +1682,936 @@ const runCheck = async () => {
     "no storage dependency added",
   );
 
+  // ---- Issue #524 scope boundary ----
+  assert(
+    workspaceSource.includes("LOCAL_AVATAR_WORKSPACE_SCHEMA_VERSION = 1"),
+    "Issue #524 scope: workspace schema version must remain 1 (no schema change)",
+  );
+  assertNotContainsAny(
+    previewSource,
+    ["BroadcastChannel", 'addEventListener("storage"'],
+    "Issue #524 scope: no live cross-window synchronization",
+  );
+
+  // ---- Pure lifecycle controller behavioral tests ----
+  // Fakes, counted disposal, and deferred Promises exercise lifecycle ordering
+  // without React or real browser IndexedDB.
+  const { createLocalGlbAvatarWorkspaceController } = controllerModule;
+
+  const createDeferred = () => {
+    let resolve;
+    const promise = new Promise((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  };
+  const settle = async (rounds = 8) => {
+    for (let i = 0; i < rounds; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  };
+  const buildBytes = (seed) => {
+    const bytes = new ArrayBuffer(8);
+    new Uint8Array(bytes).set([seed, 2, 3, 4, 5, 6, 7, 8]);
+    return bytes;
+  };
+  const buildWorkspace = (fileName, seed = 1) =>
+    createLocalAvatarWorkspace({
+      fileName,
+      mimeType: "model/gltf-binary",
+      glbBytes: buildBytes(seed),
+      framing: createDefaultLocalAvatarFraming(),
+    });
+  const makeFile = (name, opts = {}) => {
+    const bytes = opts.bytes ?? buildBytes(opts.seed ?? 1);
+    return {
+      name,
+      size: opts.size ?? bytes.byteLength,
+      type: opts.type ?? "",
+      arrayBuffer: async () => bytes,
+    };
+  };
+  const createDisposer = () => {
+    const counts = new Map();
+    return {
+      dispose: (asset) => counts.set(asset, (counts.get(asset) ?? 0) + 1),
+      countFor: (asset) => counts.get(asset) ?? 0,
+    };
+  };
+  const createParser = () => {
+    const calls = [];
+    const responders = [];
+    return {
+      calls,
+      program: (fn) => responders.push(fn),
+      parse: async (fileName, glbBytes) => {
+        calls.push({ fileName, glbBytes });
+        if (responders.length) return responders.shift()(fileName, glbBytes);
+        return { fileName };
+      },
+    };
+  };
+  const createStorage = (initialDurable) => {
+    let durable = initialDurable;
+    const calls = { load: 0, save: [], clear: 0 };
+    const loadResponders = [];
+    const saveResponders = [];
+    const clearResponders = [];
+    return {
+      calls,
+      getDurable: () => durable,
+      programLoad: (fn) => loadResponders.push(fn),
+      programSave: (fn) => saveResponders.push(fn),
+      programClear: (fn) => clearResponders.push(fn),
+      async load() {
+        calls.load += 1;
+        if (loadResponders.length) return loadResponders.shift()(durable);
+        return durable === undefined
+          ? { status: "empty" }
+          : { status: "ready", workspace: durable };
+      },
+      async save(workspace) {
+        calls.save.push(workspace);
+        if (saveResponders.length) {
+          const result = await saveResponders.shift()(workspace);
+          if (result.status === "saved") durable = workspace;
+          return result;
+        }
+        durable = workspace;
+        return { status: "saved" };
+      },
+      async clear() {
+        calls.clear += 1;
+        if (clearResponders.length) {
+          const result = await clearResponders.shift()(durable);
+          if (result.status === "cleared") durable = undefined;
+          return result;
+        }
+        durable = undefined;
+        return { status: "cleared" };
+      },
+    };
+  };
+  const createHarness = (options = {}) => {
+    const storage = options.storage ?? createStorage(options.durable);
+    const parser = options.parser ?? createParser();
+    const disposer = options.disposer ?? createDisposer();
+    const states = [];
+    const controller = createLocalGlbAvatarWorkspaceController({
+      storage,
+      parseBytes: parser.parse,
+      disposeAsset: disposer.dispose,
+      onStateChange: (state) => states.push(state),
+    });
+    return { controller, storage, parser, disposer, states };
+  };
+
+  // Restoration --------------------------------------------------------------
+  {
+    const h = createHarness();
+    const loadDeferred = createDeferred();
+    h.storage.programLoad(() => loadDeferred.promise);
+    h.controller.start();
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "checking",
+      "restore: checking while storage load pending",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      null,
+      "restore: primitive rendered while storage load pending",
+    );
+    loadDeferred.resolve({ status: "empty" });
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "empty",
+      "restore: empty storage resolves to empty",
+    );
+  }
+  {
+    const workspaceP = buildWorkspace("avatar.glb", 11);
+    const h = createHarness({ durable: workspaceP });
+    const assetP = { tag: "P" };
+    h.parser.program(() => assetP);
+    h.controller.start();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.lifecycleStatus,
+      "ready",
+      "restore: valid record restores to ready",
+    );
+    assertEqual(
+      s.persistenceStatus,
+      "persisted",
+      "restore: restored asset marked persisted",
+    );
+    assertEqual(s.asset, assetP, "restore: restored asset committed");
+    assertEqual(s.pendingFileName, null, "restore: pending file name cleared");
+    assertEqual(h.parser.calls.length, 1, "restore: stored bytes parsed once");
+    assertEqual(
+      h.parser.calls[0].fileName,
+      "avatar.glb",
+      "restore: parser receives sanitized stored file name",
+    );
+    assertArrayBufferBytes(
+      h.parser.calls[0].glbBytes,
+      [11, 2, 3, 4, 5, 6, 7, 8],
+      "restore: parser receives stored bytes",
+    );
+  }
+  for (const [status, persistence] of [
+    ["unavailable", "unavailable"],
+    ["failed", "read_failed"],
+  ]) {
+    const h = createHarness();
+    h.storage.programLoad(() => ({ status }));
+    h.controller.start();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.lifecycleStatus,
+      "empty",
+      `restore: ${status} keeps primitive`,
+    );
+    assertEqual(
+      s.persistenceStatus,
+      persistence,
+      `restore: ${status} surfaced`,
+    );
+    assertEqual(s.asset, null, `restore: ${status} renders primitive`);
+  }
+  {
+    const h = createHarness({ durable: buildWorkspace("x.glb") });
+    h.storage.programLoad(() => ({ status: "invalid" }));
+    h.controller.start();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.lifecycleStatus,
+      "empty",
+      "restore: invalid falls back to primitive",
+    );
+    assertEqual(
+      s.persistenceStatus,
+      "invalid",
+      "restore: invalid record cleared",
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "restore: invalid record durably cleared",
+    );
+    assert(
+      h.storage.calls.clear >= 1,
+      "restore: invalid record triggers best-effort clear",
+    );
+  }
+  for (const message of [
+    "bad glb",
+    "This GLB references external resources, which are blocked in local-only preview.",
+  ]) {
+    const h = createHarness({ durable: buildWorkspace("bad.glb", 5) });
+    h.parser.program(() => {
+      throw new Error(message);
+    });
+    h.controller.start();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.lifecycleStatus,
+      "empty",
+      "restore: unparseable persisted bytes fall back to primitive",
+    );
+    assertEqual(
+      s.persistenceStatus,
+      "invalid",
+      "restore: unparseable persisted bytes cleared",
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "restore: unparseable persisted record durably cleared",
+    );
+  }
+  {
+    const h = createHarness({ durable: buildWorkspace("x.glb") });
+    h.storage.programLoad(() => ({ status: "invalid" }));
+    h.storage.programClear(() => ({ status: "failed" }));
+    h.controller.start();
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.persistenceStatus,
+      "clear_failed",
+      "restore: invalid-record clear failure distinguished from success",
+    );
+    assertEqual(
+      s.asset,
+      null,
+      "restore: invalid-record clear failure still renders primitive",
+    );
+  }
+  {
+    const h = createHarness({ durable: buildWorkspace("p.glb", 7) });
+    const restoreDeferred = createDeferred();
+    const assetP = { tag: "P" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => restoreDeferred.promise.then(() => assetP));
+    h.parser.program(() => assetB);
+    h.controller.start();
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "restoring",
+      "restore: restoring while stored bytes parse",
+    );
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    restoreDeferred.resolve();
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      assetB,
+      "restore: user selection supersedes an in-flight restore",
+    );
+    assertEqual(
+      h.disposer.countFor(assetP),
+      1,
+      "restore: stale restore candidate disposed",
+    );
+  }
+
+  // Selection ----------------------------------------------------------------
+  {
+    const h = createHarness();
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("model.txt"));
+    const s = h.controller.getState();
+    assertEqual(s.lifecycleStatus, "error", "selection: non-GLB rejected");
+    assertEqual(s.asset, null, "selection: non-GLB keeps primitive");
+    assertEqual(
+      h.parser.calls.length,
+      0,
+      "selection: non-GLB rejected before parsing",
+    );
+    assertEqual(
+      h.storage.calls.save.length,
+      0,
+      "selection: non-GLB rejected before saving",
+    );
+  }
+  {
+    const h = createHarness();
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("empty.glb", { size: 0 }));
+    assertEqual(
+      h.parser.calls.length,
+      0,
+      "selection: zero-byte rejected before parsing",
+    );
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "error",
+      "selection: zero-byte rejected",
+    );
+  }
+  {
+    const h = createHarness();
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(
+      makeFile("big.glb", { size: MAX_LOCAL_AVATAR_GLB_BYTES + 1 }),
+    );
+    assertEqual(
+      h.parser.calls.length,
+      0,
+      "selection: oversized rejected before reading bytes",
+    );
+    assertEqual(
+      h.storage.calls.save.length,
+      0,
+      "selection: oversized rejected before saving",
+    );
+  }
+  for (const [type, expected] of [
+    ["model/gltf-binary", "model/gltf-binary"],
+    ["application/octet-stream", "application/octet-stream"],
+    ["text/plain", null],
+    ["", null],
+  ]) {
+    const h = createHarness();
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb", { type }));
+    assertEqual(
+      h.controller.getState().persistenceStatus,
+      "persisted",
+      `selection: MIME ${type || "empty"} still persists a valid .glb`,
+    );
+    assertEqual(
+      h.storage.getDurable().mimeType,
+      expected,
+      `selection: MIME ${type || "empty"} normalized to ${expected}`,
+    );
+  }
+  {
+    const sourceBytes = buildBytes(3);
+    const h = createHarness();
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile({
+      name: "a.glb",
+      size: 8,
+      type: "",
+      arrayBuffer: async () => sourceBytes,
+    });
+    new Uint8Array(sourceBytes)[0] = 99;
+    assertArrayBufferBytes(
+      h.storage.getDurable().glbBytes,
+      [3, 2, 3, 4, 5, 6, 7, 8],
+      "selection: saved bytes are a private copy",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.start();
+    await settle();
+    const pending = h.controller.loadFile(makeFile("a.glb"));
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "loading",
+      "selection: loading while save pending",
+    );
+    assert(
+      h.controller.getState().asset !== assetA,
+      "selection: candidate not committed before save resolves",
+    );
+    saveDeferred.resolve({ status: "saved" });
+    await pending;
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      "selection: candidate committed after save succeeds",
+    );
+    assertEqual(
+      s.persistenceStatus,
+      "persisted",
+      "selection: committed candidate persisted",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "selection: first selection committed",
+    );
+    h.parser.program(() => assetB);
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    const pending = h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "selection: current asset preserved while replacement save pending",
+    );
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "loading",
+      "selection: replacement shows loading while pending",
+    );
+    saveDeferred.resolve({ status: "saved" });
+    await pending;
+    assertEqual(
+      h.controller.getState().asset,
+      assetB,
+      "selection: replacement committed after save",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "selection: replaced asset disposed after successful replacement",
+    );
+  }
+  for (const status of ["unavailable", "failed"]) {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.storage.programSave(() => ({ status }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const s = h.controller.getState();
+    assertEqual(
+      s.lifecycleStatus,
+      "ready",
+      `selection: first save ${status} still renders the avatar`,
+    );
+    assertEqual(
+      s.persistenceStatus,
+      "unsaved",
+      `selection: first save ${status} yields explicit unsaved state`,
+    );
+    assertEqual(
+      s.asset,
+      assetA,
+      `selection: first save ${status} keeps the parsed asset`,
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      `selection: first save ${status} creates no durable record`,
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      0,
+      `selection: first save ${status} does not dispose the unsaved asset`,
+    );
+  }
+  for (const [status, persistence] of [
+    ["failed", "write_failed"],
+    ["unavailable", "unavailable"],
+  ]) {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const durableA = h.storage.getDurable();
+    h.parser.program(() => assetB);
+    h.storage.programSave(() => ({ status }));
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    const s = h.controller.getState();
+    assertEqual(
+      s.asset,
+      assetA,
+      `selection: replacement ${status} preserves the active avatar`,
+    );
+    assertEqual(
+      s.persistenceStatus,
+      persistence,
+      `selection: replacement ${status} surfaced`,
+    );
+    assertEqual(
+      h.disposer.countFor(assetB),
+      1,
+      "selection: failed replacement candidate disposed",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      0,
+      "selection: preserved active avatar not disposed",
+    );
+    assert(
+      h.storage.getDurable() === durableA,
+      `selection: replacement ${status} preserves the durable record`,
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    const parseDeferred = createDeferred();
+    h.parser.program(() => parseDeferred.promise.then(() => assetA));
+    h.parser.program(() => assetB);
+    h.controller.start();
+    await settle();
+    const pendingA = h.controller.loadFile(makeFile("a.glb"));
+    await settle();
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    parseDeferred.resolve();
+    await pendingA;
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      assetB,
+      "selection: newer selection wins over a stale parse",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "selection: stale parsed candidate disposed",
+    );
+  }
+
+  // Durable mutation ordering ------------------------------------------------
+  {
+    const h = createHarness();
+    const assetP = { tag: "P" };
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetP);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("p.glb"));
+    const saveDeferredA = createDeferred();
+    h.parser.program(() => assetA);
+    h.storage.programSave(() => saveDeferredA.promise);
+    h.parser.program(() => assetB);
+    const pendingA = h.controller.loadFile(makeFile("a.glb", { seed: 2 }));
+    await settle();
+    const pendingB = h.controller.loadFile(makeFile("b.glb", { seed: 3 }));
+    await settle();
+    saveDeferredA.resolve({ status: "saved" });
+    await pendingA;
+    await pendingB;
+    await settle();
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "b.glb",
+      "durable order: stale save cannot remain over the newer durable record",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetB,
+      "durable order: newer successful save wins",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "durable order: stale replacement candidate disposed",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    const saveDeferredA = createDeferred();
+    h.storage.programSave(() => saveDeferredA.promise);
+    h.controller.start();
+    await settle();
+    const pendingA = h.controller.loadFile(makeFile("a.glb"));
+    await settle();
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    saveDeferredA.resolve({ status: "saved" });
+    await pendingA;
+    await pendingClear;
+    await settle();
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "durable order: stale first save reconciled to empty",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      null,
+      "durable order: stale first save leaves the primitive",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "durable order: stale first-save candidate disposed",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetP = { tag: "P" };
+    h.parser.program(() => assetP);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("p.glb"));
+    const clearDeferred = createDeferred();
+    h.storage.programClear(() => clearDeferred.promise);
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    h.parser.program(() => {
+      throw new Error("bad");
+    });
+    await h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    clearDeferred.resolve({ status: "cleared" });
+    await pendingClear;
+    await settle();
+    assertEqual(
+      h.storage.getDurable().fileName,
+      "p.glb",
+      "durable order: stale clear cannot permanently remove the desired durable workspace",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetP,
+      "durable order: active avatar preserved after stale clear and failed selection",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    const assetB = { tag: "B" };
+    h.parser.program(() => assetA);
+    h.parser.program(() => assetB);
+    const saveDeferredA = createDeferred();
+    h.storage.programSave(() => saveDeferredA.promise);
+    h.controller.start();
+    await settle();
+    const pendingA = h.controller.loadFile(makeFile("a.glb"));
+    await settle();
+    const pendingB = h.controller.loadFile(makeFile("b.glb", { seed: 2 }));
+    await settle();
+    assertEqual(
+      h.storage.calls.save.length,
+      1,
+      "durable order: queued mutations execute serially",
+    );
+    saveDeferredA.resolve({ status: "saved" });
+    await pendingA;
+    await pendingB;
+    await settle();
+    assert(
+      h.storage.calls.save.length >= 2,
+      "durable order: later queued mutation runs after the earlier one settles",
+    );
+  }
+
+  // Clear --------------------------------------------------------------------
+  {
+    const h = createHarness({ durable: buildWorkspace("p.glb", 7) });
+    const restoreDeferred = createDeferred();
+    const assetP = { tag: "P" };
+    h.parser.program(() => restoreDeferred.promise.then(() => assetP));
+    h.controller.start();
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "restoring",
+      "clear: restoring before clear",
+    );
+    const pendingClear = h.controller.clearAvatar();
+    restoreDeferred.resolve();
+    await pendingClear;
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      null,
+      "clear: pending restore invalidated by clear",
+    );
+    assertEqual(
+      h.disposer.countFor(assetP),
+      1,
+      "clear: stale restore candidate disposed after clear",
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "clear: durable record cleared",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.start();
+    await settle();
+    const pendingA = h.controller.loadFile(makeFile("a.glb"));
+    await settle();
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    saveDeferred.resolve({ status: "saved" });
+    await pendingA;
+    await pendingClear;
+    await settle();
+    assertEqual(
+      h.controller.getState().asset,
+      null,
+      "clear: pending selection invalidated by clear",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "clear: superseded selection candidate disposed",
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "clear: durable stays empty after an invalidated selection",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const clearDeferred = createDeferred();
+    h.storage.programClear(() => clearDeferred.promise);
+    const pendingClear = h.controller.clearAvatar();
+    await settle();
+    assertEqual(
+      h.controller.getState().lifecycleStatus,
+      "clearing",
+      "clear: clearing status while pending",
+    );
+    assertEqual(
+      h.controller.getState().asset,
+      assetA,
+      "clear: active asset stays rendered while clear pending",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      0,
+      "clear: active asset not disposed until clear succeeds",
+    );
+    clearDeferred.resolve({ status: "cleared" });
+    await pendingClear;
+    await settle();
+    const s = h.controller.getState();
+    assertEqual(
+      s.lifecycleStatus,
+      "empty",
+      "clear: success returns to primitive",
+    );
+    assertEqual(
+      s.persistenceStatus,
+      "none",
+      "clear: success resets persistence",
+    );
+    assertEqual(s.asset, null, "clear: success removes active asset");
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "clear: success disposes the active asset",
+    );
+    assertEqual(
+      h.storage.getDurable(),
+      undefined,
+      "clear: success durably clears the record",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    const durableA = h.storage.getDurable();
+    h.storage.programClear(() => ({ status: "failed" }));
+    await h.controller.clearAvatar();
+    const s = h.controller.getState();
+    assertEqual(s.asset, assetA, "clear: failure preserves the active asset");
+    assertEqual(s.persistenceStatus, "clear_failed", "clear: failure surfaced");
+    assertEqual(
+      h.disposer.countFor(assetA),
+      0,
+      "clear: failure does not dispose the active asset",
+    );
+    assert(
+      h.storage.getDurable() === durableA,
+      "clear: failure preserves the durable record",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.storage.programSave(() => ({ status: "unavailable" }));
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    assertEqual(
+      h.controller.getState().persistenceStatus,
+      "unsaved",
+      "clear: precondition unsaved avatar",
+    );
+    await h.controller.clearAvatar();
+    const s = h.controller.getState();
+    assertEqual(s.asset, null, "clear: unsaved avatar cleared safely");
+    assertEqual(
+      s.persistenceStatus,
+      "none",
+      "clear: unsaved avatar clear resets persistence",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "clear: unsaved avatar disposed on clear",
+    );
+  }
+
+  // Unmount ------------------------------------------------------------------
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    h.controller.start();
+    await settle();
+    await h.controller.loadFile(makeFile("a.glb"));
+    h.controller.dispose();
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "unmount: active asset disposed exactly once",
+    );
+    h.controller.dispose();
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "unmount: repeated dispose does not double-dispose",
+    );
+  }
+  {
+    const h = createHarness();
+    const assetA = { tag: "A" };
+    h.parser.program(() => assetA);
+    const saveDeferred = createDeferred();
+    h.storage.programSave(() => saveDeferred.promise);
+    h.controller.start();
+    await settle();
+    const pendingA = h.controller.loadFile(makeFile("a.glb"));
+    await settle();
+    const statesBefore = h.states.length;
+    h.controller.dispose();
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "unmount: pending parsed candidate disposed",
+    );
+    saveDeferred.resolve({ status: "saved" });
+    await pendingA;
+    await settle();
+    assertEqual(
+      h.states.length,
+      statesBefore,
+      "unmount: disposed controller commits no further state",
+    );
+    assertEqual(
+      h.disposer.countFor(assetA),
+      1,
+      "unmount: candidate not disposed twice after a late save",
+    );
+  }
+
   console.log(
     `Web Preview local avatar contract check passed.\n  - extracted framing contract remains shared with AvatarPreview and keeps exact v0.11.0 bounds
   - versioned v1 workspace validation, defensive cloning, and the 50 MiB GLB byte limit are covered
   - bounded IndexedDB load/save/clear results are covered with an injected dependency-free record store
   - blocked IndexedDB opens reject once and close delayed successful abandoned database handles
   - local-only and dependency-free storage boundary assertions are present
-  - scale, vertical offset, yaw degree controls, and reset framing remain wired to renderer-owned memory-only state\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - manual ownership is preserved across the root, static framing, head motion, scale, and primitive nodes\n  - local .glb lifecycle preservation remains covered: local-only loading, fallback, replacement retention, stale cleanup, reset invalidation, and unmount disposal\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  - automated source/unit evidence only\n  NOTE: source/unit checker evidence only; NOT real browser IndexedDB persistence, reload restoration, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
+  - the local-only GLB byte parser is shared by selected and restored bytes with user-safe error mapping
+  - the pure lifecycle controller stays framework-free and reuses the versioned workspace module
+  - scale, vertical offset, yaw degree controls, and reset framing remain renderer-owned memory-only state; live framing is neither persisted nor restored\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - restore lifecycle, save-before-commit, first-selection unsaved fallback, failed-replacement preservation, durable mutation ordering with stale reconciliation, explicit durable clear, and Three.js resource ownership are behaviorally covered with fake storage/parser/assets and deferred Promises\n  - persistence is scoped to the standard non-OBS Preview; OBS keeps the built-in primitive and no final OBS restoration is added\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: automated lifecycle/source evidence only; NOT real browser IndexedDB reload persistence, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
   );
 };
 

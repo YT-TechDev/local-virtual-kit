@@ -1,30 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import {
+  createLocalGlbAvatarWorkspaceController,
+  type LocalGlbAvatarLifecycleStatus,
+  type LocalGlbAvatarPersistenceStatus,
+  type LocalGlbAvatarWorkspaceController,
+  type LocalGlbAvatarWorkspaceState,
+} from "./localGlbAvatarWorkspaceController";
+import { createLocalAvatarWorkspaceStorage } from "./localAvatarWorkspace";
 
 export type LocalGlbAvatarAsset = {
   fileName: string;
   scene: THREE.Group;
 };
 
-export type LocalGlbAvatarLoadStatus = "idle" | "loading" | "ready" | "error";
-
 export type LocalGlbAvatarController = {
   asset: LocalGlbAvatarAsset | null;
   errorMessage: string | null;
   pendingFileName: string | null;
-  status: LocalGlbAvatarLoadStatus;
+  lifecycleStatus: LocalGlbAvatarLifecycleStatus;
+  persistenceStatus: LocalGlbAvatarPersistenceStatus;
   loadFile: (file: File) => Promise<void>;
-  reset: () => void;
+  clearAvatar: () => Promise<void>;
 };
 
-const UNSUPPORTED_FILE_ERROR = "Select a single local .glb file.";
+export type UseLocalGlbAvatarOptions = {
+  workspaceEnabled: boolean;
+};
+
 const LOCAL_ONLY_RESOURCE_ERROR =
   "This GLB references external resources, which are blocked in local-only preview.";
 const PARSE_ERROR = "Could not read this GLB. Select a valid local .glb file.";
-
-const hasGlbExtension = (fileName: string) =>
-  fileName.toLowerCase().endsWith(".glb");
 
 const isAllowedGeneratedResourceUrl = (url: string) => {
   const normalizedUrl = url.trim().toLowerCase();
@@ -96,117 +103,103 @@ export const disposeLocalGlbAvatarAsset = (asset: LocalGlbAvatarAsset) => {
   asset.scene.traverse(disposeObjectResources);
 };
 
-export function useLocalGlbAvatar(): LocalGlbAvatarController {
-  const [asset, setAsset] = useState<LocalGlbAvatarAsset | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [pendingFileName, setPendingFileName] = useState<string | null>(null);
-  const [status, setStatus] = useState<LocalGlbAvatarLoadStatus>("idle");
-  const assetRef = useRef<LocalGlbAvatarAsset | null>(null);
-  const pendingDisposalsRef = useRef<LocalGlbAvatarAsset[]>([]);
-  const requestGenerationRef = useRef(0);
+// Single local-only GLB byte parser shared by user-selected files and restored
+// IndexedDB bytes. It never fetches remote resources, blocks external resource
+// references, does not mutate authored scene transforms, and maps failures to a
+// user-safe message so raw Three.js errors are never surfaced.
+export async function parseLocalGlbAvatarBytes(
+  fileName: string,
+  glbBytes: ArrayBuffer,
+): Promise<LocalGlbAvatarAsset> {
+  const loader = new GLTFLoader(createLocalOnlyLoadingManager());
+  try {
+    const gltf = await loader.parseAsync(glbBytes, "");
+    return { fileName, scene: gltf.scene };
+  } catch (error) {
+    // Only the sanitized message is ever surfaced to the UI; the original error
+    // is retained as `cause` for local debugging and never read for display.
+    throw new Error(
+      error instanceof Error && error.message === LOCAL_ONLY_RESOURCE_ERROR
+        ? LOCAL_ONLY_RESOURCE_ERROR
+        : PARSE_ERROR,
+      { cause: error },
+    );
+  }
+}
 
-  const drainPendingDisposals = useCallback(() => {
-    const pendingDisposals = pendingDisposalsRef.current;
-    pendingDisposalsRef.current = [];
+const createInitialControllerState =
+  (): LocalGlbAvatarWorkspaceState<LocalGlbAvatarAsset> => ({
+    asset: null,
+    pendingFileName: null,
+    lifecycleStatus: "checking",
+    persistenceStatus: "none",
+    errorMessage: null,
+  });
 
-    for (const retiredAsset of new Set(pendingDisposals)) {
-      disposeLocalGlbAvatarAsset(retiredAsset);
-    }
-  }, []);
+const DISABLED_CONTROLLER_STATE: LocalGlbAvatarWorkspaceState<LocalGlbAvatarAsset> =
+  {
+    asset: null,
+    pendingFileName: null,
+    lifecycleStatus: "empty",
+    persistenceStatus: "none",
+    errorMessage: null,
+  };
 
-  const replaceAsset = useCallback((nextAsset: LocalGlbAvatarAsset | null) => {
-    const previousAsset = assetRef.current;
-    assetRef.current = nextAsset;
-    if (previousAsset !== null && previousAsset !== nextAsset) {
-      pendingDisposalsRef.current.push(previousAsset);
-    }
-    setAsset(nextAsset);
-  }, []);
-
-  const reset = useCallback(() => {
-    requestGenerationRef.current += 1;
-    replaceAsset(null);
-    setErrorMessage(null);
-    setPendingFileName(null);
-    setStatus("idle");
-  }, [replaceAsset]);
-
-  const loadFile = useCallback(
-    async (file: File) => {
-      const requestGeneration = requestGenerationRef.current + 1;
-      requestGenerationRef.current = requestGeneration;
-
-      if (!hasGlbExtension(file.name)) {
-        setErrorMessage(UNSUPPORTED_FILE_ERROR);
-        setPendingFileName(null);
-        setStatus("error");
-        return;
-      }
-
-      setErrorMessage(null);
-      setPendingFileName(file.name);
-      setStatus("loading");
-
-      try {
-        const fileBytes = await file.arrayBuffer();
-        const loader = new GLTFLoader(createLocalOnlyLoadingManager());
-        const gltf = await loader.parseAsync(fileBytes, "");
-        const nextAsset = { fileName: file.name, scene: gltf.scene };
-
-        if (requestGenerationRef.current !== requestGeneration) {
-          disposeLocalGlbAvatarAsset(nextAsset);
-          return;
-        }
-
-        replaceAsset(nextAsset);
-        setErrorMessage(null);
-        setPendingFileName(null);
-        setStatus("ready");
-      } catch (error) {
-        if (requestGenerationRef.current !== requestGeneration) {
-          return;
-        }
-
-        setErrorMessage(
-          error instanceof Error && error.message === LOCAL_ONLY_RESOURCE_ERROR
-            ? LOCAL_ONLY_RESOURCE_ERROR
-            : PARSE_ERROR,
-        );
-        setPendingFileName(null);
-        setStatus("error");
-      }
-    },
-    [replaceAsset],
-  );
+export function useLocalGlbAvatar({
+  workspaceEnabled,
+}: UseLocalGlbAvatarOptions): LocalGlbAvatarController {
+  const [state, setState] = useState<
+    LocalGlbAvatarWorkspaceState<LocalGlbAvatarAsset>
+  >(createInitialControllerState);
+  const controllerRef =
+    useRef<LocalGlbAvatarWorkspaceController<LocalGlbAvatarAsset> | null>(null);
 
   useEffect(() => {
-    drainPendingDisposals();
-  }, [asset, drainPendingDisposals]);
+    // Persistence is scoped to the standard non-OBS Preview. OBS routes keep the
+    // built-in primitive and never touch browser-local storage for this issue.
+    if (!workspaceEnabled) {
+      controllerRef.current = null;
+      return undefined;
+    }
 
-  useEffect(() => {
+    // Create a fresh controller for each Strict Mode setup so the simulated
+    // cleanup disposes exactly this controller; the next setup starts a new one.
+    // The controller pushes its initial state synchronously through start().
+    const controller =
+      createLocalGlbAvatarWorkspaceController<LocalGlbAvatarAsset>({
+        storage: createLocalAvatarWorkspaceStorage(),
+        parseBytes: parseLocalGlbAvatarBytes,
+        disposeAsset: disposeLocalGlbAvatarAsset,
+        onStateChange: setState,
+      });
+    controllerRef.current = controller;
+    controller.start();
+
     return () => {
-      requestGenerationRef.current += 1;
-      const assetsToDispose = [
-        assetRef.current,
-        ...pendingDisposalsRef.current,
-      ].filter(
-        (candidate): candidate is LocalGlbAvatarAsset => candidate !== null,
-      );
-      assetRef.current = null;
-      pendingDisposalsRef.current = [];
-
-      for (const ownedAsset of new Set(assetsToDispose)) {
-        disposeLocalGlbAvatarAsset(ownedAsset);
-      }
+      controllerRef.current = null;
+      controller.dispose();
     };
+  }, [workspaceEnabled]);
+
+  const loadFile = useCallback(async (file: File) => {
+    await controllerRef.current?.loadFile(file);
   }, []);
+
+  const clearAvatar = useCallback(async () => {
+    await controllerRef.current?.clearAvatar();
+  }, []);
+
+  // When the workspace is disabled (OBS), ignore any controller state and keep
+  // the built-in primitive without a synchronous in-effect state update.
+  const effectiveState = workspaceEnabled ? state : DISABLED_CONTROLLER_STATE;
 
   return {
-    asset,
-    errorMessage,
-    pendingFileName,
-    status,
+    asset: effectiveState.asset,
+    errorMessage: effectiveState.errorMessage,
+    pendingFileName: effectiveState.pendingFileName,
+    lifecycleStatus: effectiveState.lifecycleStatus,
+    persistenceStatus: effectiveState.persistenceStatus,
     loadFile,
-    reset,
+    clearAvatar,
   };
 }
