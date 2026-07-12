@@ -170,6 +170,64 @@ const createMemoryRecordStoreOpener = (initialRecord, options = {}) => {
   return opener;
 };
 
+const withFakeIndexedDB = async (fakeIndexedDB, callback) => {
+  const previousDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "indexedDB",
+  );
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: fakeIndexedDB,
+  });
+  try {
+    await callback();
+  } finally {
+    if (previousDescriptor === undefined) {
+      delete globalThis.indexedDB;
+    } else {
+      Object.defineProperty(globalThis, "indexedDB", previousDescriptor);
+    }
+  }
+};
+
+const createManualIndexedDBOpenFake = () => {
+  const requests = [];
+  return {
+    requests,
+    open(name, version) {
+      const request = {
+        name,
+        version,
+        result: undefined,
+        onblocked: null,
+        onerror: null,
+        onsuccess: null,
+        onupgradeneeded: null,
+      };
+      requests.push(request);
+      return request;
+    },
+  };
+};
+
+const createFakeOpenDatabase = () => ({
+  closeCalls: 0,
+  objectStoreNames: {
+    contains() {
+      return true;
+    },
+  },
+  createObjectStore() {
+    fail("fake IndexedDB open regression: unexpected object store creation");
+  },
+  transaction() {
+    fail("fake IndexedDB open regression: unexpected transaction use");
+  },
+  close() {
+    this.closeCalls += 1;
+  },
+});
+
 const runCheck = async () => {
   const [
     rootPackageSource,
@@ -1128,6 +1186,7 @@ const runCheck = async () => {
     createLocalAvatarWorkspace,
     parsePersistedLocalAvatarWorkspace,
     cloneLocalAvatarWorkspace,
+    openIndexedDBLocalAvatarWorkspaceRecordStore,
     createLocalAvatarWorkspaceStorage,
   } = workspaceModule;
 
@@ -1532,6 +1591,61 @@ const runCheck = async () => {
     "storage clear closes store on delete failure",
   );
 
+  await withFakeIndexedDB(createManualIndexedDBOpenFake(), async () => {
+    const fakeIndexedDB = globalThis.indexedDB;
+    const blockedOpenPromise = openIndexedDBLocalAvatarWorkspaceRecordStore();
+    assertEqual(
+      fakeIndexedDB.requests.length,
+      1,
+      "fake IndexedDB blocked lifecycle starts exactly one open request",
+    );
+    const request = fakeIndexedDB.requests[0];
+    request.onblocked();
+    const blockedResult = await blockedOpenPromise.then(
+      () => "resolved",
+      (error) => error?.name,
+    );
+    assertEqual(
+      blockedResult,
+      "LocalAvatarWorkspaceIndexedDBUnavailable",
+      "fake IndexedDB blocked lifecycle rejects as unavailable",
+    );
+    const lateDatabase = createFakeOpenDatabase();
+    request.result = lateDatabase;
+    request.onsuccess();
+    assertEqual(
+      lateDatabase.closeCalls,
+      1,
+      "fake IndexedDB blocked lifecycle closes late successful abandoned database",
+    );
+  });
+
+  await withFakeIndexedDB(createManualIndexedDBOpenFake(), async () => {
+    const fakeIndexedDB = globalThis.indexedDB;
+    const openPromise = openIndexedDBLocalAvatarWorkspaceRecordStore();
+    const request = fakeIndexedDB.requests[0];
+    const openedDatabase = createFakeOpenDatabase();
+    request.result = openedDatabase;
+    request.onsuccess();
+    const recordStore = await openPromise;
+    assertEqual(
+      openedDatabase.closeCalls,
+      0,
+      "fake IndexedDB normal open keeps database open until record store close",
+    );
+    recordStore.close();
+    assertEqual(
+      openedDatabase.closeCalls,
+      1,
+      "fake IndexedDB normal open closes database through returned store",
+    );
+  });
+
+  assert(
+    Object.getOwnPropertyDescriptor(globalThis, "indexedDB") === undefined,
+    "fake IndexedDB open regression restores original global indexedDB",
+  );
+
   assert(
     workspaceSource.includes("globalThis.indexedDB") &&
       workspaceSource.includes("indexedDBFactory.open"),
@@ -1569,6 +1683,7 @@ const runCheck = async () => {
     `Web Preview local avatar contract check passed.\n  - extracted framing contract remains shared with AvatarPreview and keeps exact v0.11.0 bounds
   - versioned v1 workspace validation, defensive cloning, and the 50 MiB GLB byte limit are covered
   - bounded IndexedDB load/save/clear results are covered with an injected dependency-free record store
+  - blocked IndexedDB opens reject once and close delayed successful abandoned database handles
   - local-only and dependency-free storage boundary assertions are present
   - scale, vertical offset, yaw degree controls, and reset framing remain wired to renderer-owned memory-only state\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - manual ownership is preserved across the root, static framing, head motion, scale, and primitive nodes\n  - local .glb lifecycle preservation remains covered: local-only loading, fallback, replacement retention, stale cleanup, reset invalidation, and unmount disposal\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  - automated source/unit evidence only\n  NOTE: source/unit checker evidence only; NOT real browser IndexedDB persistence, reload restoration, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
   );

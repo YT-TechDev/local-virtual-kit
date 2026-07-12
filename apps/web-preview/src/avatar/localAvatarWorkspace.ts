@@ -245,6 +245,14 @@ export const openIndexedDBLocalAvatarWorkspaceRecordStore: OpenLocalAvatarWorksp
     if (indexedDBFactory === undefined) throw createUnavailableError();
 
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      let settled = false;
+      let abandoned = false;
+      const rejectUnavailable = () => {
+        if (settled) return;
+        settled = true;
+        abandoned = true;
+        reject(createUnavailableError());
+      };
       const request = indexedDBFactory.open(
         LOCAL_AVATAR_WORKSPACE_DATABASE_NAME,
         LOCAL_AVATAR_WORKSPACE_DATABASE_VERSION,
@@ -255,9 +263,17 @@ export const openIndexedDBLocalAvatarWorkspaceRecordStore: OpenLocalAvatarWorksp
           db.createObjectStore(LOCAL_AVATAR_WORKSPACE_STORE_NAME);
         }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(createUnavailableError());
-      request.onblocked = () => reject(createUnavailableError());
+      request.onsuccess = () => {
+        const openedDatabase = request.result;
+        if (abandoned || settled) {
+          openedDatabase.close();
+          return;
+        }
+        settled = true;
+        resolve(openedDatabase);
+      };
+      request.onerror = rejectUnavailable;
+      request.onblocked = rejectUnavailable;
     });
 
     return {
