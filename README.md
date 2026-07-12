@@ -2,9 +2,9 @@
 
 Local Virtual Kit is a local-first avatar tracking and rendering kit for VTuber and virtual character workflows.
 
-LVK is currently in early development. The current public baseline is **v0.8.0: Renderer Calibration Workflow**. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
+LVK is currently in early development. The current public baseline is **v0.9.0: OBS Browser Source Workflow Polish**. The v0.2.0 baseline can produce MotionFrame face-position output from local OpenCV face bounds, and the Web Preview can consume that localhost MotionFrame stream.
 
-v0.8.0 adds the first user-facing Web Preview renderer calibration workflow: persistent Balanced / Steady / Responsive renderer presets, safe browser-local versioned calibration state, native neutral-pose capture/reset, and a separated calibration panel with source diagnostics. Calibration controls remain excluded from OBS mode, persisted renderer calibration can still affect avatar rendering, and the MotionFrame contract plus local-first privacy boundary remain unchanged. v0.7.0 remains the previous MediaPipe feasibility foundation; v0.8.0 does not add a new tracking backend, telemetry, cloud upload, remote inference, runtime downloads, or new network behavior.
+v0.9.0 adds typed Electron OBS dummy URL exposure, focused Desktop Copy/Open actions for dummy and native OBS routes, recommended `1920 × 1080` starting dimensions, localhost-only and camera-frames-remain-local guidance, focused OBS route-contract checker coverage, and renderer calibration compatibility with OBS rendering. v0.8.0 remains the previous Renderer Calibration Workflow release. v0.9.0 does not add a new tracking backend, MotionFrame changes, telemetry, cloud upload, remote inference, runtime downloads, new dependencies, or new network behavior.
 
 ## Core principles
 
@@ -67,7 +67,8 @@ Open one of the local preview URLs:
 
 - `http://localhost:5173/?source=dummy` uses frontend dummy `MotionFrame` data.
 - `http://localhost:5173/?source=native` connects to the local `MotionFrame` endpoint at `ws://127.0.0.1:45731/motion`.
-- `http://localhost:5173/?mode=obs&source=native` uses the native source with the OBS-friendly preview layout.
+- `http://localhost:5173/?mode=obs&source=dummy` uses built-in local demo MotionFrames with the OBS-friendly preview layout.
+- `http://localhost:5173/?mode=obs&source=native` uses the localhost native MotionFrame path with the OBS-friendly preview layout.
 
 Run the desktop app:
 
@@ -75,7 +76,7 @@ Run the desktop app:
 pnpm dev:desktop
 ```
 
-The Electron desktop app shows these preview URLs and can start or stop the development native pipeline after the native tracker has been built.
+The Electron desktop app shows these preview URLs, provides focused Copy/Open actions for both OBS routes, and can start or stop the development native pipeline after the native tracker has been built.
 
 Build the native tracker:
 
@@ -124,14 +125,15 @@ LVK is local-first. Raw camera frames must remain local. Telemetry, analytics, c
 
 For the post-v0.2 entrypoint, use these current source-of-truth documents first:
 
-- `docs/releases/v0.8.0.md` - current Renderer Calibration Workflow release-readiness notes.
-- `docs/releases/v0.7.0.md` - previous MediaPipe local feasibility foundation release-readiness notes.
+- `docs/releases/v0.9.0.md` - current OBS Browser Source Workflow Polish release-readiness notes.
+- `docs/releases/v0.8.0.md` - previous Renderer Calibration Workflow release-readiness notes.
+- `docs/releases/v0.7.0.md` - MediaPipe local feasibility foundation release-readiness notes.
 - `docs/releases/v0.6.0.md` - Local backend candidate validation spike release-readiness notes.
 - `docs/releases/v0.5.0.md` - Native Core backend evaluation foundation release-readiness notes.
 - `docs/releases/v0.4.0.md` - local runtime confidence and native pipeline readiness notes.
 - `docs/releases/v0.3.0.md` - local tracking quality and release-readiness notes.
 - `docs/releases/v0.2.0.md` - Local OpenCV Face-Following MVP baseline and known limitations.
-- `docs/ROADMAP.md` - implementation sequence and v0.8/post-v0.8 direction.
+- `docs/ROADMAP.md` - implementation sequence and v0.9/post-v0.9 direction.
 - `docs/LOCAL_RUNTIME_CHECKLIST.md` - local/manual validation boundaries and runtime checklist.
 
 Start contributor or agent work with `docs/AGENTS.md`, then read only the focused document relevant to the task.
