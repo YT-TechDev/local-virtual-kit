@@ -142,6 +142,14 @@ const runCheck = async () => {
     "const MIN_LOCAL_AVATAR_SCALE = 0.25",
     "const MAX_LOCAL_AVATAR_SCALE = 3",
     "const LOCAL_AVATAR_SCALE_STEP = 0.05",
+    "const DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET = 0",
+    "const MIN_LOCAL_AVATAR_VERTICAL_OFFSET = -2",
+    "const MAX_LOCAL_AVATAR_VERTICAL_OFFSET = 2",
+    "const LOCAL_AVATAR_VERTICAL_OFFSET_STEP = 0.05",
+    "const DEFAULT_LOCAL_AVATAR_YAW_DEGREES = 0",
+    "const MIN_LOCAL_AVATAR_YAW_DEGREES = -180",
+    "const MAX_LOCAL_AVATAR_YAW_DEGREES = 180",
+    "const LOCAL_AVATAR_YAW_STEP_DEGREES = 1",
   ])
     assert(
       previewSource.includes(constantNeedle),
@@ -159,6 +167,18 @@ const runCheck = async () => {
     ),
     "local avatar scale control: current value text must format scale as multiplier",
   );
+  for (const stateNeedle of [
+    "const [localAvatarVerticalOffset, setLocalAvatarVerticalOffset] = useState(\n    DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,\n  );",
+    "const [localAvatarYawDegrees, setLocalAvatarYawDegrees] = useState(\n    DEFAULT_LOCAL_AVATAR_YAW_DEGREES,\n  );",
+    "localAvatarVerticalOffset.toFixed(2)",
+    "const localAvatarYawValueText = `${localAvatarYawDegrees}°`;",
+    "const degreesToRadians = (degrees: number) =>",
+    "return (degrees * Math.PI) / 180;",
+  ])
+    assert(
+      previewSource.includes(stateNeedle),
+      `local avatar framing controls: missing ${stateNeedle}`,
+    );
 
   const controls = sliceBetween(
     previewSource,
@@ -193,6 +213,35 @@ const runCheck = async () => {
       panel.includes(scaleNeedle),
       `local avatar scale control: panel missing ${scaleNeedle}`,
     );
+  for (const framingNeedle of [
+    "Vertical offset",
+    "min={MIN_LOCAL_AVATAR_VERTICAL_OFFSET}",
+    "max={MAX_LOCAL_AVATAR_VERTICAL_OFFSET}",
+    "step={LOCAL_AVATAR_VERTICAL_OFFSET_STEP}",
+    "value={localAvatarVerticalOffset}",
+    "onChange={handleLocalAvatarVerticalOffsetChange}",
+    "aria-valuetext={localAvatarVerticalOffsetAriaValueText}",
+    "htmlFor={LOCAL_AVATAR_VERTICAL_OFFSET_ID}",
+    "{localAvatarVerticalOffsetValueText}",
+    "Yaw orientation",
+    "min={MIN_LOCAL_AVATAR_YAW_DEGREES}",
+    "max={MAX_LOCAL_AVATAR_YAW_DEGREES}",
+    "step={LOCAL_AVATAR_YAW_STEP_DEGREES}",
+    "value={localAvatarYawDegrees}",
+    "onChange={handleLocalAvatarYawChange}",
+    "aria-valuetext={localAvatarYawAriaValueText}",
+    "htmlFor={LOCAL_AVATAR_YAW_ID}",
+    "{localAvatarYawValueText}",
+  ])
+    assert(
+      panel.includes(framingNeedle),
+      `local avatar framing controls: panel missing ${framingNeedle}`,
+    );
+  assert(
+    countOccurrences(panel, 'type="range"') === 3,
+    "local avatar framing controls: panel must expose exactly three range inputs",
+  );
+
   const scaleHandler = sliceBetween(
     previewSource,
     "const handleLocalAvatarScaleChange",
@@ -212,8 +261,24 @@ const runCheck = async () => {
   assert(
     resetFramingHandler.includes(
       "setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE)",
-    ),
-    "local avatar scale control: reset framing must restore documented default",
+    ) &&
+      resetFramingHandler.includes(
+        "setLocalAvatarVerticalOffset(DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET)",
+      ) &&
+      resetFramingHandler.includes(
+        "setLocalAvatarYawDegrees(DEFAULT_LOCAL_AVATAR_YAW_DEGREES)",
+      ),
+    "local avatar framing controls: reset framing must restore scale, vertical offset, and yaw defaults",
+  );
+  assert(
+    previewSource.includes("disabled={resetLocalAvatarFramingDisabled}") &&
+      previewSource.includes(
+        "localAvatarVerticalOffset === DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET",
+      ) &&
+      previewSource.includes(
+        "localAvatarYawDegrees === DEFAULT_LOCAL_AVATAR_YAW_DEGREES",
+      ),
+    "local avatar framing controls: reset disabled condition must consider all framing defaults",
   );
   assert(
     resetFramingHandler.includes("DEFAULT_LOCAL_AVATAR_SCALE") &&
@@ -576,7 +641,9 @@ const runCheck = async () => {
   );
   assert(
     loadedSource.includes("motion: AvatarMotionState") &&
-      loadedSource.includes("scene: THREE.Group"),
+      loadedSource.includes("scene: THREE.Group") &&
+      loadedSource.includes("verticalOffset: number") &&
+      loadedSource.includes("yawRadians: number"),
     "AvatarMotionState prop wiring: LoadedGlbAvatar props must include motion and scene",
   );
   assert(
@@ -588,14 +655,18 @@ const runCheck = async () => {
     "coarse rotation: loaded GLB must use AvatarMotionState headRotation",
   );
   assert(
-    loadedSource.includes("<group scale={uniformScale} dispose={null}>") &&
+    loadedSource.includes("position={[0, verticalOffset, 0]}") &&
+      loadedSource.includes("rotation={[0, yawRadians, 0]}") &&
+      loadedSource.includes("<group scale={uniformScale} dispose={null}>") &&
       loadedSource.indexOf("position={motion.rootPosition}") <
+        loadedSource.indexOf("position={[0, verticalOffset, 0]}") &&
+      loadedSource.indexOf("rotation={[0, yawRadians, 0]}") <
         loadedSource.indexOf("rotation={motion.headRotation}") &&
       loadedSource.indexOf("rotation={motion.headRotation}") <
         loadedSource.indexOf("scale={uniformScale}") &&
       loadedSource.indexOf("scale={uniformScale}") <
         loadedSource.indexOf("<primitive object={scene}"),
-    "local avatar scale control: loaded GLB must use root, head, static scale, primitive hierarchy",
+    "local avatar framing controls: loaded GLB must use root, static vertical/yaw, head, static scale, primitive hierarchy",
   );
   assert(
     loadedSource.includes("<primitive object={scene}"),
@@ -618,6 +689,12 @@ const runCheck = async () => {
       "mouth",
       "gaze",
       "expression",
+      "scene.position",
+      "scene.rotation",
+      "scene.scale",
+      "scene.clone",
+      "clone(",
+      "Box3",
     ],
     "AvatarMotionState prop wiring",
   );
@@ -664,11 +741,12 @@ const runCheck = async () => {
     "primitive fallback: loaded GLB branch missing",
   );
   assert(
-    countOccurrences(
-      rendererSelection,
-      "motion={fallbackState.renderedMotion}",
-    ) === 2,
-    "AvatarMotionState prop wiring: both renderers must receive the same renderedMotion",
+    countOccurrences(scene, "motion={fallbackState.renderedMotion}") === 2 &&
+      rendererSelection.includes(
+        "verticalOffset={localAvatarVerticalOffset}",
+      ) &&
+      scene.includes("yawRadians={degreesToRadians(localAvatarYawDegrees)}"),
+    "AvatarMotionState prop wiring: both renderers must receive the same renderedMotion and loaded GLB must receive static framing props",
   );
 
   const invocation = sliceBetween(
@@ -682,6 +760,8 @@ const runCheck = async () => {
     "calibration={effectiveCalibration}",
     "nativeFrame={nativeFrame}",
     "localAvatarScale={localAvatarScale}",
+    "localAvatarVerticalOffset={localAvatarVerticalOffset}",
+    "localAvatarYawDegrees={localAvatarYawDegrees}",
     "smoothing={selectedPreset.smoothing}",
     "source={source}",
     "localAvatarScene={localGlbAvatar.asset?.scene ?? null}",
