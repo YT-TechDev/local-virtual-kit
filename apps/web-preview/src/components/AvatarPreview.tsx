@@ -53,6 +53,8 @@ type AvatarSceneProps = {
   calibration: FaceFollowingCalibration;
   localAvatarScene: THREE.Group | null;
   localAvatarScale: number;
+  localAvatarVerticalOffset: number;
+  localAvatarYawDegrees: number;
   nativeFrame: MotionFrame | null;
   smoothing: TrackingSmoothingOptions;
   source: PreviewSource;
@@ -72,6 +74,10 @@ const clampMotionDebugMarker = (value: number) => {
 };
 
 const formatMotionDebugNumber = (value: number) => value.toFixed(4);
+
+const degreesToRadians = (degrees: number) => {
+  return (degrees * Math.PI) / 180;
+};
 
 const getMotionDebugFrameAgeText = (
   lastFrameReceivedAtMs: number | null,
@@ -206,10 +212,21 @@ const LOCAL_AVATAR_GUIDANCE_ID = "web-preview-local-avatar-guidance";
 const LOCAL_AVATAR_STATUS_ID = "web-preview-local-avatar-status";
 const LOCAL_AVATAR_ERROR_ID = "web-preview-local-avatar-error";
 const LOCAL_AVATAR_SCALE_ID = "web-preview-local-avatar-scale";
+const LOCAL_AVATAR_VERTICAL_OFFSET_ID =
+  "web-preview-local-avatar-vertical-offset";
+const LOCAL_AVATAR_YAW_ID = "web-preview-local-avatar-yaw";
 const DEFAULT_LOCAL_AVATAR_SCALE = 1;
 const MIN_LOCAL_AVATAR_SCALE = 0.25;
 const MAX_LOCAL_AVATAR_SCALE = 3;
 const LOCAL_AVATAR_SCALE_STEP = 0.05;
+const DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET = 0;
+const MIN_LOCAL_AVATAR_VERTICAL_OFFSET = -2;
+const MAX_LOCAL_AVATAR_VERTICAL_OFFSET = 2;
+const LOCAL_AVATAR_VERTICAL_OFFSET_STEP = 0.05;
+const DEFAULT_LOCAL_AVATAR_YAW_DEGREES = 0;
+const MIN_LOCAL_AVATAR_YAW_DEGREES = -180;
+const MAX_LOCAL_AVATAR_YAW_DEGREES = 180;
+const LOCAL_AVATAR_YAW_STEP_DEGREES = 1;
 
 type EndpointCopyFeedbackState = {
   message: string;
@@ -406,6 +423,8 @@ function AvatarScene({
   calibration,
   localAvatarScene,
   localAvatarScale,
+  localAvatarVerticalOffset,
+  localAvatarYawDegrees,
   nativeFrame,
   smoothing,
   source,
@@ -502,6 +521,8 @@ function AvatarScene({
           motion={fallbackState.renderedMotion}
           scene={localAvatarScene}
           uniformScale={localAvatarScale}
+          verticalOffset={localAvatarVerticalOffset}
+          yawRadians={degreesToRadians(localAvatarYawDegrees)}
         />
       )}
     </>
@@ -576,7 +597,24 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
   const [localAvatarScale, setLocalAvatarScale] = useState(
     DEFAULT_LOCAL_AVATAR_SCALE,
   );
+  const [localAvatarVerticalOffset, setLocalAvatarVerticalOffset] = useState(
+    DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET,
+  );
+  const [localAvatarYawDegrees, setLocalAvatarYawDegrees] = useState(
+    DEFAULT_LOCAL_AVATAR_YAW_DEGREES,
+  );
   const localAvatarScaleValueText = `${localAvatarScale.toFixed(2)}×`;
+  const localAvatarVerticalOffsetValueText =
+    localAvatarVerticalOffset === 0
+      ? "0.00"
+      : `${localAvatarVerticalOffset > 0 ? "+" : ""}${localAvatarVerticalOffset.toFixed(2)}`;
+  const localAvatarVerticalOffsetAriaValueText = `Vertical offset ${localAvatarVerticalOffset.toFixed(2)}`;
+  const localAvatarYawValueText = `${localAvatarYawDegrees}°`;
+  const localAvatarYawAriaValueText = `Yaw orientation ${localAvatarYawDegrees} degrees`;
+  const resetLocalAvatarFramingDisabled =
+    localAvatarScale === DEFAULT_LOCAL_AVATAR_SCALE &&
+    localAvatarVerticalOffset === DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET &&
+    localAvatarYawDegrees === DEFAULT_LOCAL_AVATAR_YAW_DEGREES;
   const localAvatarStatusText = (() => {
     switch (localGlbAvatar.status) {
       case "idle":
@@ -707,8 +745,20 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
     setLocalAvatarScale(event.target.valueAsNumber);
   };
 
+  const handleLocalAvatarVerticalOffsetChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setLocalAvatarVerticalOffset(event.target.valueAsNumber);
+  };
+
+  const handleLocalAvatarYawChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setLocalAvatarYawDegrees(event.target.valueAsNumber);
+  };
+
   const handleResetLocalAvatarFraming = () => {
     setLocalAvatarScale(DEFAULT_LOCAL_AVATAR_SCALE);
+    setLocalAvatarVerticalOffset(DEFAULT_LOCAL_AVATAR_VERTICAL_OFFSET);
+    setLocalAvatarYawDegrees(DEFAULT_LOCAL_AVATAR_YAW_DEGREES);
   };
 
   const handleLocalAvatarFileChange = (
@@ -856,7 +906,8 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
             >
               Select one local .glb file. Bytes and parsed resources stay in
               memory only; external resources are blocked. Ready GLBs render
-              with root translation and coarse overall orientation only.
+              with manual scale, vertical offset, yaw framing, and MotionFrame
+              transforms.
             </p>
             <label className="preview-local-avatar-panel__field">
               <span className="preview-local-avatar-panel__label">
@@ -896,6 +947,59 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
                 </output>
               </span>
             </label>
+
+            <label className="preview-local-avatar-panel__field">
+              <span className="preview-local-avatar-panel__label">
+                Vertical offset
+              </span>
+              <span className="preview-local-avatar-panel__range-row">
+                <input
+                  id={LOCAL_AVATAR_VERTICAL_OFFSET_ID}
+                  className="preview-local-avatar-panel__range"
+                  type="range"
+                  min={MIN_LOCAL_AVATAR_VERTICAL_OFFSET}
+                  max={MAX_LOCAL_AVATAR_VERTICAL_OFFSET}
+                  step={LOCAL_AVATAR_VERTICAL_OFFSET_STEP}
+                  value={localAvatarVerticalOffset}
+                  onChange={handleLocalAvatarVerticalOffsetChange}
+                  disabled={localGlbAvatar.asset === null}
+                  aria-valuetext={localAvatarVerticalOffsetAriaValueText}
+                  aria-describedby={LOCAL_AVATAR_STATUS_ID}
+                />
+                <output
+                  className="preview-local-avatar-panel__output"
+                  htmlFor={LOCAL_AVATAR_VERTICAL_OFFSET_ID}
+                >
+                  {localAvatarVerticalOffsetValueText}
+                </output>
+              </span>
+            </label>
+            <label className="preview-local-avatar-panel__field">
+              <span className="preview-local-avatar-panel__label">
+                Yaw orientation
+              </span>
+              <span className="preview-local-avatar-panel__range-row">
+                <input
+                  id={LOCAL_AVATAR_YAW_ID}
+                  className="preview-local-avatar-panel__range"
+                  type="range"
+                  min={MIN_LOCAL_AVATAR_YAW_DEGREES}
+                  max={MAX_LOCAL_AVATAR_YAW_DEGREES}
+                  step={LOCAL_AVATAR_YAW_STEP_DEGREES}
+                  value={localAvatarYawDegrees}
+                  onChange={handleLocalAvatarYawChange}
+                  disabled={localGlbAvatar.asset === null}
+                  aria-valuetext={localAvatarYawAriaValueText}
+                  aria-describedby={LOCAL_AVATAR_STATUS_ID}
+                />
+                <output
+                  className="preview-local-avatar-panel__output"
+                  htmlFor={LOCAL_AVATAR_YAW_ID}
+                >
+                  {localAvatarYawValueText}
+                </output>
+              </span>
+            </label>
             <dl className="preview-local-avatar-panel__state">
               <div>
                 <dt>Status</dt>
@@ -932,7 +1036,7 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
                 className="preview-local-avatar-panel__button"
                 type="button"
                 onClick={handleResetLocalAvatarFraming}
-                disabled={localAvatarScale === DEFAULT_LOCAL_AVATAR_SCALE}
+                disabled={resetLocalAvatarFramingDisabled}
               >
                 Reset framing
               </button>
@@ -1064,6 +1168,8 @@ export function AvatarPreview({ debugMode, mode, source }: AvatarPreviewProps) {
             calibration={effectiveCalibration}
             localAvatarScene={localGlbAvatar.asset?.scene ?? null}
             localAvatarScale={localAvatarScale}
+            localAvatarVerticalOffset={localAvatarVerticalOffset}
+            localAvatarYawDegrees={localAvatarYawDegrees}
             nativeFrame={nativeFrame}
             smoothing={selectedPreset.smoothing}
             source={source}
