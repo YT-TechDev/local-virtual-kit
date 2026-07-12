@@ -593,6 +593,47 @@ const runCheck = async () => {
       guidance.includes("nothing is uploaded"),
     "browser-local storage guidance: must explain local persistence while keeping local-only and external-resource-blocking reassurance",
   );
+  const localAvatarCopy = sliceBetween(
+    previewSource,
+    "const localAvatarStatusText = (() => {",
+    "const showCalibrationFeedback =",
+    "local avatar privacy-safe status copy",
+  ).slice;
+  for (const expectedCopyMarker of [
+    "Checking browser-local storage",
+    "Restoring",
+    "Saved avatar data was invalid",
+    "Ready ·",
+    "Loaded locally · not saved",
+    "Browser-local storage save failed",
+    "Framing kept locally · save failed",
+    "Framing kept in memory",
+  ]) {
+    assert(
+      localAvatarCopy.includes(expectedCopyMarker),
+      `local avatar privacy-safe status copy: missing bounded marker ${expectedCopyMarker}`,
+    );
+  }
+  assertNotContainsAny(
+    localAvatarCopy,
+    [
+      "error.stack",
+      "error.message",
+      "String(error",
+      "LOCAL_AVATAR_WORKSPACE_DATABASE_NAME",
+      "LOCAL_AVATAR_WORKSPACE_STORE_NAME",
+      "LOCAL_AVATAR_WORKSPACE_ACTIVE_KEY",
+      "glbBytes",
+      "ArrayBuffer",
+      "byteLength",
+      "generation",
+      "revision",
+      "indexedDB",
+      "C:\\",
+      "/home/",
+    ],
+    "local avatar privacy-safe status copy must not expose raw exceptions, IndexedDB identifiers, binary details, internal revisions, or absolute path examples",
+  );
 
   // ---- Local-only GLB byte parser (useLocalGlbAvatar.ts) ----
   assert(
@@ -1504,6 +1545,25 @@ const runCheck = async () => {
     validWorkspace.glbBytes,
     [1, 2, 3, 4],
     "workspace creation defensively clones input bytes",
+  );
+  assert(
+    JSON.stringify(Object.keys(validWorkspace).sort()) ===
+      JSON.stringify(
+        [
+          "byteLength",
+          "fileName",
+          "framing",
+          "glbBytes",
+          "mimeType",
+          "version",
+        ].sort(),
+      ),
+    "workspace durable record contains only schema, metadata, bytes, and framing fields",
+  );
+  assertNotContainsAny(
+    Object.keys(validWorkspace).join("\n"),
+    ["scene", "object", "three", "gltf", "parser", "runtime"],
+    "workspace durable record must not persist parsed Three.js/runtime object fields",
   );
   const clonedWorkspace = cloneLocalAvatarWorkspace(validWorkspace);
   new Uint8Array(clonedWorkspace.glbBytes)[1] = 9;
