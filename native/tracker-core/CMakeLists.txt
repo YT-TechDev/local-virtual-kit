@@ -49,6 +49,8 @@ add_executable(lvk-tracker-core
   src/face_detector.cpp
   src/face_tracking_pipeline.cpp
   src/frame_preprocessor.cpp
+  src/helper_message.cpp
+  src/helper_process_session.cpp
   src/helper_process_supervisor.cpp
   src/helper_runtime_smoke.cpp
   src/helper_tracking_result.cpp
@@ -124,6 +126,23 @@ if(MSVC)
   target_compile_options(lvk-helper-result-mapping-smoke PRIVATE /W4)
 else()
   target_compile_options(lvk-helper-result-mapping-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Strict helper-message parser smoke (v0.13.0, #533). Standalone executable that
+# asserts the strict, dependency-free helper contract parser directly on
+# hand-built lines. No OpenCV, no camera, no process spawning, no stdin, and no
+# MotionFrame output. See docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md.
+add_executable(lvk-helper-message-parse-smoke
+  src/helper_message_parse_smoke.cpp
+  src/helper_message.cpp
+)
+
+target_compile_features(lvk-helper-message-parse-smoke PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-helper-message-parse-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-helper-message-parse-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Helper process supervision smoke (H1c). Standalone executable that launches
