@@ -2,6 +2,7 @@
 
 #include "helper_tracking_result.h"
 
+#include <iostream>
 #include <utility>
 
 namespace lvk::tracker {
@@ -41,6 +42,14 @@ bool SyntheticHelperTrackingBackend::start() {
 
 void SyntheticHelperTrackingBackend::stop() {
   session_.stop();
+  // Surface only a generic, path-free category if a healthy session did not shut
+  // down cleanly (no valid stopped line and/or a forced termination). Never
+  // forwards raw child output.
+  const HelperDiagnosticCategory category = session_.shutdownDiagnostic();
+  if (category != HelperDiagnosticCategory::None) {
+    std::cerr << "[helper-session] shutdown incomplete (category="
+              << helperDiagnosticCategoryLabel(category) << ")\n";
+  }
 }
 
 TrackingSample SyntheticHelperTrackingBackend::track(

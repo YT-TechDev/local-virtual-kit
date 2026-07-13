@@ -87,6 +87,7 @@ struct HelperOptions {
   bool sessionMode = false;
   bool sessionSkipReady = false;
   bool sessionExitBeforeReady = false;
+  bool sessionExitAfterReady = false;
   bool sessionHangResult = false;
   bool sessionExitOnRequest = false;
   bool sessionMalformedResult = false;
@@ -94,8 +95,12 @@ struct HelperOptions {
   bool sessionOversizedResult = false;
   bool sessionNonfiniteResult = false;
   bool sessionStaleRequestId = false;
+  bool sessionStaleTimestamp = false;
   bool sessionUnsafeStderr = false;
+  bool sessionUnterminatedUnsafeStderr = false;
   bool sessionIgnoreStop = false;
+  bool sessionMissingStopped = false;
+  bool sessionMalformedStopped = false;
 };
 
 bool parseIntInRange(
@@ -242,12 +247,14 @@ void printUsage(std::ostream &output) {
             "parent \"stop\" request or stdin EOF. It stays synthetic only and "
             "never emits MotionFrame. The --session-* flags "
             "(--session-skip-ready, --session-exit-before-ready, "
-            "--session-hang-result, --session-exit-on-request, "
-            "--session-malformed-result, --session-unknown-result, "
-            "--session-oversized-result, --session-nonfinite-result, "
-            "--session-stale-request-id, --session-unsafe-stderr, "
-            "--session-ignore-stop) are deterministic test-only session fault "
-            "modes.\n";
+            "--session-exit-after-ready, --session-hang-result, "
+            "--session-exit-on-request, --session-malformed-result, "
+            "--session-unknown-result, --session-oversized-result, "
+            "--session-nonfinite-result, --session-stale-request-id, "
+            "--session-stale-timestamp, --session-unsafe-stderr, "
+            "--session-unterminated-unsafe-stderr, --session-ignore-stop, "
+            "--session-missing-stopped, --session-malformed-stopped) are "
+            "deterministic test-only session fault modes.\n";
   output << "This helper is synthetic only: it does not access a camera, files, "
             "models, sockets, or raw frames, and it does not emit MotionFrame.\n";
 }
@@ -389,6 +396,10 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       options.sessionExitBeforeReady = true;
       continue;
     }
+    if (argument == "--session-exit-after-ready") {
+      options.sessionExitAfterReady = true;
+      continue;
+    }
     if (argument == "--session-hang-result") {
       options.sessionHangResult = true;
       continue;
@@ -417,12 +428,28 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       options.sessionStaleRequestId = true;
       continue;
     }
+    if (argument == "--session-stale-timestamp") {
+      options.sessionStaleTimestamp = true;
+      continue;
+    }
     if (argument == "--session-unsafe-stderr") {
       options.sessionUnsafeStderr = true;
       continue;
     }
+    if (argument == "--session-unterminated-unsafe-stderr") {
+      options.sessionUnterminatedUnsafeStderr = true;
+      continue;
+    }
     if (argument == "--session-ignore-stop") {
       options.sessionIgnoreStop = true;
+      continue;
+    }
+    if (argument == "--session-missing-stopped") {
+      options.sessionMissingStopped = true;
+      continue;
+    }
+    if (argument == "--session-malformed-stopped") {
+      options.sessionMalformedStopped = true;
       continue;
     }
 
@@ -725,6 +752,8 @@ void writeSessionResult(
 
   const long long emittedRequestId =
       options.sessionStaleRequestId ? requestId + 1 : requestId;
+  const long long emittedFrameTimestampMs =
+      options.sessionStaleTimestamp ? frameTimestampMs + 1 : frameTimestampMs;
   const SessionAdapterPattern &pattern =
       kSessionAdapterPatterns[requestIndex % 3];
 
@@ -733,7 +762,7 @@ void writeSessionResult(
          << "\"type\":\"result\","
          << "\"schemaVersion\":1,"
          << "\"requestId\":" << emittedRequestId << ","
-         << "\"frameTimestampMs\":" << frameTimestampMs << ","
+         << "\"frameTimestampMs\":" << emittedFrameTimestampMs << ","
          << "\"status\":\"tracking\","
          << "\"confidence\":";
   if (options.sessionNonfiniteResult) {
@@ -787,6 +816,15 @@ int runSyntheticHelperSession(const HelperOptions &options) {
     std::cout.flush();
   }
 
+  if (options.sessionExitAfterReady) {
+    // Exit cleanly right after ready, before reading any request. Models a
+    // helper that dies after the handshake but before/at the first request
+    // write; the parent must stay alive and fail closed.
+    std::cerr << "[helper] session: exiting after ready "
+                 "(reason=synthetic-session-exit-after-ready)\n";
+    return 0;
+  }
+
   long long requestIndex = 0;
   std::string line;
   while (std::getline(std::cin, line)) {
@@ -804,6 +842,23 @@ int runSyntheticHelperSession(const HelperOptions &options) {
         std::cerr << "[helper] session: ignoring stop "
                      "(reason=synthetic-session-ignore-stop)\n";
         continue;
+      }
+      if (options.sessionMissingStopped) {
+        // Exit cleanly on stop without emitting the "stopped" boundary; the
+        // parent must treat this as an incomplete shutdown.
+        std::cerr << "[helper] session: exiting without stopped "
+                     "(reason=synthetic-session-missing-stopped)\n";
+        return 0;
+      }
+      if (options.sessionMalformedStopped) {
+        // Emit a "stopped" line with an invalid schemaVersion; the parent's
+        // strict shutdown validation must reject it.
+        std::cout << "{\"type\":\"stopped\",\"schemaVersion\":10,"
+                     "\"reason\":\"session-stop\"}\n";
+        std::cout.flush();
+        std::cerr << "[helper] session: emitted malformed stopped "
+                     "(reason=synthetic-session-malformed-stopped)\n";
+        return 0;
       }
       writeStoppingLine(std::cout, "session-stop");
       std::cout.flush();
@@ -826,6 +881,15 @@ int runSyntheticHelperSession(const HelperOptions &options) {
         std::cerr << "unsafe-synthetic-session-diagnostic: "
                      "modeled-policy-violation "
                      "(reason=synthetic-session-unsafe-stderr)\n";
+      }
+      if (options.sessionUnterminatedUnsafeStderr) {
+        // An unsafe stderr line WITHOUT a trailing newline, followed by exit, so
+        // the parent must validate the unterminated residual at EOF and fail
+        // closed. Benign synthetic marker only.
+        std::cerr << "unsafe-synthetic-session-unterminated: "
+                     "modeled-policy-violation";
+        std::cerr.flush();
+        return 0;
       }
       if (options.sessionExitOnRequest) {
         std::cerr << "[helper] session: exiting on request "

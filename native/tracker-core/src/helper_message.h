@@ -41,6 +41,25 @@ enum class HelperLineType {
   Unknown,
 };
 
+// Result of scanning a bounded newline-delimited line out of an accumulation
+// buffer. Oversized is reported as soon as the un-terminated run exceeds
+// kHelperMaxLineBytes (i.e. during accumulation, before any newline arrives),
+// so a pathological unterminated line can never grow a read buffer without
+// bound.
+enum class HelperLineScan {
+  Line,
+  NeedMore,
+  Oversized,
+};
+
+// Extracts one bounded line (content only, trailing "\r" stripped) from the
+// front of `buffer`, erasing it through the newline. Returns:
+//   - Line: a complete line no longer than kHelperMaxLineBytes was extracted;
+//   - NeedMore: no newline yet and the buffered run is within the bound;
+//   - Oversized: the line content exceeds kHelperMaxLineBytes (whether or not a
+//     newline has arrived) -- caller must reject and stop reading.
+HelperLineScan scanBoundedLine(std::string& buffer, std::string& lineOut);
+
 // Transport-level result envelope for the session request/result exchange. The
 // requestId correlates a result with the outstanding request; requestId and
 // frameTimestampMs are helper-IPC-internal transport concerns and never enter

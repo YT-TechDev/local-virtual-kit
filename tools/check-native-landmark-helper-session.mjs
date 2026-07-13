@@ -123,9 +123,18 @@ const inRange = (value, lo, hi) =>
   value >= lo &&
   value <= hi;
 
+const SHUTDOWN_INCOMPLETE = "[helper-session] shutdown incomplete";
+
 // Validates exactly `expectedCount` native MotionFrame lines, their value
-// ranges, and (optionally) tracking status, plus public-stream cleanliness.
-function assertMotionFrames(result, expectedCount, label, { status } = {}) {
+// ranges, and (optionally) tracking status, plus public-stream cleanliness. When
+// `shutdownIncomplete` is set, a generic incomplete-shutdown diagnostic must be
+// present on stderr; otherwise it must be absent.
+function assertMotionFrames(
+  result,
+  expectedCount,
+  label,
+  { status, shutdownIncomplete } = {},
+) {
   if (result.error) {
     fail(`${label}: could not run tracker: ${result.error.message}`, result);
   }
@@ -179,6 +188,13 @@ function assertMotionFrames(result, expectedCount, label, { status } = {}) {
     }
   });
   assertStreamsClean(result, label);
+  const stderr = result.stderr ?? "";
+  if (shutdownIncomplete && !stderr.includes(SHUTDOWN_INCOMPLETE)) {
+    fail(`${label}: expected a generic incomplete-shutdown diagnostic`, result);
+  }
+  if (!shutdownIncomplete && stderr.includes(SHUTDOWN_INCOMPLETE)) {
+    fail(`${label}: unexpected incomplete-shutdown diagnostic`, result);
+  }
 }
 
 function assertFailClosedNoStdout(result, label, expectedStderr) {
@@ -351,17 +367,62 @@ assertMotionFrames(
   "lifecycle child-exit",
   { status: "lost" },
 );
-// Ignore-stop: normal results, then a bounded forced termination at shutdown.
+// Helper exits after ready, before/at the first request write: the tracker must
+// stay alive and fail closed to safe lost tracking (POSIX SIGPIPE-safe write).
+assertMotionFrames(
+  runTracker(
+    backendArgs([
+      "--helper-arg",
+      "--session-exit-after-ready",
+      "--frames",
+      "3",
+    ]),
+  ),
+  3,
+  "lifecycle exit-after-ready",
+  { status: "lost" },
+);
+// Ignore-stop: normal results, then a bounded forced termination at shutdown,
+// surfaced only as a generic incomplete-shutdown diagnostic.
 assertMotionFrames(
   runTracker(
     backendArgs(["--helper-arg", "--session-ignore-stop", "--frames", "2"]),
   ),
   2,
   "lifecycle forced-shutdown",
-  { status: "tracking" },
+  { status: "tracking", shutdownIncomplete: true },
 );
 console.log(
   "Lifecycle guard OK: launch/ready failures fail closed before camera; runtime failures return safe lost tracking; forced shutdown is bounded.",
+);
+
+// --- Strict shutdown validation --------------------------------------------
+// A healthy session that receives no strictly-valid stopped line (missing or
+// malformed) still completes with correct frames, but reports a generic
+// incomplete-shutdown diagnostic and never leaks raw child output.
+assertMotionFrames(
+  runTracker(
+    backendArgs(["--helper-arg", "--session-missing-stopped", "--frames", "2"]),
+  ),
+  2,
+  "shutdown missing-stopped",
+  { status: "tracking", shutdownIncomplete: true },
+);
+assertMotionFrames(
+  runTracker(
+    backendArgs([
+      "--helper-arg",
+      "--session-malformed-stopped",
+      "--frames",
+      "2",
+    ]),
+  ),
+  2,
+  "shutdown malformed-stopped",
+  { status: "tracking", shutdownIncomplete: true },
+);
+console.log(
+  "Shutdown guard OK: missing/malformed stopped lines are treated as incomplete shutdown with generic diagnostics and no leaked output.",
 );
 
 // --- Message failures: each returns safe lost tracking, streams stay clean ---
@@ -370,8 +431,13 @@ for (const [faultFlag, label] of [
   ["--session-unknown-result", "message unknown-type"],
   ["--session-oversized-result", "message oversized-line"],
   ["--session-nonfinite-result", "message non-finite"],
-  ["--session-stale-request-id", "message stale-correlation"],
+  ["--session-stale-request-id", "message stale-request-id"],
+  ["--session-stale-timestamp", "message stale-timestamp"],
   ["--session-unsafe-stderr", "message unsafe-stderr"],
+  [
+    "--session-unterminated-unsafe-stderr",
+    "message unterminated-unsafe-stderr",
+  ],
 ]) {
   assertMotionFrames(
     runTracker(backendArgs(["--helper-arg", faultFlag, "--frames", "3"])),

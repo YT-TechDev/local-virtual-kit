@@ -191,6 +191,47 @@ int main() {
         "valid stopped line accepted");
   }
 
+  // --- Bounded line-framing boundaries (scanBoundedLine). ---
+  using lvk::tracker::HelperLineScan;
+  using lvk::tracker::kHelperMaxLineBytes;
+  using lvk::tracker::scanBoundedLine;
+  {
+    // Exactly kHelperMaxLineBytes of content plus a newline: accepted.
+    std::string buffer(kHelperMaxLineBytes, 'a');
+    buffer.push_back('\n');
+    std::string out;
+    const HelperLineScan scan = scanBoundedLine(buffer, out);
+    expect(scan == HelperLineScan::Line, "exact-limit line accepted");
+    expect(out.size() == kHelperMaxLineBytes, "exact-limit line length preserved");
+  }
+  {
+    // kHelperMaxLineBytes + 1 of content plus a newline: rejected.
+    std::string buffer(kHelperMaxLineBytes + 1, 'a');
+    buffer.push_back('\n');
+    std::string out;
+    expect(
+        scanBoundedLine(buffer, out) == HelperLineScan::Oversized,
+        "limit+1 terminated line rejected");
+  }
+  {
+    // Unterminated partial run larger than the limit: rejected during
+    // accumulation (before any newline arrives).
+    std::string buffer(kHelperMaxLineBytes + 1, 'a');
+    std::string out;
+    expect(
+        scanBoundedLine(buffer, out) == HelperLineScan::Oversized,
+        "unterminated over-limit run rejected during accumulation");
+  }
+  {
+    // Unterminated run exactly at the limit: still needs a newline, not yet
+    // oversized.
+    std::string buffer(kHelperMaxLineBytes, 'a');
+    std::string out;
+    expect(
+        scanBoundedLine(buffer, out) == HelperLineScan::NeedMore,
+        "unterminated at-limit run needs more");
+  }
+
   if (gFailures != 0) {
     std::cerr << "[helper-message-parse-smoke] " << gFailures
               << " assertion(s) failed.\n";

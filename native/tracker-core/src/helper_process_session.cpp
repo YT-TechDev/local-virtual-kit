@@ -41,11 +41,15 @@ std::string buildRequestLine(std::uint64_t requestId, long long frameTimestampMs
 // ===========================================================================
 // Platform layer: process launch, bounded pipe I/O, and cleanup. Each stream is
 // read non-blocking in a single bounded poll loop so neither the child nor
-// Native Core can block indefinitely.
+// Native Core can block indefinitely. Child handle/fd inheritance is restricted
+// to exactly the three stdio channels.
 // ===========================================================================
 
 #ifdef _WIN32
 
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -66,6 +70,16 @@ std::string quoteArgument(const std::string& value) {
   return "\"" + value + "\"";
 }
 
+void closeHandleOnce(HANDLE& handle) {
+  if (handle != nullptr && handle != INVALID_HANDLE_VALUE) {
+    CloseHandle(handle);
+  }
+  handle = nullptr;
+}
+
+// Launches the child with STARTUPINFOEX + PROC_THREAD_ATTRIBUTE_HANDLE_LIST so
+// ONLY the three intended stdio handles are inheritable. Every setup call is
+// checked and every partial-failure path closes exactly what it created.
 bool platformLaunch(
     HelperSessionHandles& handles,
     const std::string& executablePath,
@@ -82,33 +96,71 @@ bool platformLaunch(
   HANDLE stderrRead = nullptr;
   HANDLE stderrWrite = nullptr;
 
+  const auto closeAllPipes = [&]() {
+    closeHandleOnce(stdinRead);
+    closeHandleOnce(stdinWrite);
+    closeHandleOnce(stdoutRead);
+    closeHandleOnce(stdoutWrite);
+    closeHandleOnce(stderrRead);
+    closeHandleOnce(stderrWrite);
+  };
+
   if (!CreatePipe(&stdinRead, &stdinWrite, &securityAttributes, 0)) {
     return false;
   }
   if (!CreatePipe(&stdoutRead, &stdoutWrite, &securityAttributes, 0)) {
-    CloseHandle(stdinRead);
-    CloseHandle(stdinWrite);
+    closeAllPipes();
     return false;
   }
   if (!CreatePipe(&stderrRead, &stderrWrite, &securityAttributes, 0)) {
-    CloseHandle(stdinRead);
-    CloseHandle(stdinWrite);
-    CloseHandle(stdoutRead);
-    CloseHandle(stdoutWrite);
+    closeAllPipes();
     return false;
   }
 
-  // The parent's own ends must not be inherited by the child.
-  SetHandleInformation(stdinWrite, HANDLE_FLAG_INHERIT, 0);
-  SetHandleInformation(stdoutRead, HANDLE_FLAG_INHERIT, 0);
-  SetHandleInformation(stderrRead, HANDLE_FLAG_INHERIT, 0);
+  // The parent's own ends must not be inherited by the child; the child-side
+  // ends must be inheritable and are enumerated explicitly below.
+  if (!SetHandleInformation(stdinWrite, HANDLE_FLAG_INHERIT, 0) ||
+      !SetHandleInformation(stdoutRead, HANDLE_FLAG_INHERIT, 0) ||
+      !SetHandleInformation(stderrRead, HANDLE_FLAG_INHERIT, 0) ||
+      !SetHandleInformation(
+          stdinRead, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) ||
+      !SetHandleInformation(
+          stdoutWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) ||
+      !SetHandleInformation(
+          stderrWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) {
+    closeAllPipes();
+    return false;
+  }
 
-  STARTUPINFOA startupInfo{};
-  startupInfo.cb = sizeof(startupInfo);
-  startupInfo.dwFlags = STARTF_USESTDHANDLES;
-  startupInfo.hStdInput = stdinRead;
-  startupInfo.hStdOutput = stdoutWrite;
-  startupInfo.hStdError = stderrWrite;
+  // Build a proc-thread attribute list restricting inheritance to exactly the
+  // three child stdio handles.
+  SIZE_T attributeListSize = 0;
+  InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeListSize);
+  std::vector<char> attributeListBuffer(attributeListSize);
+  auto* attributeList =
+      reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeListBuffer.data());
+  if (!InitializeProcThreadAttributeList(
+          attributeList, 1, 0, &attributeListSize)) {
+    closeAllPipes();
+    return false;
+  }
+
+  HANDLE inheritedHandles[3] = {stdinRead, stdoutWrite, stderrWrite};
+  if (!UpdateProcThreadAttribute(
+          attributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles,
+          sizeof(inheritedHandles), nullptr, nullptr)) {
+    DeleteProcThreadAttributeList(attributeList);
+    closeAllPipes();
+    return false;
+  }
+
+  STARTUPINFOEXA startupInfo{};
+  startupInfo.StartupInfo.cb = sizeof(STARTUPINFOEXA);
+  startupInfo.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  startupInfo.StartupInfo.hStdInput = stdinRead;
+  startupInfo.StartupInfo.hStdOutput = stdoutWrite;
+  startupInfo.StartupInfo.hStdError = stderrWrite;
+  startupInfo.lpAttributeList = attributeList;
 
   std::string commandLine = quoteArgument(executablePath);
   for (const std::string& argument : arguments) {
@@ -120,18 +172,21 @@ bool platformLaunch(
 
   PROCESS_INFORMATION processInfo{};
   const BOOL launched = CreateProcessA(
-      nullptr, commandLineBuffer.data(), nullptr, nullptr, TRUE, 0, nullptr,
-      nullptr, &startupInfo, &processInfo);
+      nullptr, commandLineBuffer.data(), nullptr, nullptr, TRUE,
+      EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr, &startupInfo.StartupInfo,
+      &processInfo);
+
+  DeleteProcThreadAttributeList(attributeList);
 
   // The child now owns its ends; the parent closes the child-side handles.
-  CloseHandle(stdinRead);
-  CloseHandle(stdoutWrite);
-  CloseHandle(stderrWrite);
+  closeHandleOnce(stdinRead);
+  closeHandleOnce(stdoutWrite);
+  closeHandleOnce(stderrWrite);
 
   if (!launched) {
-    CloseHandle(stdinWrite);
-    CloseHandle(stdoutRead);
-    CloseHandle(stderrRead);
+    closeHandleOnce(stdinWrite);
+    closeHandleOnce(stdoutRead);
+    closeHandleOnce(stderrRead);
     return false;
   }
 
@@ -223,26 +278,11 @@ void platformForceTerminate(HelperSessionHandles& handles) {
 }
 
 void platformClose(HelperSessionHandles& handles) {
-  if (handles.childStdinWrite != nullptr) {
-    CloseHandle(handles.childStdinWrite);
-    handles.childStdinWrite = nullptr;
-  }
-  if (handles.childStdoutRead != nullptr) {
-    CloseHandle(handles.childStdoutRead);
-    handles.childStdoutRead = nullptr;
-  }
-  if (handles.childStderrRead != nullptr) {
-    CloseHandle(handles.childStderrRead);
-    handles.childStderrRead = nullptr;
-  }
-  if (handles.process != nullptr) {
-    CloseHandle(handles.process);
-    handles.process = nullptr;
-  }
-  if (handles.thread != nullptr) {
-    CloseHandle(handles.thread);
-    handles.thread = nullptr;
-  }
+  closeHandleOnce(handles.childStdinWrite);
+  closeHandleOnce(handles.childStdoutRead);
+  closeHandleOnce(handles.childStderrRead);
+  closeHandleOnce(handles.process);
+  closeHandleOnce(handles.thread);
   handles.launched = false;
 }
 
@@ -279,51 +319,117 @@ void sleepMs(int milliseconds) {
   nanosleep(&request, nullptr);
 }
 
+void setCloexec(int fd) {
+  const int flags = fcntl(fd, F_GETFD, 0);
+  if (flags >= 0) {
+    fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+  }
+}
+
+void closeFdOnce(int& fd) {
+  if (fd >= 0) {
+    close(fd);
+    fd = -1;
+  }
+}
+
+// EINTR-safe blocking read of a single byte-count from an fd; returns bytes read
+// (0 on EOF, -1 on hard error).
+ssize_t readRetry(int fd, void* buffer, std::size_t length) {
+  while (true) {
+    const ssize_t result = read(fd, buffer, length);
+    if (result < 0 && errno == EINTR) {
+      continue;
+    }
+    return result;
+  }
+}
+
+// Reaps the child if it has exited. Returns true when the child was successfully
+// reaped or is already gone (ECHILD); false while still running or on a
+// transient/unknown error (pid ownership is NOT cleared on such errors).
+bool tryReap(pid_t& pid, bool block) {
+  if (pid < 0) {
+    return true;
+  }
+  while (true) {
+    int status = 0;
+    const pid_t result = waitpid(pid, &status, block ? 0 : WNOHANG);
+    if (result == pid) {
+      pid = -1;
+      return true;
+    }
+    if (result == 0) {
+      return false;  // WNOHANG: still running
+    }
+    // result < 0
+    if (errno == EINTR) {
+      continue;
+    }
+    if (errno == ECHILD) {
+      pid = -1;  // already reaped elsewhere / no such child
+      return true;
+    }
+    return false;  // other error: keep pid ownership, treat as not complete
+  }
+}
+
 bool platformLaunch(
     HelperSessionHandles& handles,
     const std::string& executablePath,
     const std::vector<std::string>& arguments) {
-  int stdinPipe[2];
-  int stdoutPipe[2];
-  int stderrPipe[2];
+  // Writing to a helper that has closed its stdin must yield EPIPE, never a
+  // process-terminating SIGPIPE. Set once, process-wide; idempotent.
+  static const bool ignoredSigpipe = []() {
+    signal(SIGPIPE, SIG_IGN);
+    return true;
+  }();
+  (void)ignoredSigpipe;
+
+  int stdinPipe[2] = {-1, -1};
+  int stdoutPipe[2] = {-1, -1};
+  int stderrPipe[2] = {-1, -1};
+  int execErrPipe[2] = {-1, -1};
+
+  const auto closeAll = [&]() {
+    closeFdOnce(stdinPipe[0]);
+    closeFdOnce(stdinPipe[1]);
+    closeFdOnce(stdoutPipe[0]);
+    closeFdOnce(stdoutPipe[1]);
+    closeFdOnce(stderrPipe[0]);
+    closeFdOnce(stderrPipe[1]);
+    closeFdOnce(execErrPipe[0]);
+    closeFdOnce(execErrPipe[1]);
+  };
+
   if (pipe(stdinPipe) != 0) {
     return false;
   }
-  if (pipe(stdoutPipe) != 0) {
-    close(stdinPipe[0]);
-    close(stdinPipe[1]);
+  if (pipe(stdoutPipe) != 0 || pipe(stderrPipe) != 0 ||
+      pipe(execErrPipe) != 0) {
+    closeAll();
     return false;
   }
-  if (pipe(stderrPipe) != 0) {
-    close(stdinPipe[0]);
-    close(stdinPipe[1]);
-    close(stdoutPipe[0]);
-    close(stdoutPipe[1]);
-    return false;
+
+  // All pipe fds are CLOEXEC so none leak across exec except the three stdio
+  // descriptors, which are re-established via dup2 (dup2 clears CLOEXEC on the
+  // new descriptor).
+  for (int fd : {stdinPipe[0], stdinPipe[1], stdoutPipe[0], stdoutPipe[1],
+                 stderrPipe[0], stderrPipe[1], execErrPipe[0], execErrPipe[1]}) {
+    setCloexec(fd);
   }
 
   const pid_t pid = fork();
   if (pid < 0) {
-    close(stdinPipe[0]);
-    close(stdinPipe[1]);
-    close(stdoutPipe[0]);
-    close(stdoutPipe[1]);
-    close(stderrPipe[0]);
-    close(stderrPipe[1]);
+    closeAll();
     return false;
   }
 
   if (pid == 0) {
-    // Child: wire pipe ends to std streams.
+    // Child: wire the three stdio ends, then exec. Only fds 0/1/2 survive.
     dup2(stdinPipe[0], STDIN_FILENO);
     dup2(stdoutPipe[1], STDOUT_FILENO);
     dup2(stderrPipe[1], STDERR_FILENO);
-    close(stdinPipe[0]);
-    close(stdinPipe[1]);
-    close(stdoutPipe[0]);
-    close(stdoutPipe[1]);
-    close(stderrPipe[0]);
-    close(stderrPipe[1]);
 
     std::vector<char*> argv;
     argv.push_back(const_cast<char*>(executablePath.c_str()));
@@ -333,13 +439,39 @@ bool platformLaunch(
     argv.push_back(nullptr);
 
     execv(executablePath.c_str(), argv.data());
-    _exit(127);  // exec failed
+
+    // exec failed: report errno to the parent through the CLOEXEC error pipe,
+    // then exit. On success this write never happens and the pipe closes on
+    // exec, which the parent observes as EOF.
+    const int execErrno = errno;
+    ssize_t ignored = write(execErrPipe[1], &execErrno, sizeof(execErrno));
+    (void)ignored;
+    _exit(127);
   }
 
-  // Parent: keep its own ends, close the child-side ends.
-  close(stdinPipe[0]);
-  close(stdoutPipe[1]);
-  close(stderrPipe[1]);
+  // Parent: close the child-side ends and the write end of the error pipe.
+  closeFdOnce(stdinPipe[0]);
+  closeFdOnce(stdoutPipe[1]);
+  closeFdOnce(stderrPipe[1]);
+  closeFdOnce(execErrPipe[1]);
+
+  // Determine whether exec succeeded: a successful exec closes execErrPipe[1]
+  // (CLOEXEC) with no data, so the parent reads EOF; a failed exec delivers the
+  // child's errno.
+  int childErrno = 0;
+  const ssize_t reported =
+      readRetry(execErrPipe[0], &childErrno, sizeof(childErrno));
+  closeFdOnce(execErrPipe[0]);
+
+  if (reported == static_cast<ssize_t>(sizeof(childErrno))) {
+    // exec failed in the child: reap it and report a clean launch failure.
+    pid_t deadChild = pid;
+    tryReap(deadChild, /*block=*/true);
+    closeFdOnce(stdinPipe[1]);
+    closeFdOnce(stdoutPipe[0]);
+    closeFdOnce(stderrPipe[0]);
+    return false;
+  }
 
   handles.stdinWrite = stdinPipe[1];
   handles.stdoutRead = stdoutPipe[0];
@@ -363,7 +495,7 @@ bool platformWriteAll(
     } else if (chunk < 0 && (errno == EINTR || errno == EAGAIN)) {
       continue;
     } else {
-      return false;  // includes EPIPE
+      return false;  // includes EPIPE (helper closed its stdin)
     }
   }
   return true;
@@ -425,16 +557,12 @@ bool platformWaitExit(HelperSessionHandles& handles, int timeoutMs) {
   if (handles.pid < 0) {
     return true;
   }
-  const long long deadline = static_cast<long long>(timeoutMs);
   long long waited = 0;
   while (true) {
-    int status = 0;
-    const pid_t result = waitpid(handles.pid, &status, WNOHANG);
-    if (result == handles.pid || result < 0) {
-      handles.pid = -1;
-      return true;
+    if (tryReap(handles.pid, /*block=*/false)) {
+      return handles.pid < 0;  // true only if actually reaped / ECHILD
     }
-    if (timeoutMs >= 0 && waited >= deadline) {
+    if (timeoutMs >= 0 && waited >= timeoutMs) {
       return false;
     }
     sleepMs(2);
@@ -447,24 +575,15 @@ void platformForceTerminate(HelperSessionHandles& handles) {
     return;
   }
   kill(handles.pid, SIGKILL);
-  int status = 0;
-  waitpid(handles.pid, &status, 0);
+  // SIGKILL cannot be caught, so a bounded blocking reap terminates promptly.
+  tryReap(handles.pid, /*block=*/true);
   handles.pid = -1;
 }
 
 void platformClose(HelperSessionHandles& handles) {
-  if (handles.stdinWrite >= 0) {
-    close(handles.stdinWrite);
-    handles.stdinWrite = -1;
-  }
-  if (handles.stdoutRead >= 0) {
-    close(handles.stdoutRead);
-    handles.stdoutRead = -1;
-  }
-  if (handles.stderrRead >= 0) {
-    close(handles.stderrRead);
-    handles.stderrRead = -1;
-  }
+  closeFdOnce(handles.stdinWrite);
+  closeFdOnce(handles.stdoutRead);
+  closeFdOnce(handles.stderrRead);
   handles.launched = false;
 }
 
@@ -513,39 +632,35 @@ HelperProcessSession::~HelperProcessSession() {
   }
 }
 
-HelperProcessSession::LineScan HelperProcessSession::scanLine(
-    std::string& buffer, std::string& lineOut) {
-  const std::size_t newline = buffer.find('\n');
-  if (newline == std::string::npos) {
-    // Enforce the bound WHILE accumulating: a partial line already exceeding the
-    // limit is rejected before any newline arrives.
-    if (buffer.size() > kHelperMaxLineBytes) {
-      return LineScan::Oversized;
-    }
-    return LineScan::NeedMore;
-  }
-  if (newline > kHelperMaxLineBytes) {
-    return LineScan::Oversized;
-  }
-  lineOut.assign(buffer, 0, newline);
-  if (!lineOut.empty() && lineOut.back() == '\r') {
-    lineOut.pop_back();
-  }
-  buffer.erase(0, newline + 1);
-  return LineScan::Line;
-}
-
 bool HelperProcessSession::drainStderr() {
   // Continuously validate captured child stderr: bounded line size and the safe
   // "[helper] " diagnostic prefix. No raw diagnostic content is retained (only a
   // count), and nothing is ever forwarded. Unsafe/oversized stderr fails closed.
   while (true) {
     std::string line;
-    const LineScan scan = scanLine(stderrBuffer_, line);
-    if (scan == LineScan::Oversized) {
+    const HelperLineScan scan = scanBoundedLine(stderrBuffer_, line);
+    if (scan == HelperLineScan::Oversized) {
       return false;
     }
-    if (scan == LineScan::NeedMore) {
+    if (scan == HelperLineScan::NeedMore) {
+      // At EOF, validate any unterminated residual as the final line so an
+      // unsafe partial stderr line cannot slip through unvalidated.
+      if (stderrEof_ && !stderrBuffer_.empty()) {
+        std::string residual;
+        residual.swap(stderrBuffer_);
+        if (residual.size() > kHelperMaxLineBytes) {
+          return false;
+        }
+        if (!residual.empty() && residual.back() == '\r') {
+          residual.pop_back();
+        }
+        if (!residual.empty() && residual.rfind("[helper] ", 0) != 0) {
+          return false;  // unterminated unsafe diagnostic -> fail closed
+        }
+        if (!residual.empty()) {
+          ++stderrDiagnosticCount_;
+        }
+      }
       return true;
     }
     if (line.empty()) {
@@ -569,16 +684,19 @@ bool HelperProcessSession::nextStdoutLine(
       return false;
     }
 
-    const LineScan scan = scanLine(stdoutBuffer_, lineOut);
-    if (scan == LineScan::Oversized) {
+    const HelperLineScan scan = scanBoundedLine(stdoutBuffer_, lineOut);
+    if (scan == HelperLineScan::Oversized) {
       lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
       return false;
     }
-    if (scan == LineScan::Line) {
+    if (scan == HelperLineScan::Line) {
       return true;
     }
 
     if (stdoutEof_) {
+      // EOF with an unterminated partial stdout line is malformed framing; a
+      // clean exit with no pending line is a child exit. Either way, reject the
+      // read (fail closed) without emitting the residual.
       lastDiagnostic_ = HelperDiagnosticCategory::ChildExit;
       return false;
     }
@@ -595,29 +713,36 @@ bool HelperProcessSession::nextStdoutLine(
   }
 }
 
-void HelperProcessSession::drainUntilStopped(int timeoutMs) {
+HelperProcessSession::ShutdownOutcome HelperProcessSession::drainUntilStopped(
+    int timeoutMs) {
   const long long deadline = nowMs() + timeoutMs;
   while (true) {
     if (!drainStderr()) {
-      return;  // unsafe stderr during shutdown: stop draining, forced path follows
+      return ShutdownOutcome::Malformed;  // unsafe/oversized stderr in shutdown
     }
     std::string line;
-    const LineScan scan = scanLine(stdoutBuffer_, line);
-    if (scan == LineScan::Oversized) {
-      return;
+    const HelperLineScan scan = scanBoundedLine(stdoutBuffer_, line);
+    if (scan == HelperLineScan::Oversized) {
+      return ShutdownOutcome::Malformed;
     }
-    if (scan == LineScan::Line) {
-      if (classifyHelperLine(line) == HelperLineType::Stopped) {
-        return;
+    if (scan == HelperLineScan::Line) {
+      std::string reason;
+      if (parseHelperStoppedLine(line, reason)) {
+        return ShutdownOutcome::StoppedCleanly;
       }
-      continue;
+      // A valid "stopping" line may precede "stopped"; anything else during
+      // shutdown is a malformed lifecycle line.
+      if (classifyHelperLine(line) == HelperLineType::Stopping) {
+        continue;
+      }
+      return ShutdownOutcome::Malformed;
     }
     if (stdoutEof_) {
-      return;
+      return ShutdownOutcome::ChildExit;  // EOF before a valid "stopped" line
     }
     const long long remaining = deadline - nowMs();
     if (remaining <= 0) {
-      return;
+      return ShutdownOutcome::Timeout;
     }
     platformPump(
         *handles_, static_cast<int>(remaining), stdoutBuffer_, stdoutEof_,
@@ -707,8 +832,11 @@ HelperTrackOutcome HelperProcessSession::track(long long frameTimestampMs) {
     state_ = HelperSessionState::Failed;
     return outcome;
   }
-  if (parsed.requestId != requestId) {
-    // Stale / mismatched correlation: reject, do not reuse.
+  // Full correlation: both the request id and the parent frame timestamp must
+  // match the outstanding request. A stale/mismatched result is rejected and
+  // never becomes MotionFrame output.
+  if (parsed.requestId != requestId ||
+      parsed.frameTimestampMs != frameTimestampMs) {
     lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
     state_ = HelperSessionState::Failed;
     return outcome;
@@ -724,23 +852,57 @@ void HelperProcessSession::stop() {
     return;
   }
 
+  HelperDiagnosticCategory shutdownCategory = HelperDiagnosticCategory::None;
+  bool enteredStopping = false;
+
   if (handles_ && handles_->launched) {
+    bool validStopped = false;
     if (state_ == HelperSessionState::Ready ||
         state_ == HelperSessionState::Running) {
+      enteredStopping = true;
       state_ = HelperSessionState::Stopping;
       if (writeControlLine("{\"type\":\"stop\",\"schemaVersion\":1}\n")) {
-        drainUntilStopped(config_.stopTimeoutMs);
+        switch (drainUntilStopped(config_.stopTimeoutMs)) {
+          case ShutdownOutcome::StoppedCleanly:
+            validStopped = true;
+            break;
+          case ShutdownOutcome::Malformed:
+            shutdownCategory = HelperDiagnosticCategory::MalformedMessage;
+            break;
+          case ShutdownOutcome::ChildExit:
+            shutdownCategory = HelperDiagnosticCategory::ChildExit;
+            break;
+          case ShutdownOutcome::Timeout:
+            shutdownCategory = HelperDiagnosticCategory::ShutdownTimeout;
+            break;
+        }
+      } else {
+        shutdownCategory = HelperDiagnosticCategory::ChildExit;
       }
     }
 
-    if (!platformWaitExit(*handles_, config_.stopTimeoutMs)) {
+    const bool exited = platformWaitExit(*handles_, config_.stopTimeoutMs);
+    if (!exited) {
       platformForceTerminate(*handles_);
-      lastDiagnostic_ = HelperDiagnosticCategory::ShutdownTimeout;
+      shutdownCategory = HelperDiagnosticCategory::ShutdownTimeout;
     }
     platformClose(*handles_);
+
+    // A clean graceful stop requires a strictly valid "stopped" line AND a
+    // bounded child exit. Anything else on a session that reached Ready/Running
+    // is reported as a generic incomplete-shutdown category.
+    if (enteredStopping) {
+      if (validStopped && exited) {
+        shutdownCategory = HelperDiagnosticCategory::None;
+      } else if (shutdownCategory == HelperDiagnosticCategory::None) {
+        shutdownCategory = HelperDiagnosticCategory::ShutdownTimeout;
+      }
+    }
   }
 
   cleaned_ = true;
+  shutdownDiagnostic_ =
+      enteredStopping ? shutdownCategory : HelperDiagnosticCategory::None;
   if (state_ != HelperSessionState::Failed) {
     state_ = HelperSessionState::Stopped;
   }

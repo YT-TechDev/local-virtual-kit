@@ -419,6 +419,27 @@ bool parseStatus(const std::string& text, HelperTrackingStatus& status) {
 
 }  // namespace
 
+HelperLineScan scanBoundedLine(std::string& buffer, std::string& lineOut) {
+  const std::size_t newline = buffer.find('\n');
+  if (newline == std::string::npos) {
+    // Enforce the bound WHILE accumulating: a partial line already exceeding the
+    // limit is rejected before any newline arrives.
+    if (buffer.size() > kHelperMaxLineBytes) {
+      return HelperLineScan::Oversized;
+    }
+    return HelperLineScan::NeedMore;
+  }
+  if (newline > kHelperMaxLineBytes) {
+    return HelperLineScan::Oversized;
+  }
+  lineOut.assign(buffer, 0, newline);
+  if (!lineOut.empty() && lineOut.back() == '\r') {
+    lineOut.pop_back();
+  }
+  buffer.erase(0, newline + 1);
+  return HelperLineScan::Line;
+}
+
 HelperLineType classifyHelperLine(const std::string& line) {
   JsonValue root;
   std::string reason;

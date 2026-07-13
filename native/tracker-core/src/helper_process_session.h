@@ -99,22 +99,36 @@ class HelperProcessSession {
   HelperSessionState state() const { return state_; }
   HelperDiagnosticCategory lastDiagnostic() const { return lastDiagnostic_; }
 
- private:
-  enum class LineScan { Line, NeedMore, Oversized };
+  // Set by stop() when a session that reached Ready/Running did not shut down
+  // cleanly (no strictly-valid stopped line and/or the child did not exit within
+  // the bounded wait). None means either a clean graceful stop or a session that
+  // never became healthy. Only a generic category is exposed.
+  HelperDiagnosticCategory shutdownDiagnostic() const {
+    return shutdownDiagnostic_;
+  }
 
-  static LineScan scanLine(std::string& buffer, std::string& lineOut);
+ private:
+  // Structured outcome of the bounded graceful-stop drain.
+  enum class ShutdownOutcome {
+    StoppedCleanly,  // a strictly valid "stopped" line was observed
+    Malformed,       // malformed/oversized lifecycle line or unsafe stderr
+    ChildExit,       // stdout EOF before any valid "stopped" line
+    Timeout,         // bounded drain elapsed without a valid "stopped" line
+  };
+
   bool nextStdoutLine(
       std::string& lineOut,
       int timeoutMs,
       HelperDiagnosticCategory timeoutCategory);
   bool drainStderr();
-  void drainUntilStopped(int timeoutMs);
+  ShutdownOutcome drainUntilStopped(int timeoutMs);
   bool writeControlLine(const std::string& line);
 
   HelperSessionConfig config_;
   std::unique_ptr<HelperSessionHandles> handles_;
   HelperSessionState state_ = HelperSessionState::NotStarted;
   HelperDiagnosticCategory lastDiagnostic_ = HelperDiagnosticCategory::None;
+  HelperDiagnosticCategory shutdownDiagnostic_ = HelperDiagnosticCategory::None;
   std::string stdoutBuffer_;
   std::string stderrBuffer_;
   bool stdoutEof_ = false;
