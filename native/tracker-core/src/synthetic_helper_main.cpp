@@ -36,6 +36,33 @@ constexpr long long kSyntheticTimestampStepMs = 33; // ~30 synthetic fps
 // (not multi-MB) so the test stays deterministic and memory-safe.
 constexpr int kSyntheticOversizedFillerBytes = 2048;
 
+// v0.13.0 (#533): interactive session-mode padding for the oversized session
+// result fixture. Strictly greater than the session's kHelperMaxLineBytes bound
+// (2048) so the padded result line is genuinely rejected by the session's
+// bounded line reader. Kept file-local to avoid a header dependency here.
+constexpr int kSessionOversizedFillerBytes = 2200;
+
+// v0.13.0 (#533): deterministic adapter value patterns for interactive session
+// results, cycling by request index so the session parse-and-clamp mapping is
+// exercised through the real request/result channel. Mirrors the batch adapter
+// patterns: in-range, out-of-range (clamped by the mapper), and exact-boundary.
+struct SessionAdapterPattern {
+  double confidence;
+  double pitch;
+  double yaw;
+  double roll;
+  double leftOpen;
+  double rightOpen;
+  double mouthOpen;
+  double mouthSmile;
+};
+
+constexpr SessionAdapterPattern kSessionAdapterPatterns[3] = {
+    {0.82, 0.30, -0.25, 0.10, 0.75, 0.65, 0.40, 0.55},
+    {1.75, 4.20, -3.50, 2.00, 1.50, -0.50, 2.00, -1.00},
+    {1.00, -1.00, 1.00, 0.00, 0.00, 1.00, 1.00, 0.00},
+};
+
 struct HelperOptions {
   int frameCount = kDefaultFrameCount;
   int intervalMs = kDefaultIntervalMs;
@@ -53,6 +80,27 @@ struct HelperOptions {
   bool emitMalformedResultSchema = false;
   bool emitMalformedStoppedSchema = false;
   bool emitAdapterValues = false;
+  // v0.13.0 (#533): interactive session mode and its deterministic fault modes.
+  // Session mode reads real parent control lines from stdin and emits one result
+  // envelope per request; all fields default off so batch/smoke behavior is
+  // unchanged.
+  bool sessionMode = false;
+  bool sessionSkipReady = false;
+  bool sessionExitBeforeReady = false;
+  bool sessionExitAfterReady = false;
+  bool sessionHangResult = false;
+  bool sessionExitOnRequest = false;
+  bool sessionMalformedResult = false;
+  bool sessionUnknownResult = false;
+  bool sessionOversizedResult = false;
+  bool sessionNonfiniteResult = false;
+  bool sessionStaleRequestId = false;
+  bool sessionStaleTimestamp = false;
+  bool sessionUnsafeStderr = false;
+  bool sessionUnterminatedUnsafeStderr = false;
+  bool sessionIgnoreStop = false;
+  bool sessionMissingStopped = false;
+  bool sessionMalformedStopped = false;
 };
 
 bool parseIntInRange(
@@ -192,6 +240,21 @@ void printUsage(std::ostream &output) {
   output << "--fail-after N is a test-only mode that simulates a helper failure "
             "after emitting N synthetic result frames. N must be between 0 and "
          << kMaxFrameCount << ".\n";
+  output << "--session runs the interactive session mode (v0.13.0, #533): the "
+            "helper emits a \"ready\" line, then one \"result\" envelope per "
+            "parent \"request\" control line read from stdin (echoing requestId "
+            "and frameTimestampMs), and a \"stopping\"/\"stopped\" pair on a "
+            "parent \"stop\" request or stdin EOF. It stays synthetic only and "
+            "never emits MotionFrame. The --session-* flags "
+            "(--session-skip-ready, --session-exit-before-ready, "
+            "--session-exit-after-ready, --session-hang-result, "
+            "--session-exit-on-request, --session-malformed-result, "
+            "--session-unknown-result, --session-oversized-result, "
+            "--session-nonfinite-result, --session-stale-request-id, "
+            "--session-stale-timestamp, --session-unsafe-stderr, "
+            "--session-unterminated-unsafe-stderr, --session-ignore-stop, "
+            "--session-missing-stopped, --session-malformed-stopped) are "
+            "deterministic test-only session fault modes.\n";
   output << "This helper is synthetic only: it does not access a camera, files, "
             "models, sockets, or raw frames, and it does not emit MotionFrame.\n";
 }
@@ -318,6 +381,75 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
 
     if (argument == "--emit-adapter-values") {
       options.emitAdapterValues = true;
+      continue;
+    }
+
+    if (argument == "--session") {
+      options.sessionMode = true;
+      continue;
+    }
+    if (argument == "--session-skip-ready") {
+      options.sessionSkipReady = true;
+      continue;
+    }
+    if (argument == "--session-exit-before-ready") {
+      options.sessionExitBeforeReady = true;
+      continue;
+    }
+    if (argument == "--session-exit-after-ready") {
+      options.sessionExitAfterReady = true;
+      continue;
+    }
+    if (argument == "--session-hang-result") {
+      options.sessionHangResult = true;
+      continue;
+    }
+    if (argument == "--session-exit-on-request") {
+      options.sessionExitOnRequest = true;
+      continue;
+    }
+    if (argument == "--session-malformed-result") {
+      options.sessionMalformedResult = true;
+      continue;
+    }
+    if (argument == "--session-unknown-result") {
+      options.sessionUnknownResult = true;
+      continue;
+    }
+    if (argument == "--session-oversized-result") {
+      options.sessionOversizedResult = true;
+      continue;
+    }
+    if (argument == "--session-nonfinite-result") {
+      options.sessionNonfiniteResult = true;
+      continue;
+    }
+    if (argument == "--session-stale-request-id") {
+      options.sessionStaleRequestId = true;
+      continue;
+    }
+    if (argument == "--session-stale-timestamp") {
+      options.sessionStaleTimestamp = true;
+      continue;
+    }
+    if (argument == "--session-unsafe-stderr") {
+      options.sessionUnsafeStderr = true;
+      continue;
+    }
+    if (argument == "--session-unterminated-unsafe-stderr") {
+      options.sessionUnterminatedUnsafeStderr = true;
+      continue;
+    }
+    if (argument == "--session-ignore-stop") {
+      options.sessionIgnoreStop = true;
+      continue;
+    }
+    if (argument == "--session-missing-stopped") {
+      options.sessionMissingStopped = true;
+      continue;
+    }
+    if (argument == "--session-malformed-stopped") {
+      options.sessionMalformedStopped = true;
       continue;
     }
 
@@ -578,6 +710,216 @@ void writeMalformedStoppedSchemaLine(
          << "\"reason\":\"" << reason << "\"}\n";
 }
 
+// v0.13.0 (#533): interactive session helpers. -------------------------------
+
+// True when a parent control line carries the given "type". The parent writes
+// compact single-line JSON control messages; a substring match is sufficient
+// for this synthetic test tool (Native Core owns the strict parser).
+bool sessionControlIsType(const std::string &line, const char *type) {
+  return line.find(std::string("\"type\":\"") + type + "\"") !=
+         std::string::npos;
+}
+
+long long sessionExtractLong(
+    const std::string &line, const char *key, long long fallback) {
+  const std::string token = std::string("\"") + key + "\":";
+  const std::size_t position = line.find(token);
+  if (position == std::string::npos) {
+    return fallback;
+  }
+  return std::strtoll(line.c_str() + position + token.size(), nullptr, 10);
+}
+
+// Emits one session "result" envelope (or a requested fault variant) echoing the
+// parent's requestId and frameTimestampMs. It is intentionally NOT a MotionFrame
+// and carries no raw data, paths, secrets, pixels, tensors, or model contents.
+void writeSessionResult(
+    std::ostream &output,
+    const HelperOptions &options,
+    long long requestId,
+    long long frameTimestampMs,
+    long long requestIndex) {
+  if (options.sessionMalformedResult) {
+    output << "{\"type\":\"result\",\"schemaVersion\":1,\"requestId\":"
+           << requestId << " this-is-not-valid-session-json\n";
+    return;
+  }
+  if (options.sessionUnknownResult) {
+    output << "{\"type\":\"telemetry\",\"schemaVersion\":1,\"requestId\":"
+           << requestId << "}\n";
+    return;
+  }
+
+  const long long emittedRequestId =
+      options.sessionStaleRequestId ? requestId + 1 : requestId;
+  const long long emittedFrameTimestampMs =
+      options.sessionStaleTimestamp ? frameTimestampMs + 1 : frameTimestampMs;
+  const SessionAdapterPattern &pattern =
+      kSessionAdapterPatterns[requestIndex % 3];
+
+  output << std::fixed << std::setprecision(6);
+  output << "{"
+         << "\"type\":\"result\","
+         << "\"schemaVersion\":1,"
+         << "\"requestId\":" << emittedRequestId << ","
+         << "\"frameTimestampMs\":" << emittedFrameTimestampMs << ","
+         << "\"status\":\"tracking\","
+         << "\"confidence\":";
+  if (options.sessionNonfiniteResult) {
+    // A finite JSON number token that parses to a non-finite double; Native Core
+    // must reject the result rather than neutralize it.
+    output << "1e400";
+  } else {
+    output << pattern.confidence;
+  }
+  output << ","
+         << "\"faceRotation\":{"
+         << "\"pitch\":" << pattern.pitch << ","
+         << "\"yaw\":" << pattern.yaw << ","
+         << "\"roll\":" << pattern.roll << "},"
+         << "\"eyes\":{"
+         << "\"leftOpen\":" << pattern.leftOpen << ","
+         << "\"rightOpen\":" << pattern.rightOpen << "},"
+         << "\"mouth\":{"
+         << "\"open\":" << pattern.mouthOpen << ","
+         << "\"smile\":" << pattern.mouthSmile << "},"
+         << "\"diag\":{\"inferenceMs\":" << 0.0 << "}";
+  if (options.sessionOversizedResult) {
+    output << ",\"pad\":\"";
+    for (int fillerIndex = 0; fillerIndex < kSessionOversizedFillerBytes;
+         ++fillerIndex) {
+      output << 'x';
+    }
+    output << "\"";
+  }
+  output << "}\n";
+}
+
+// Runs the interactive session: emit ready, then one result envelope per parent
+// request, until a parent stop request or stdin EOF. stdout is flushed after
+// every protocol line so the parent's bounded reads observe them promptly. All
+// stderr uses the safe "[helper] " diagnostic prefix.
+int runSyntheticHelperSession(const HelperOptions &options) {
+  std::cerr << "[helper] session: starting (source=synthetic-helper)\n";
+
+  if (options.sessionExitBeforeReady) {
+    std::cerr << "[helper] session: exiting before ready "
+                 "(reason=synthetic-session-exit-before-ready)\n";
+    return 1;
+  }
+
+  if (options.sessionSkipReady) {
+    std::cerr << "[helper] session: skipping ready "
+                 "(reason=synthetic-session-skip-ready)\n";
+  } else {
+    writeReadyLine(std::cout);
+    std::cout.flush();
+  }
+
+  if (options.sessionExitAfterReady) {
+    // Exit cleanly right after ready, before reading any request. Models a
+    // helper that dies after the handshake but before/at the first request
+    // write; the parent must stay alive and fail closed.
+    std::cerr << "[helper] session: exiting after ready "
+                 "(reason=synthetic-session-exit-after-ready)\n";
+    return 0;
+  }
+
+  long long requestIndex = 0;
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    if (line.empty()) {
+      continue;
+    }
+
+    if (sessionControlIsType(line, "stop")) {
+      if (options.sessionIgnoreStop) {
+        // Model a stop that never completes so the parent's bounded shutdown
+        // wait fires and it force-terminates the child.
+        std::cerr << "[helper] session: ignoring stop "
+                     "(reason=synthetic-session-ignore-stop)\n";
+        continue;
+      }
+      if (options.sessionMissingStopped) {
+        // Exit cleanly on stop without emitting the "stopped" boundary; the
+        // parent must treat this as an incomplete shutdown.
+        std::cerr << "[helper] session: exiting without stopped "
+                     "(reason=synthetic-session-missing-stopped)\n";
+        return 0;
+      }
+      if (options.sessionMalformedStopped) {
+        // Emit a "stopped" line with an invalid schemaVersion; the parent's
+        // strict shutdown validation must reject it.
+        std::cout << "{\"type\":\"stopped\",\"schemaVersion\":10,"
+                     "\"reason\":\"session-stop\"}\n";
+        std::cout.flush();
+        std::cerr << "[helper] session: emitted malformed stopped "
+                     "(reason=synthetic-session-malformed-stopped)\n";
+        return 0;
+      }
+      writeStoppingLine(std::cout, "session-stop");
+      std::cout.flush();
+      writeStoppedLine(std::cout, "session-stop");
+      std::cout.flush();
+      std::cerr << "[helper] session: stopped (reason=session-stop)\n";
+      return 0;
+    }
+
+    if (sessionControlIsType(line, "request")) {
+      const long long requestId = sessionExtractLong(line, "requestId", 0);
+      const long long frameTimestampMs =
+          sessionExtractLong(line, "frameTimestampMs", 0);
+
+      if (options.sessionUnsafeStderr) {
+        // Emitted on the request path (not at ready) so Native Core reliably
+        // observes it during a track() exchange and fails closed. It
+        // intentionally omits the safe "[helper] " prefix. Benign synthetic
+        // marker only: no raw data, paths, or secrets.
+        std::cerr << "unsafe-synthetic-session-diagnostic: "
+                     "modeled-policy-violation "
+                     "(reason=synthetic-session-unsafe-stderr)\n";
+      }
+      if (options.sessionUnterminatedUnsafeStderr) {
+        // An unsafe stderr line WITHOUT a trailing newline, followed by exit, so
+        // the parent must validate the unterminated residual at EOF and fail
+        // closed. Benign synthetic marker only.
+        std::cerr << "unsafe-synthetic-session-unterminated: "
+                     "modeled-policy-violation";
+        std::cerr.flush();
+        return 0;
+      }
+      if (options.sessionExitOnRequest) {
+        std::cerr << "[helper] session: exiting on request "
+                     "(reason=synthetic-session-exit-on-request)\n";
+        return 1;
+      }
+      if (options.sessionHangResult) {
+        // Withhold the result so the parent's bounded result wait fires.
+        std::cerr << "[helper] session: withholding result "
+                     "(reason=synthetic-session-hang-result)\n";
+        continue;
+      }
+
+      writeSessionResult(
+          std::cout, options, requestId, frameTimestampMs, requestIndex);
+      std::cout.flush();
+      ++requestIndex;
+      continue;
+    }
+
+    std::cerr << "[helper] session: ignoring unknown control line\n";
+  }
+
+  // stdin closed by the parent: clean terminal stop.
+  writeStoppedLine(std::cout, "session-eof");
+  std::cout.flush();
+  std::cerr << "[helper] session: stopped (reason=session-eof)\n";
+  return 0;
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -590,6 +932,13 @@ int main(int argc, char *argv[]) {
   HelperOptions options;
   if (!parseHelperOptions(argc, argv, options)) {
     return 1;
+  }
+
+  // v0.13.0 (#533): interactive session mode is a distinct, opt-in path that
+  // reads real parent control lines. All existing batch/smoke behavior below is
+  // unchanged when --session is not supplied.
+  if (options.sessionMode) {
+    return runSyntheticHelperSession(options);
   }
 
   std::cerr << "[helper] startup: source=synthetic-helper\n";

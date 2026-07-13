@@ -230,6 +230,12 @@ HelperProcessRunResult runHelperProcessForSmoke(
 
   int stdoutPipe[2];
   int stderrPipe[2];
+  // Close-on-exec error pipe: a successful exec closes execErrPipe[1] with no
+  // data (parent reads EOF); a failed exec delivers the child's errno. This lets
+  // the parent report a genuine launch failure (launched=false) on a bad
+  // executable path -- matching the Windows CreateProcess semantics -- instead of
+  // reporting a child that exited 127.
+  int execErrPipe[2];
   if (pipe(stdoutPipe) != 0) {
     return result;
   }
@@ -238,6 +244,19 @@ HelperProcessRunResult runHelperProcessForSmoke(
     close(stdoutPipe[1]);
     return result;
   }
+  if (pipe(execErrPipe) != 0) {
+    close(stdoutPipe[0]);
+    close(stdoutPipe[1]);
+    close(stderrPipe[0]);
+    close(stderrPipe[1]);
+    return result;
+  }
+  for (int fd : {execErrPipe[0], execErrPipe[1]}) {
+    const int flags = fcntl(fd, F_GETFD, 0);
+    if (flags >= 0) {
+      fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+    }
+  }
 
   const pid_t pid = fork();
   if (pid < 0) {
@@ -245,6 +264,8 @@ HelperProcessRunResult runHelperProcessForSmoke(
     close(stdoutPipe[1]);
     close(stderrPipe[0]);
     close(stderrPipe[1]);
+    close(execErrPipe[0]);
+    close(execErrPipe[1]);
     return result;
   }
 
@@ -261,6 +282,7 @@ HelperProcessRunResult runHelperProcessForSmoke(
     close(stdoutPipe[1]);
     close(stderrPipe[0]);
     close(stderrPipe[1]);
+    close(execErrPipe[0]);
 
     std::vector<char*> argv;
     argv.push_back(const_cast<char*>(executablePath.c_str()));
@@ -270,13 +292,36 @@ HelperProcessRunResult runHelperProcessForSmoke(
     argv.push_back(nullptr);
 
     execv(executablePath.c_str(), argv.data());
+    const int execErrno = errno;
+    ssize_t ignored = write(execErrPipe[1], &execErrno, sizeof(execErrno));
+    (void)ignored;
     _exit(127);  // exec failed
   }
 
   // Parent.
-  result.launched = true;
   close(stdoutPipe[1]);
   close(stderrPipe[1]);
+  close(execErrPipe[1]);
+
+  // Detect exec failure before reporting a launch. EINTR-safe single read.
+  int childExecErrno = 0;
+  ssize_t reported = 0;
+  do {
+    reported = read(execErrPipe[0], &childExecErrno, sizeof(childExecErrno));
+  } while (reported < 0 && errno == EINTR);
+  close(execErrPipe[0]);
+
+  if (reported == static_cast<ssize_t>(sizeof(childExecErrno))) {
+    // exec failed in the child: reap it and report a clean launch failure.
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+    }
+    close(stdoutPipe[0]);
+    close(stderrPipe[0]);
+    return result;  // launched stays false
+  }
+
+  result.launched = true;
 
   bool stdoutOpen = true;
   bool stderrOpen = true;
