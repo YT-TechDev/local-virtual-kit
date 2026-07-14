@@ -80,3 +80,6 @@ jobs:
 
       - name: MediaPipe face candidate observation tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_candidate_observation.py
+
+      - name: MediaPipe helper tracking payload tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_tracking_payload.py
