@@ -83,3 +83,6 @@ jobs:
 
       - name: MediaPipe helper tracking payload tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_tracking_payload.py
+
+      - name: MediaPipe helper result JSON tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_result_json.py

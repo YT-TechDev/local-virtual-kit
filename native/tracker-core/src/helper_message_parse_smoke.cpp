@@ -8,6 +8,15 @@
 // numeric tokens, non-finite numbers, and exact schemaVersion matching, while
 // confirming finite out-of-range values are accepted (left for the mapper to
 // clamp).
+//
+// v0.13.0 (#535): also supports one opt-in, test-only cross-runtime parity
+// mode ("--parse-result-frame-line <json-content>") that feeds a real
+// Python-serialized frame-mode result line through the actual production
+// parseHelperResultEnvelope()/parseHelperFrameAck() and checks it against a
+// known synthetic fixture. The JSON content is passed as a bounded
+// command-line argument only (no stdin), and is never echoed to stdout or
+// stderr. This does not alter production parser semantics; it only exercises
+// the existing strict parser from this same smoke executable.
 
 #include "helper_message.h"
 
@@ -48,7 +57,8 @@ void expectReject(const std::string& line, const std::string& what) {
 
 }  // namespace
 
-int main() {
+// The pre-existing, byte-for-byte-compatible default smoke (no arguments).
+int runDefaultSmoke() {
   using lvk::tracker::classifyHelperLine;
   using lvk::tracker::HelperLineType;
   using lvk::tracker::parseHelperReadyLine;
@@ -239,4 +249,102 @@ int main() {
   }
   std::cout << "helper-message parse smoke OK\n";
   return 0;
+}
+
+// Opt-in, test-only cross-runtime parity mode. Feeds a real Python-serialized
+// frame-mode result line (passed as `line`, content only, no trailing
+// newline) through the actual production parseHelperResultEnvelope() and
+// parseHelperFrameAck(), then checks the parsed values against the one known
+// synthetic contract fixture shared with test_helper_result_json.py
+// (--emit-cpp-parity-line). Never echoes `line` to stdout or stderr. Returns
+// 0 and prints only the safe marker on success; returns non-zero and prints
+// only a generic diagnostic on any failure.
+int runResultFrameLineParityCheck(const std::string& line) {
+  using lvk::tracker::classifyHelperLine;
+  using lvk::tracker::HelperLineType;
+  using lvk::tracker::HelperTrackingStatus;
+  using lvk::tracker::parseHelperFrameAck;
+  using lvk::tracker::parseHelperResultEnvelope;
+  using lvk::tracker::ParsedFrameAck;
+  using lvk::tracker::ParsedHelperResult;
+
+  if (line.find('\r') != std::string::npos ||
+      line.find('\n') != std::string::npos) {
+    std::cerr << "[helper-message-parse-smoke] parity check rejected: "
+                 "embedded CR/LF in argument\n";
+    return 1;
+  }
+
+  if (classifyHelperLine(line) != HelperLineType::Result) {
+    std::cerr << "[helper-message-parse-smoke] parity check failed: "
+                 "line not classified as Result\n";
+    return 1;
+  }
+
+  ParsedHelperResult parsedResult;
+  std::string resultReason;
+  if (!parseHelperResultEnvelope(line, parsedResult, resultReason)) {
+    std::cerr << "[helper-message-parse-smoke] parity check failed: "
+                 "result envelope rejected\n";
+    return 1;
+  }
+
+  ParsedFrameAck parsedAck;
+  std::string ackReason;
+  if (!parseHelperFrameAck(line, parsedAck, ackReason)) {
+    std::cerr << "[helper-message-parse-smoke] parity check failed: "
+                 "frameAck rejected\n";
+    return 1;
+  }
+
+  // Known synthetic contract fixture, shared with
+  // test_helper_result_json.py's --emit-cpp-parity-line mode. Synthetic
+  // metadata only: no image/frame/model/private-path data.
+  constexpr double kTolerance = 1e-9;
+  bool matches = true;
+  matches = matches && parsedResult.requestId == 7ull;
+  matches = matches && parsedResult.frameTimestampMs == 123;
+  matches = matches &&
+      parsedResult.payload.status == HelperTrackingStatus::Tracking;
+  matches = matches &&
+      std::abs(parsedResult.payload.confidence - 1.0) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.faceRotation.pitch - 0.25) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.faceRotation.yaw - (-0.5)) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.faceRotation.roll - 0.75) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.eyes.leftOpen - 0.8) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.eyes.rightOpen - 0.6) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.mouth.open - 0.4) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.mouth.smile - 0.2) < kTolerance;
+  matches = matches &&
+      std::abs(parsedResult.payload.inferenceMs - 1.5) < kTolerance;
+  matches = matches && parsedAck.sequence == 7ull;
+  matches = matches && parsedAck.payloadBytes == 3ull;
+  matches = matches && parsedAck.checksum == 123456789u;
+
+  if (!matches) {
+    std::cerr << "[helper-message-parse-smoke] parity check failed: "
+                 "fixture value mismatch\n";
+    return 1;
+  }
+
+  std::cout << "helper-message serializer parity OK\n";
+  return 0;
+}
+
+int main(int argc, char** argv) {
+  if (argc == 1) {
+    return runDefaultSmoke();
+  }
+  if (argc == 3 && std::string(argv[1]) == "--parse-result-frame-line") {
+    return runResultFrameLineParityCheck(std::string(argv[2]));
+  }
+  std::cerr << "[helper-message-parse-smoke] unknown arguments\n";
+  return 1;
 }
