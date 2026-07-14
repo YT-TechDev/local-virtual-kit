@@ -14,12 +14,24 @@
 //   - stdout: newline-delimited internal helper JSON
 //   - stderr: safe diagnostics only (no raw pixels/images/paths/secrets)
 
+#include "helper_frame_packet.h"
+
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <string>
 #include <thread>
+#include <vector>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <cerrno>
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -101,6 +113,93 @@ struct HelperOptions {
   bool sessionIgnoreStop = false;
   bool sessionMissingStopped = false;
   bool sessionMalformedStopped = false;
+  // v0.13.0 (#534): opt-in private frame transport within session mode, and
+  // its deterministic test-only fault modes. All default off so session mode
+  // without --session-frame-mode is byte-for-byte the #533 result-only
+  // behavior.
+  bool sessionFrameMode = false;
+  bool sessionFrameIgnore = false;
+  bool sessionFrameShortRead = false;
+  bool sessionFrameExitDuringTransfer = false;
+  bool sessionFrameBadAck = false;
+};
+
+// v0.13.0 (#534): the private frame endpoint the parent inherits into this
+// process. On POSIX it is always a fixed fd (matching
+// HelperProcessSession's kFrameTransportChildFd); on Windows the numeric
+// handle value is read from a private, per-launch environment variable that
+// is never logged. Neither value is ever printed.
+#ifdef _WIN32
+using FrameHandle = HANDLE;
+constexpr FrameHandle kInvalidFrameHandle = nullptr;
+#else
+using FrameHandle = int;
+constexpr FrameHandle kInvalidFrameHandle = -1;
+constexpr int kFrameTransportChildFd = 3;
+#endif
+
+#ifdef _WIN32
+FrameHandle resolveFrameHandleFromEnvironment() {
+  // _dupenv_s (rather than std::getenv) so this Windows-only lookup owns its
+  // own buffer instead of relying on getenv's implementation-defined
+  // internal static storage.
+  char *value = nullptr;
+  std::size_t valueLength = 0;
+  if (_dupenv_s(&value, &valueLength, "LVK_FRAME_PIPE_HANDLE") != 0 ||
+      value == nullptr) {
+    free(value);
+    return kInvalidFrameHandle;
+  }
+  char *end = nullptr;
+  const long long raw = std::strtoll(value, &end, 10);
+  const bool valid = end != value && *end == '\0';
+  free(value);
+  if (!valid) {
+    return kInvalidFrameHandle;
+  }
+  return reinterpret_cast<HANDLE>(static_cast<std::intptr_t>(raw));
+}
+
+bool readExactFrameBytes(
+    FrameHandle handle, std::uint8_t *buffer, std::size_t length) {
+  std::size_t readTotal = 0;
+  while (readTotal < length) {
+    DWORD chunk = 0;
+    const DWORD toRead = static_cast<DWORD>(length - readTotal);
+    if (!ReadFile(handle, buffer + readTotal, toRead, &chunk, nullptr) ||
+        chunk == 0) {
+      return false;
+    }
+    readTotal += chunk;
+  }
+  return true;
+}
+#else
+bool readExactFrameBytes(
+    FrameHandle handle, std::uint8_t *buffer, std::size_t length) {
+  std::size_t readTotal = 0;
+  while (readTotal < length) {
+    const ssize_t chunk = read(handle, buffer + readTotal, length - readTotal);
+    if (chunk > 0) {
+      readTotal += static_cast<std::size_t>(chunk);
+      continue;
+    }
+    if (chunk < 0 && errno == EINTR) {
+      continue;
+    }
+    return false;  // EOF or hard error
+  }
+  return true;
+}
+#endif
+
+// Deterministic frame acknowledgement to append to a session result line;
+// null when not in frame mode. Native Core-internal only -- never pixel
+// data, never a path, never a handle value.
+struct FrameAckToEmit {
+  unsigned long long sequence = 0;
+  unsigned long long payloadBytes = 0;
+  std::uint32_t checksum = 0;
 };
 
 bool parseIntInRange(
@@ -255,6 +354,16 @@ void printUsage(std::ostream &output) {
             "--session-unterminated-unsafe-stderr, --session-ignore-stop, "
             "--session-missing-stopped, --session-malformed-stopped) are "
             "deterministic test-only session fault modes.\n";
+  output << "--session-frame-mode (v0.13.0, #534) additionally reads exactly "
+            "one bounded binary frame packet per parent \"request\" from the "
+            "private frame endpoint, and appends a frameAck object "
+            "(sequence, payloadBytes, checksum) to the result envelope. It "
+            "never accesses a camera and never emits pixel data. "
+            "--session-frame-ignore, --session-frame-short-read, "
+            "--session-frame-exit-during-transfer, and "
+            "--session-frame-bad-ack are deterministic test-only frame fault "
+            "modes; combine with --session-stale-request-id to model a "
+            "stale frameAck.sequence.\n";
   output << "This helper is synthetic only: it does not access a camera, files, "
             "models, sockets, or raw frames, and it does not emit MotionFrame.\n";
 }
@@ -450,6 +559,26 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
     }
     if (argument == "--session-malformed-stopped") {
       options.sessionMalformedStopped = true;
+      continue;
+    }
+    if (argument == "--session-frame-mode") {
+      options.sessionFrameMode = true;
+      continue;
+    }
+    if (argument == "--session-frame-ignore") {
+      options.sessionFrameIgnore = true;
+      continue;
+    }
+    if (argument == "--session-frame-short-read") {
+      options.sessionFrameShortRead = true;
+      continue;
+    }
+    if (argument == "--session-frame-exit-during-transfer") {
+      options.sessionFrameExitDuringTransfer = true;
+      continue;
+    }
+    if (argument == "--session-frame-bad-ack") {
+      options.sessionFrameBadAck = true;
       continue;
     }
 
@@ -738,7 +867,8 @@ void writeSessionResult(
     const HelperOptions &options,
     long long requestId,
     long long frameTimestampMs,
-    long long requestIndex) {
+    long long requestIndex,
+    const FrameAckToEmit *frameAck = nullptr) {
   if (options.sessionMalformedResult) {
     output << "{\"type\":\"result\",\"schemaVersion\":1,\"requestId\":"
            << requestId << " this-is-not-valid-session-json\n";
@@ -784,6 +914,12 @@ void writeSessionResult(
          << "\"open\":" << pattern.mouthOpen << ","
          << "\"smile\":" << pattern.mouthSmile << "},"
          << "\"diag\":{\"inferenceMs\":" << 0.0 << "}";
+  if (frameAck != nullptr) {
+    output << ",\"frameAck\":{"
+           << "\"sequence\":" << frameAck->sequence << ","
+           << "\"payloadBytes\":" << frameAck->payloadBytes << ","
+           << "\"checksum\":" << frameAck->checksum << "}";
+  }
   if (options.sessionOversizedResult) {
     output << ",\"pad\":\"";
     for (int fillerIndex = 0; fillerIndex < kSessionOversizedFillerBytes;
@@ -801,6 +937,24 @@ void writeSessionResult(
 // stderr uses the safe "[helper] " diagnostic prefix.
 int runSyntheticHelperSession(const HelperOptions &options) {
   std::cerr << "[helper] session: starting (source=synthetic-helper)\n";
+
+  // v0.13.0 (#534): resolve the private frame endpoint once, before any
+  // ready/request handling, when frame mode was requested. The numeric
+  // handle/fd value is never printed.
+  FrameHandle frameHandle = kInvalidFrameHandle;
+  if (options.sessionFrameMode) {
+#ifdef _WIN32
+    frameHandle = resolveFrameHandleFromEnvironment();
+#else
+    frameHandle = kFrameTransportChildFd;
+#endif
+    if (frameHandle == kInvalidFrameHandle) {
+      std::cerr << "[helper] session: frame mode requested but no frame "
+                   "endpoint is available "
+                   "(reason=synthetic-session-frame-missing-endpoint)\n";
+      return 1;
+    }
+  }
 
   if (options.sessionExitBeforeReady) {
     std::cerr << "[helper] session: exiting before ready "
@@ -903,8 +1057,70 @@ int runSyntheticHelperSession(const HelperOptions &options) {
         continue;
       }
 
+      FrameAckToEmit ackStorage;
+      const FrameAckToEmit *ackPtr = nullptr;
+
+      if (options.sessionFrameMode) {
+        if (options.sessionFrameExitDuringTransfer) {
+          std::cerr << "[helper] session: exiting during frame transfer "
+                       "(reason=synthetic-session-frame-exit-during-transfer)"
+                       "\n";
+          return 1;
+        }
+        if (options.sessionFrameIgnore) {
+          // Deliberately never reads the frame endpoint and withholds the
+          // result, so the parent's bounded frame write/result wait fires.
+          std::cerr << "[helper] session: ignoring frame pipe "
+                       "(reason=synthetic-session-frame-ignore)\n";
+          continue;
+        }
+
+        std::uint8_t headerBytes[lvk::tracker::kFramePacketHeaderBytes];
+        if (!readExactFrameBytes(
+                frameHandle, headerBytes, sizeof(headerBytes))) {
+          std::cerr << "[helper] session: frame header read failed "
+                       "(reason=synthetic-session-frame-header-read-failed)"
+                       "\n";
+          return 1;
+        }
+        lvk::tracker::FramePacketHeader header;
+        const lvk::tracker::FramePacketDecodeStatus status =
+            lvk::tracker::decodeFramePacketHeader(
+                headerBytes, sizeof(headerBytes), header);
+        if (status != lvk::tracker::FramePacketDecodeStatus::Ok) {
+          std::cerr << "[helper] session: frame header invalid "
+                       "(reason=synthetic-session-frame-header-invalid)\n";
+          return 1;
+        }
+
+        std::size_t payloadToRead = static_cast<std::size_t>(header.payloadBytes);
+        if (options.sessionFrameShortRead) {
+          payloadToRead = payloadToRead / 2;
+        }
+        std::vector<std::uint8_t> payload(payloadToRead);
+        if (payloadToRead > 0 &&
+            !readExactFrameBytes(frameHandle, payload.data(), payloadToRead)) {
+          std::cerr << "[helper] session: frame payload read failed "
+                       "(reason=synthetic-session-frame-payload-read-failed)"
+                       "\n";
+          return 1;
+        }
+
+        ackStorage.sequence = static_cast<unsigned long long>(
+            options.sessionStaleRequestId ? requestId + 1 : requestId);
+        ackStorage.payloadBytes =
+            static_cast<unsigned long long>(payloadToRead);
+        ackStorage.checksum =
+            lvk::tracker::fnv1a32(payload.data(), payload.size());
+        if (options.sessionFrameBadAck) {
+          ackStorage.checksum ^= 1u;
+        }
+        ackPtr = &ackStorage;
+      }
+
       writeSessionResult(
-          std::cout, options, requestId, frameTimestampMs, requestIndex);
+          std::cout, options, requestId, frameTimestampMs, requestIndex,
+          ackPtr);
       std::cout.flush();
       ++requestIndex;
       continue;
