@@ -35,12 +35,6 @@ _ROTATION_MAX = 1.0
 _NORMALIZED_MIN = 0.0
 _NORMALIZED_MAX = 1.0
 
-_LOST_OBSERVATION_STATUSES = (
-    FaceCandidateObservationStatus.NO_FACE,
-    FaceCandidateObservationStatus.MULTIPLE_FACES,
-    FaceCandidateObservationStatus.MALFORMED,
-)
-
 
 class HelperTrackingPayloadStatus(Enum):
     TRACKING = "tracking"
@@ -107,10 +101,17 @@ def assemble_helper_tracking_payload(
     face_rotation = observation.face_rotation
     expressions = observation.expressions
 
-    if status == FaceCandidateObservationStatus.VALID_FACE:
+    if type(status) is not FaceCandidateObservationStatus:
+        return None
+
+    if status is FaceCandidateObservationStatus.VALID_FACE:
         return _assemble_tracking_payload(face_rotation, expressions)
 
-    if status in _LOST_OBSERVATION_STATUSES:
+    if (
+        status is FaceCandidateObservationStatus.NO_FACE
+        or status is FaceCandidateObservationStatus.MULTIPLE_FACES
+        or status is FaceCandidateObservationStatus.MALFORMED
+    ):
         if face_rotation is not None or expressions is not None:
             return None
         return _LOST_PAYLOAD
@@ -166,14 +167,22 @@ def _assemble_tracking_payload(
 
 
 def _validate_number(value: object, minimum: float, maximum: float) -> float | None:
-    """Accepts only an exact built-in int/float, finite and within range."""
-    if type(value) is not int and type(value) is not float:
-        return None
+    """Accepts only an exact built-in int/float, finite and within range.
 
-    as_float = float(value)
-    if not math.isfinite(as_float):
-        return None
-    if as_float < minimum or as_float > maximum:
-        return None
+    An exact int is range-checked as an int first: an arbitrarily large
+    built-in int is rejected before any float conversion is attempted, so a
+    huge value can never raise OverflowError on `float()`.
+    """
+    if type(value) is int:
+        if value < minimum or value > maximum:
+            return None
+        return float(value)
 
-    return as_float
+    if type(value) is float:
+        if not math.isfinite(value):
+            return None
+        if value < minimum or value > maximum:
+            return None
+        return value
+
+    return None

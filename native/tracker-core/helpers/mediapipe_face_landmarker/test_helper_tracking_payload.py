@@ -42,6 +42,16 @@ class _FaceCandidateObservationSubclass(FaceCandidateObservation):
     """A FaceCandidateObservation subclass, used to prove exact-type rejection."""
 
 
+class _AlwaysEqualStatus:
+    """Object whose __eq__ always returns True, spoofing enum comparisons."""
+
+    def __eq__(self, other: object) -> bool:
+        return True
+
+    def __hash__(self) -> int:
+        return 0
+
+
 @dataclass
 class _FakeCategory:
     category_name: str
@@ -348,6 +358,45 @@ class AssembleHelperTrackingPayloadInputContractTests(unittest.TestCase):
         self.assertIsNone(assemble_helper_tracking_payload(observation))
 
 
+class AssembleHelperTrackingPayloadStatusTypeSafetyTests(unittest.TestCase):
+    def test_equality_spoofing_status_with_valid_payload_returns_none(self) -> None:
+        observation = FaceCandidateObservation(
+            status=_AlwaysEqualStatus(),
+            face_rotation=_valid_rotation(),
+            expressions=_valid_expressions(),
+        )
+        payload = assemble_helper_tracking_payload(observation)
+        self.assertIsNone(payload)
+
+    def test_equality_spoofing_status_with_no_payload_returns_none(self) -> None:
+        observation = FaceCandidateObservation(
+            status=_AlwaysEqualStatus(), face_rotation=None, expressions=None
+        )
+        payload = assemble_helper_tracking_payload(observation)
+        self.assertIsNone(payload)
+
+    def test_ordinary_unknown_string_status_returns_none(self) -> None:
+        observation = FaceCandidateObservation(
+            status="unexpected", face_rotation=None, expressions=None
+        )
+        self.assertIsNone(assemble_helper_tracking_payload(observation))
+
+    def test_legitimate_statuses_retain_existing_behavior(self) -> None:
+        valid_face_payload = assemble_helper_tracking_payload(_valid_face_observation())
+        self.assertEqual(valid_face_payload.status, HelperTrackingPayloadStatus.TRACKING)
+
+        for status in (
+            FaceCandidateObservationStatus.NO_FACE,
+            FaceCandidateObservationStatus.MULTIPLE_FACES,
+            FaceCandidateObservationStatus.MALFORMED,
+        ):
+            observation = FaceCandidateObservation(
+                status=status, face_rotation=None, expressions=None
+            )
+            payload = assemble_helper_tracking_payload(observation)
+            self.assertEqual(payload.status, HelperTrackingPayloadStatus.LOST)
+
+
 class AssembleHelperTrackingPayloadNumericSafetyTests(unittest.TestCase):
     def test_bool_rotation_rejected(self) -> None:
         observation = FaceCandidateObservation(
@@ -448,6 +497,55 @@ class AssembleHelperTrackingPayloadNumericSafetyTests(unittest.TestCase):
             ),
         )
         self.assertIsNone(assemble_helper_tracking_payload(observation))
+
+
+class AssembleHelperTrackingPayloadHugeIntSafetyTests(unittest.TestCase):
+    _HUGE_POSITIVE_INT = 10**400
+    _HUGE_NEGATIVE_INT = -(10**400)
+
+    def test_huge_positive_int_rotation_returns_none_without_raising(self) -> None:
+        observation = FaceCandidateObservation(
+            status=FaceCandidateObservationStatus.VALID_FACE,
+            face_rotation=FaceRotationValues(
+                pitch=self._HUGE_POSITIVE_INT, yaw=0.0, roll=0.0
+            ),
+            expressions=_valid_expressions(),
+        )
+        self.assertIsNone(assemble_helper_tracking_payload(observation))
+
+    def test_huge_negative_int_rotation_returns_none_without_raising(self) -> None:
+        observation = FaceCandidateObservation(
+            status=FaceCandidateObservationStatus.VALID_FACE,
+            face_rotation=FaceRotationValues(
+                pitch=0.0, yaw=self._HUGE_NEGATIVE_INT, roll=0.0
+            ),
+            expressions=_valid_expressions(),
+        )
+        self.assertIsNone(assemble_helper_tracking_payload(observation))
+
+    def test_huge_int_expression_returns_none_without_raising(self) -> None:
+        observation = FaceCandidateObservation(
+            status=FaceCandidateObservationStatus.VALID_FACE,
+            face_rotation=_valid_rotation(),
+            expressions=ExpressionValues(
+                left_eye_open=self._HUGE_POSITIVE_INT,
+                right_eye_open=0.5,
+                mouth_open=0.5,
+                mouth_smile=0.5,
+            ),
+        )
+        self.assertIsNone(assemble_helper_tracking_payload(observation))
+
+    def test_in_range_integer_conversion_still_accepted_as_builtin_float(self) -> None:
+        observation = FaceCandidateObservation(
+            status=FaceCandidateObservationStatus.VALID_FACE,
+            face_rotation=FaceRotationValues(pitch=1, yaw=-1, roll=0),
+            expressions=_valid_expressions(),
+        )
+        payload = assemble_helper_tracking_payload(observation)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload.face_rotation.pitch, 1.0)
+        self.assertIs(type(payload.face_rotation.pitch), float)
 
 
 class AssembleHelperTrackingPayloadOutputModelTests(unittest.TestCase):
