@@ -86,3 +86,6 @@ jobs:
 
       - name: MediaPipe helper result JSON tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_result_json.py
+
+      - name: MediaPipe helper frame input tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_frame_input.py
