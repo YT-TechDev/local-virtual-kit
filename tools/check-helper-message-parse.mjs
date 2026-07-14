@@ -33,19 +33,55 @@ const fail = (message, result) => {
 
 const kMaxParityLineBytes = 2048;
 
-function resolvePythonExecutable() {
+// Resolution order for the Python interpreter used to generate the parity
+// fixture:
+//   1. an explicit CLI argument (used exactly, no fallback),
+//   2. otherwise a non-empty LVK_TEST_PYTHON (used exactly, no fallback),
+//   3. otherwise "python3" then "python", falling back from python3 to
+//      python ONLY when spawning python3 itself fails because the command is
+//      unavailable (ENOENT) -- never because it ran and failed.
+function resolvePythonCandidates() {
   const provided = process.argv[3];
   if (provided) {
-    return provided;
+    return [provided];
   }
   if (process.env.LVK_TEST_PYTHON) {
-    return process.env.LVK_TEST_PYTHON;
+    return [process.env.LVK_TEST_PYTHON];
   }
-  return process.platform === "win32" ? "python" : "python3";
+  return ["python3", "python"];
+}
+
+function isCommandNotFound(spawnError) {
+  return Boolean(spawnError) && spawnError.code === "ENOENT";
+}
+
+// Spawns the parity fixture generator against each candidate in order,
+// falling back to the next candidate only when the current one could not be
+// spawned at all (command not found). A candidate that actually starts and
+// then fails (non-zero exit, stderr, malformed output) is returned as-is so
+// the failure stays visible instead of being masked by another interpreter.
+function runPythonFixtureGenerator(fixtureScript) {
+  const candidates = resolvePythonCandidates();
+  for (let i = 0; i < candidates.length; i += 1) {
+    const isLastCandidate = i === candidates.length - 1;
+    const result = spawnSync(
+      candidates[i],
+      ["-B", fixtureScript, "--emit-cpp-parity-line"],
+      { encoding: "utf8", maxBuffer: 1024 * 1024 },
+    );
+    if (result.error) {
+      if (!isLastCandidate && isCommandNotFound(result.error)) {
+        continue;
+      }
+      fail("fixture generation failed: Python executable unavailable");
+    }
+    return result;
+  }
+  fail("fixture generation failed: Python executable unavailable");
+  return undefined;
 }
 
 function runCrossRuntimeParityCheck(executablePath) {
-  const pythonExecutable = resolvePythonExecutable();
   const fixtureScript = join(
     repoRoot,
     "native",
@@ -55,15 +91,8 @@ function runCrossRuntimeParityCheck(executablePath) {
     "test_helper_result_json.py",
   );
 
-  const pythonResult = spawnSync(
-    pythonExecutable,
-    ["-B", fixtureScript, "--emit-cpp-parity-line"],
-    { encoding: "utf8", maxBuffer: 1024 * 1024 },
-  );
+  const pythonResult = runPythonFixtureGenerator(fixtureScript);
 
-  if (pythonResult.error) {
-    fail(`fixture generation failed: could not run ${pythonExecutable}`);
-  }
   if (pythonResult.status !== 0) {
     fail("fixture generation failed: non-zero exit status");
   }
@@ -73,17 +102,17 @@ function runCrossRuntimeParityCheck(executablePath) {
 
   const stdout = pythonResult.stdout ?? "";
   if (!stdout.endsWith("\n")) {
-    fail("malformed fixture framing: missing trailing newline");
+    fail("malformed fixture framing");
   }
   const content = stdout.slice(0, -1);
   if (content.length === 0) {
-    fail("malformed fixture framing: empty content");
+    fail("malformed fixture framing");
   }
   if (content.includes("\r") || content.includes("\n")) {
-    fail("malformed fixture framing: embedded CR/LF");
+    fail("malformed fixture framing");
   }
   if (Buffer.byteLength(content, "utf8") > kMaxParityLineBytes) {
-    fail("malformed fixture framing: content exceeds bounded size");
+    fail("malformed fixture framing");
   }
 
   const parserResult = spawnSync(
@@ -93,7 +122,7 @@ function runCrossRuntimeParityCheck(executablePath) {
   );
 
   if (parserResult.error) {
-    fail(`could not run ${executablePath}`);
+    fail("C++ parser parity failed: parser process unavailable");
   }
   if (parserResult.status !== 0) {
     fail("C++ parser parity failed");
@@ -101,7 +130,7 @@ function runCrossRuntimeParityCheck(executablePath) {
   if (
     !(parserResult.stdout ?? "").includes("helper-message serializer parity OK")
   ) {
-    fail("C++ parser parity failed: missing success marker");
+    fail("C++ parser parity failed");
   }
 
   console.log("Helper message cross-runtime parity check passed.");
