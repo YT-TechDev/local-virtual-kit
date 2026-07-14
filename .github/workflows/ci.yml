@@ -74,3 +74,6 @@ jobs:
 
       - name: MediaPipe rotation mapping tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_rotation_mapping.py
+
+      - name: MediaPipe face candidate observation tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_candidate_observation.py
