@@ -69,6 +69,9 @@ jobs:
       - name: MediaPipe face result selection tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_result_selection.py
 
+      - name: MediaPipe facial transform matrix adapter tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_facial_transform_matrix_adapter.py
+
       - name: MediaPipe matrix normalization tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_matrix_mapping.py
 

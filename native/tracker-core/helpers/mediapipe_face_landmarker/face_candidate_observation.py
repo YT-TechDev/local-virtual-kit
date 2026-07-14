@@ -8,9 +8,10 @@ never calls `select_single_face_candidate` itself.
 
 Composition delegates entirely to existing boundaries:
 `blendshape_category_adapter.py` and `expression_mapping.py` own expression
-extraction and mapping; `matrix_mapping.py` and `rotation_mapping.py` own
-matrix validation and Euler conversion. This module does not duplicate or
-weaken any of that validation.
+extraction and mapping; `facial_transform_matrix_adapter.py` owns structural
+payload adaptation (including the measured MediaPipe ndarray-like route);
+`matrix_mapping.py` and `rotation_mapping.py` own matrix validation and Euler
+conversion. This module does not duplicate or weaken any of that validation.
 
 All-or-nothing policy: a SINGLE_FACE selection becomes VALID_FACE only if
 both the expression and rotation pipelines succeed. Any inner failure, any
@@ -32,6 +33,7 @@ from face_result_selection import (
     FaceCandidateSelectionStatus,
     SelectedFaceCandidate,
 )
+from facial_transform_matrix_adapter import adapt_facial_transform_matrix_payload
 from matrix_mapping import normalize_facial_transform_matrix
 from rotation_mapping import (
     FaceRotationValues,
@@ -112,12 +114,13 @@ def _compose_single_face(
     if scores is None:
         return _malformed_observation()
 
-    try:
-        normalized_matrix = normalize_facial_transform_matrix(
-            selected_face.facial_transformation_matrix
-        )
-    except Exception:
+    adapted_matrix = adapt_facial_transform_matrix_payload(
+        selected_face.facial_transformation_matrix
+    )
+    if adapted_matrix is None:
         return _malformed_observation()
+
+    normalized_matrix = normalize_facial_transform_matrix(adapted_matrix)
     if normalized_matrix is None:
         return _malformed_observation()
 

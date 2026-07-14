@@ -7,6 +7,7 @@ import dataclasses
 import math
 import unittest
 from dataclasses import FrozenInstanceError, dataclass
+from unittest import mock
 
 from face_candidate_observation import (
     FaceCandidateObservation,
@@ -46,6 +47,40 @@ class _LenRaisesMatrix:
 
     def __len__(self):
         raise RuntimeError("len failed")
+
+
+class _FakeRuntimeMatrix:
+    """Minimal ndarray-like fake exposing shape/ndim/tolist, without importing NumPy."""
+
+    def __init__(self, shape, ndim, rows):
+        self.shape = shape
+        self.ndim = ndim
+        self._rows = rows
+        self.tolist_calls = 0
+
+    def tolist(self):
+        self.tolist_calls += 1
+        return self._rows
+
+
+class _RuntimeMatrixWrongShape:
+    """Fake ndarray-like object exposing a non-4x4 shape."""
+
+    shape = (3, 4)
+    ndim = 2
+
+    def tolist(self):
+        return [[0.0] * 4 for _ in range(3)]
+
+
+class _RuntimeMatrixTolistRaises:
+    """Fake ndarray-like object whose tolist() raises an ordinary exception."""
+
+    shape = (4, 4)
+    ndim = 2
+
+    def tolist(self):
+        raise RuntimeError("tolist failed")
 
 
 @dataclass
@@ -296,6 +331,88 @@ class ComposeFaceCandidateObservationTests(unittest.TestCase):
         self.assertEqual(observation.status, FaceCandidateObservationStatus.MALFORMED)
         self.assertIsNone(observation.face_rotation)
         self.assertIsNone(observation.expressions)
+
+    def test_runtime_like_matrix_produces_valid_face(self) -> None:
+        matrix = _FakeRuntimeMatrix((4, 4), 2, [list(row) for row in IDENTITY_MATRIX])
+        selection = _single_face_selection(_full_categories(), matrix)
+        observation = compose_face_candidate_observation(selection)
+        self.assertEqual(observation.status, FaceCandidateObservationStatus.VALID_FACE)
+        self.assertIsInstance(observation.face_rotation, FaceRotationValues)
+        self.assertIsInstance(observation.expressions, ExpressionValues)
+
+    def test_runtime_like_tolist_called_exactly_once(self) -> None:
+        matrix = _FakeRuntimeMatrix((4, 4), 2, [list(row) for row in IDENTITY_MATRIX])
+        selection = _single_face_selection(_full_categories(), matrix)
+        compose_face_candidate_observation(selection)
+        self.assertEqual(matrix.tolist_calls, 1)
+
+    def test_runtime_like_wrong_shape_returns_malformed_with_no_partial_payload(
+        self,
+    ) -> None:
+        selection = _single_face_selection(_full_categories(), _RuntimeMatrixWrongShape())
+        observation = compose_face_candidate_observation(selection)
+        self.assertEqual(observation.status, FaceCandidateObservationStatus.MALFORMED)
+        self.assertIsNone(observation.face_rotation)
+        self.assertIsNone(observation.expressions)
+
+    def test_runtime_like_tolist_exception_returns_malformed_with_no_partial_payload(
+        self,
+    ) -> None:
+        selection = _single_face_selection(
+            _full_categories(), _RuntimeMatrixTolistRaises()
+        )
+        observation = compose_face_candidate_observation(selection)
+        self.assertEqual(observation.status, FaceCandidateObservationStatus.MALFORMED)
+        self.assertIsNone(observation.face_rotation)
+        self.assertIsNone(observation.expressions)
+
+    def test_runtime_like_malformed_converted_matrix_returns_malformed(self) -> None:
+        rows = [list(row) for row in IDENTITY_MATRIX]
+        rows[0][0] = True
+        matrix = _FakeRuntimeMatrix((4, 4), 2, rows)
+        selection = _single_face_selection(_full_categories(), matrix)
+        observation = compose_face_candidate_observation(selection)
+        self.assertEqual(observation.status, FaceCandidateObservationStatus.MALFORMED)
+        self.assertIsNone(observation.face_rotation)
+        self.assertIsNone(observation.expressions)
+
+    def test_runtime_like_affine_invalid_converted_matrix_returns_malformed(
+        self,
+    ) -> None:
+        non_uniform_scale_rows = [
+            [2.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+        matrix = _FakeRuntimeMatrix((4, 4), 2, non_uniform_scale_rows)
+        selection = _single_face_selection(_full_categories(), matrix)
+        observation = compose_face_candidate_observation(selection)
+        self.assertEqual(observation.status, FaceCandidateObservationStatus.MALFORMED)
+        self.assertIsNone(observation.face_rotation)
+        self.assertIsNone(observation.expressions)
+
+    def test_valid_expressions_with_failed_runtime_matrix_adaptation_yields_no_partial_payload(
+        self,
+    ) -> None:
+        selection = _single_face_selection(_full_categories(), _RuntimeMatrixWrongShape())
+        observation = compose_face_candidate_observation(selection)
+        self.assertEqual(observation.status, FaceCandidateObservationStatus.MALFORMED)
+        self.assertIsNone(observation.face_rotation)
+        self.assertIsNone(observation.expressions)
+
+    def test_unexpected_normalize_exception_is_not_swallowed(self) -> None:
+        selection = _single_face_selection(_full_categories(), IDENTITY_MATRIX)
+
+        def _raise_unexpected(_matrix):
+            raise RuntimeError("unexpected programming error")
+
+        with mock.patch(
+            "face_candidate_observation.normalize_facial_transform_matrix",
+            side_effect=_raise_unexpected,
+        ):
+            with self.assertRaises(RuntimeError):
+                compose_face_candidate_observation(selection)
 
     def test_single_face_with_selected_face_none_returns_malformed(self) -> None:
         selection = FaceCandidateSelection(
