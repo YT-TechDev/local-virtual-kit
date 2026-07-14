@@ -65,3 +65,6 @@ jobs:
 
       - name: MediaPipe matrix normalization tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_matrix_mapping.py
+
+      - name: MediaPipe rotation mapping tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_rotation_mapping.py
