@@ -72,6 +72,47 @@ class _RowIterationRaisesSequence(SequenceABC):
         raise RuntimeError("row access failed")
 
 
+class _LiesAboutCountSequence(SequenceABC):
+    """Declares len()==4 but actually iterates over `values` (any count)."""
+
+    def __init__(self, values):
+        self._values = values
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, index):
+        return self._values[index]
+
+    def __iter__(self):
+        return iter(self._values)
+
+
+class _InfiniteSequence(SequenceABC):
+    """Declares len()==4 but iterates forever, counting `__next__` calls."""
+
+    def __init__(self, item):
+        self._item = item
+        self.next_calls = 0
+
+    def __len__(self):
+        return 4
+
+    def __getitem__(self, index):
+        raise IndexError(index)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.next_calls += 1
+        return self._item
+
+
+class _ListSubclass(list):
+    """A `list` subclass, used to verify subclasses are rejected by identity."""
+
+
 class _FakeNdarray:
     """Minimal ndarray-like fake: shape/ndim/tolist only, no NumPy import."""
 
@@ -279,6 +320,39 @@ class FacialTransformMatrixAdapterTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             adapt_facial_transform_matrix_payload(_LenRaisesSystemExit())
 
+    def test_outer_sequence_lying_len_4_but_yields_5_rows_rejected(self) -> None:
+        five_rows = [list(row) for row in IDENTITY_MATRIX] + [[0.0, 0.0, 0.0, 0.0]]
+        payload = _LiesAboutCountSequence(five_rows)
+        self.assertIsNone(adapt_facial_transform_matrix_payload(payload))
+
+    def test_outer_sequence_lying_len_4_but_yields_3_rows_rejected(self) -> None:
+        three_rows = [list(row) for row in IDENTITY_MATRIX[:3]]
+        payload = _LiesAboutCountSequence(three_rows)
+        self.assertIsNone(adapt_facial_transform_matrix_payload(payload))
+
+    def test_row_sequence_lying_len_4_but_yields_5_scalars_rejected(self) -> None:
+        row_with_five = _LiesAboutCountSequence([1.0, 0.0, 0.0, 0.0, 0.0])
+        payload = [row_with_five, [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+        self.assertIsNone(adapt_facial_transform_matrix_payload(payload))
+
+    def test_row_sequence_lying_len_4_but_yields_3_scalars_rejected(self) -> None:
+        row_with_three = _LiesAboutCountSequence([1.0, 0.0, 0.0])
+        payload = [row_with_three, [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+        self.assertIsNone(adapt_facial_transform_matrix_payload(payload))
+
+    def test_infinite_outer_iterator_read_at_most_five_times(self) -> None:
+        infinite = _InfiniteSequence([0.0, 0.0, 0.0, 0.0])
+        result = adapt_facial_transform_matrix_payload(infinite)
+        self.assertIsNone(result)
+        self.assertLessEqual(infinite.next_calls, 5)
+
+    def test_infinite_row_iterator_read_at_most_five_times(self) -> None:
+        infinite_row = _InfiniteSequence(0.0)
+        payload = [infinite_row, [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+        result = adapt_facial_transform_matrix_payload(payload)
+        self.assertIsNone(result)
+        self.assertLessEqual(infinite_row.next_calls, 5)
+
     # -- Responsibility separation -------------------------------------------
 
     def test_nan_adapted_but_rejected_by_normalize(self) -> None:
@@ -402,6 +476,24 @@ class FacialTransformMatrixAdapterTests(unittest.TestCase):
         rows = [tuple(row) for row in IDENTITY_MATRIX]
         fake = _FakeNdarray((4, 4), 2, rows)
         self.assertIsNone(adapt_facial_transform_matrix_payload(fake))
+
+    def test_tolist_returning_list_subclass_outer_rejected(self) -> None:
+        rows = _ListSubclass([list(row) for row in IDENTITY_MATRIX])
+        fake = _FakeNdarray((4, 4), 2, rows)
+        self.assertIsNone(adapt_facial_transform_matrix_payload(fake))
+
+    def test_tolist_returning_list_subclass_row_rejected(self) -> None:
+        rows = [list(row) for row in IDENTITY_MATRIX]
+        rows[0] = _ListSubclass(rows[0])
+        fake = _FakeNdarray((4, 4), 2, rows)
+        self.assertIsNone(adapt_facial_transform_matrix_payload(fake))
+
+    def test_tolist_returning_built_in_list_accepted(self) -> None:
+        rows = [list(row) for row in IDENTITY_MATRIX]
+        fake = _FakeNdarray((4, 4), 2, rows)
+        result = adapt_facial_transform_matrix_payload(fake)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, tuple)
 
     def test_tolist_returning_wrong_dimensions_rejected(self) -> None:
         rows = [list(row) for row in IDENTITY_MATRIX[:3]]

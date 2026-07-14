@@ -17,6 +17,7 @@ those guarantees.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence as SequenceABC
 from typing import TypeAlias
 
@@ -35,6 +36,7 @@ PlainFacialTransformMatrix: TypeAlias = tuple[
 ]
 
 _MATRIX_SIZE = 4
+_MAX_ITEMS_TO_INSPECT = _MATRIX_SIZE + 1
 
 
 def adapt_facial_transform_matrix_payload(
@@ -68,6 +70,22 @@ def _is_plain_number(value: object) -> bool:
     return isinstance(value, (int, float))
 
 
+def _extract_bounded_items(container: object, cap: int) -> list[object] | None:
+    """Reads at most `cap` items from `container`; None unless exactly 4 remain.
+
+    Never trusts a container's declared `len()`: reading is capped via
+    `itertools.islice` so a hostile or inconsistent iterable (one that lies
+    about its length, or that never stops) is read at most `cap` times.
+    """
+    try:
+        collected = list(itertools.islice(container, cap))
+    except Exception:
+        return None
+    if len(collected) != _MATRIX_SIZE:
+        return None
+    return collected
+
+
 def _adapt_plain_sequence(
     payload: SequenceABC,
 ) -> PlainFacialTransformMatrix | None:
@@ -75,15 +93,23 @@ def _adapt_plain_sequence(
         if len(payload) != _MATRIX_SIZE:
             return None
 
+        row_items = _extract_bounded_items(payload, _MAX_ITEMS_TO_INSPECT)
+        if row_items is None:
+            return None
+
         rows: list[FacialTransformMatrixRow] = []
-        for row in payload:
+        for row in row_items:
             if not _is_bounded_sequence(row):
                 return None
             if len(row) != _MATRIX_SIZE:
                 return None
 
+            scalar_items = _extract_bounded_items(row, _MAX_ITEMS_TO_INSPECT)
+            if scalar_items is None:
+                return None
+
             scalars: list[float] = []
-            for scalar in row:
+            for scalar in scalar_items:
                 if not _is_plain_number(scalar):
                     return None
                 scalars.append(float(scalar))
@@ -144,16 +170,24 @@ def _is_valid_matrix_shape(shape: object) -> bool:
 
 def _adapt_tolist_result(converted: object) -> PlainFacialTransformMatrix | None:
     try:
-        if not isinstance(converted, list) or len(converted) != _MATRIX_SIZE:
+        if type(converted) is not list or len(converted) != _MATRIX_SIZE:
+            return None
+
+        row_items = _extract_bounded_items(converted, _MAX_ITEMS_TO_INSPECT)
+        if row_items is None:
             return None
 
         rows: list[FacialTransformMatrixRow] = []
-        for row in converted:
-            if not isinstance(row, list) or len(row) != _MATRIX_SIZE:
+        for row in row_items:
+            if type(row) is not list or len(row) != _MATRIX_SIZE:
+                return None
+
+            scalar_items = _extract_bounded_items(row, _MAX_ITEMS_TO_INSPECT)
+            if scalar_items is None:
                 return None
 
             scalars: list[float] = []
-            for scalar in row:
+            for scalar in scalar_items:
                 if not _is_plain_number(scalar):
                     return None
                 scalars.append(float(scalar))
