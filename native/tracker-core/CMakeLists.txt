@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.16)
 
 project(lvk_tracker_core LANGUAGES CXX)
 
+# std::thread (used by the durable helper-process cleanup registry and, on
+# Windows, the bounded frame writer) requires the platform threads library on
+# POSIX toolchains. Harmless on MSVC.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 find_package(OpenCV QUIET COMPONENTS core videoio)
 set(LVK_HAS_OPENCV_CAMERA ${OpenCV_FOUND})
 if(LVK_HAS_OPENCV_CAMERA)
@@ -49,7 +55,9 @@ add_executable(lvk-tracker-core
   src/face_detector.cpp
   src/face_tracking_pipeline.cpp
   src/frame_preprocessor.cpp
+  src/helper_frame_packet.cpp
   src/helper_message.cpp
+  src/helper_process_cleanup_registry.cpp
   src/helper_process_session.cpp
   src/helper_process_supervisor.cpp
   src/helper_runtime_smoke.cpp
@@ -62,6 +70,7 @@ add_executable(lvk-tracker-core
 )
 
 target_compile_features(lvk-tracker-core PRIVATE cxx_std_17)
+target_link_libraries(lvk-tracker-core PRIVATE Threads::Threads)
 
 
 if(LVK_HAS_OPENCV_CAMERA OR LVK_HAS_OPENCV_FACE_DETECTOR)
@@ -94,11 +103,17 @@ else()
   target_compile_options(lvk-tracker-core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Synthetic helper contract smoke (H1a). Standalone, synthetic-only executable
-# used to exercise the internal Native Core <-> helper JSON contract. It has no
-# OpenCV dependency, does not access a camera, and is not wired into Native Core
-# process supervision. See docs/TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md.
+# Synthetic helper contract smoke (H1a), extended with an opt-in bounded
+# private frame-transport mode (v0.13.0, #534: --session-frame-mode).
+# Standalone, synthetic-only executable used to exercise the internal Native
+# Core <-> helper JSON contract. It has no OpenCV dependency, does not access
+# a camera, and is not wired into Native Core process supervision. It links
+# the pure, OpenCV-independent helper_frame_packet.cpp to decode/validate the
+# frame packet header and compute the frameAck checksum, never pixels beyond
+# that. See docs/TRACKING_HELPER_PROCESS_PROTOTYPE_DESIGN.md and
+# docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md.
 add_executable(lvk-synthetic-helper
+  src/helper_frame_packet.cpp
   src/synthetic_helper_main.cpp
 )
 
@@ -186,4 +201,51 @@ if(MSVC)
   target_compile_options(lvk-helper-h2-state-machine-smoke PRIVATE /W4)
 else()
   target_compile_options(lvk-helper-h2-state-machine-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Bounded frame packet smoke (v0.13.0, #534). Standalone, pure executable that
+# asserts the OpenCV-independent binary frame packet header codec, bounds
+# validation, and BGR24 row normalization directly on hand-built in-memory
+# buffers. No OpenCV, no camera, no process/pipe I/O, no MotionFrame. See
+# docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md.
+add_executable(lvk-helper-frame-packet-smoke
+  src/helper_frame_packet.cpp
+  src/helper_frame_packet_smoke.cpp
+)
+
+target_compile_features(lvk-helper-frame-packet-smoke PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-helper-frame-packet-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-helper-frame-packet-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Bounded frame transport smoke (v0.13.0, #534). Standalone executable that
+# drives HelperProcessSession's private frame-transport machinery directly
+# against lvk-synthetic-helper (--session --session-frame-mode) using
+# in-process synthetic BGR24 buffers. Exists because native-ci.yml never
+# installs OpenCV, so the real synthetic-frame-helper runtime backend cannot
+# be exercised end-to-end there; this smoke proves the transport itself
+# without OpenCV, a camera, or a webcam. Not wired into the lvk-tracker-core
+# runtime. See docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md.
+add_executable(lvk-helper-frame-transport-smoke
+  src/helper_frame_packet.cpp
+  src/helper_frame_transport_smoke.cpp
+  src/helper_message.cpp
+  src/helper_process_cleanup_registry.cpp
+  src/helper_process_session.cpp
+)
+
+target_compile_features(lvk-helper-frame-transport-smoke PRIVATE cxx_std_17)
+target_link_libraries(lvk-helper-frame-transport-smoke PRIVATE Threads::Threads)
+
+# Test-target-only lifecycle fault-injection seam. Defined ONLY here, never on
+# lvk-tracker-core, so production binaries contain no fault-injection surface.
+target_compile_definitions(lvk-helper-frame-transport-smoke PRIVATE LVK_HELPER_LIFECYCLE_TEST_SEAM=1)
+
+if(MSVC)
+  target_compile_options(lvk-helper-frame-transport-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-helper-frame-transport-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()

@@ -96,4 +96,24 @@ bool parseHelperStoppedLine(const std::string& line, std::string& reason);
 bool parseHelperResultEnvelope(
     const std::string& line, ParsedHelperResult& out, std::string& reason);
 
+// v0.13.0 (#534): transport-level acknowledgement for the private frame pipe.
+// Present only in the result envelope of a frame-mode exchange; the #533
+// result-only envelope never carries it. sequence/payloadBytes/checksum are
+// helper-IPC-internal transport concerns, exactly like requestId and
+// frameTimestampMs: they never enter MotionFrame or HelperTrackingResult.
+struct ParsedFrameAck {
+  std::uint64_t sequence = 0;
+  std::uint64_t payloadBytes = 0;
+  std::uint32_t checksum = 0;
+};
+
+// Strictly parses the required "frameAck" sub-object from a session result
+// line: { "sequence": <uint>, "payloadBytes": <uint>, "checksum": <uint> }.
+// Returns false + reason if the "frameAck" object is absent or any of its
+// three fields is missing, non-integer, negative, or (for checksum) out of
+// 32-bit range. Only used by frame-transport sessions; never affects the
+// #533 result-only parse path.
+bool parseHelperFrameAck(
+    const std::string& line, ParsedFrameAck& out, std::string& reason);
+
 }  // namespace lvk::tracker

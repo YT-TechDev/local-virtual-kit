@@ -9,6 +9,10 @@
 #include <memory>
 #include <string>
 
+#ifndef LVK_HAS_OPENCV_CAMERA
+#define LVK_HAS_OPENCV_CAMERA 0
+#endif
+
 namespace lvk::tracker {
 
 // Native Core-owned seam for tracking backend execution. main.cpp depends on
@@ -66,5 +70,30 @@ class SyntheticHelperTrackingBackend final : public TrackingBackend {
   HelperProcessSession session_;
   FaceDetectionDiagnostics diagnostics_;
 };
+
+#if LVK_HAS_OPENCV_CAMERA
+// v0.13.0 opt-in synthetic frame-transport helper backend (#534). Like
+// SyntheticHelperTrackingBackend, but additionally normalizes the incoming
+// OpenCV frame into a bounded contiguous BGR24 payload (via normalizeBgr24Rows
+// in helper_frame_packet.h -- the same function pure smoke tests use) and
+// sends it to the helper over the private frame pipe, correlated by the
+// existing requestId. Development-only: requires --camera-source opencv and
+// is compiled only when LVK_HAS_OPENCV_CAMERA=1; never available otherwise.
+// On any normalization or transport failure it returns a safe lost sample
+// and never reuses stale tracking. Not the default backend.
+class SyntheticFrameHelperTrackingBackend final : public TrackingBackend {
+ public:
+  explicit SyntheticFrameHelperTrackingBackend(HelperSessionConfig config);
+
+  bool start() override;
+  void stop() override;
+  TrackingSample track(const PreprocessedFrame& frame) override;
+  const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;
+
+ private:
+  HelperProcessSession session_;
+  FaceDetectionDiagnostics diagnostics_;
+};
+#endif
 
 }  // namespace lvk::tracker

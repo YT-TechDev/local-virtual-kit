@@ -606,4 +606,48 @@ bool parseHelperResultEnvelope(
   return true;
 }
 
+bool parseHelperFrameAck(
+    const std::string& line, ParsedFrameAck& out, std::string& reason) {
+  JsonValue root;
+  if (!parseObjectLine(line, root, reason)) {
+    return false;
+  }
+  const JsonObject* frameAck = nullptr;
+  if (!getObject(root.object, "frameAck", frameAck, reason)) {
+    return false;
+  }
+
+  long long sequence = 0;
+  if (!getInteger(*frameAck, "sequence", sequence, reason)) {
+    return false;
+  }
+  if (sequence < 0) {
+    reason = "negative frameAck.sequence";
+    return false;
+  }
+
+  long long payloadBytes = 0;
+  if (!getInteger(*frameAck, "payloadBytes", payloadBytes, reason)) {
+    return false;
+  }
+  if (payloadBytes < 0) {
+    reason = "negative frameAck.payloadBytes";
+    return false;
+  }
+
+  long long checksum = 0;
+  if (!getInteger(*frameAck, "checksum", checksum, reason)) {
+    return false;
+  }
+  if (checksum < 0 || checksum > 4294967295LL) {
+    reason = "frameAck.checksum out of 32-bit range";
+    return false;
+  }
+
+  out.sequence = static_cast<std::uint64_t>(sequence);
+  out.payloadBytes = static_cast<std::uint64_t>(payloadBytes);
+  out.checksum = static_cast<std::uint32_t>(checksum);
+  return true;
+}
+
 }  // namespace lvk::tracker

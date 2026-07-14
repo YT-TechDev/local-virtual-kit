@@ -159,7 +159,7 @@ void printUsage(std::ostream &output) {
             "[--camera-source dummy|opencv] [--camera-index N] [--camera-width N] "
             "[--camera-height N] [--camera-fps N] "
             "[--face-detector noop|opencv] [--face-cascade PATH] "
-            "[--tracking-backend face-pipeline|synthetic-helper|mediapipe-face-landmarker] "
+            "[--tracking-backend face-pipeline|synthetic-helper|synthetic-frame-helper|mediapipe-face-landmarker] "
             "[--helper-executable PATH] "
             "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|helper-lifecycle-handshake-ready-timeout|malformed-result-schema|malformed-stopped-schema|malformed-ready-schema|unknown-stdout-line|malformed-stdout-line|bounded-oversized-stdout-line|synthetic-adapter]]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
@@ -189,11 +189,12 @@ void printUsage(std::ostream &output) {
          << kMaxCameraFps << ".\n";
   output << "--face-detector selects the face detector; supported values are 'noop' and 'opencv'.\n";
   output << "--face-cascade PATH provides the external OpenCV Haar cascade XML path required by --face-detector opencv.\n";
-  output << "--tracking-backend selects the Native Core tracking backend; supported values are 'face-pipeline', 'synthetic-helper', and 'mediapipe-face-landmarker'. "
+  output << "--tracking-backend selects the Native Core tracking backend; supported values are 'face-pipeline', 'synthetic-helper', 'synthetic-frame-helper', and 'mediapipe-face-landmarker'. "
             "The synthetic-helper backend is an opt-in, development-only backend that drives the local synthetic helper session and requires --helper-executable PATH; it sends no camera frames to the helper. "
+            "The synthetic-frame-helper backend (v0.13.0, #534) additionally sends one bounded BGR24 frame per request over a private frame pipe; it requires --helper-executable PATH and --camera-source opencv, and is only available when this build has OpenCV camera support (see --print-runtime-capabilities). "
             "The mediapipe-face-landmarker candidate is a fail-closed scaffold and is not enabled in this build.\n";
-  output << "--helper-executable PATH provides the local synthetic helper executable used by --tracking-backend synthetic-helper; it is only valid with that backend.\n";
-  output << "--helper-arg VALUE (repeatable) appends a development-only argument after the helper's '--session' flag; it is only valid with --tracking-backend synthetic-helper and is used to exercise deterministic synthetic helper session fault modes in tests.\n";
+  output << "--helper-executable PATH provides the local synthetic helper executable used by --tracking-backend synthetic-helper or synthetic-frame-helper; it is only valid with those backends.\n";
+  output << "--helper-arg VALUE (repeatable) appends a development-only argument after the helper's '--session' flag; it is only valid with --tracking-backend synthetic-helper or synthetic-frame-helper and is used to exercise deterministic synthetic helper session fault modes in tests.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
   output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, helper-lifecycle-handshake-ready-timeout, malformed-result-schema, malformed-stopped-schema, malformed-ready-schema, unknown-stdout-line, malformed-stdout-line, bounded-oversized-stdout-line, and synthetic-adapter. Defaults to normal.\n";
   output << "--print-runtime-capabilities prints compile-time and local capability information to stdout and exits without opening a camera or emitting MotionFrame data.\n";
@@ -218,6 +219,9 @@ void printRuntimeCapabilities(std::ostream &output) {
   output << "supportedFaceDetectors=" << faceDetectors << "\n";
 
   std::string trackingBackends = "face-pipeline,synthetic-helper";
+#if LVK_HAS_OPENCV_CAMERA
+  trackingBackends += ",synthetic-frame-helper";
+#endif
 #if LVK_HAS_MEDIAPIPE_FACE_LANDMARKER
   trackingBackends += ",mediapipe-face-landmarker";
 #endif
@@ -226,6 +230,12 @@ void printRuntimeCapabilities(std::ostream &output) {
   // The synthetic helper backend is compiled in and selectable, but this report
   // must not claim a local helper executable exists or launch one.
   output << "syntheticHelperBackendSupport=true\n";
+  // v0.13.0 (#534): honestly reports frame-transport availability without
+  // launching a helper or opening a camera; true only when this build has
+  // OpenCV camera support (the synthetic-frame-helper backend's hard
+  // requirement).
+  output << "frameTransportBackendSupport="
+         << (LVK_HAS_OPENCV_CAMERA ? "true" : "false") << "\n";
 
   output << "cameraOpened=false\n";
   output << "motionFramesEmitted=false\n";
@@ -677,10 +687,12 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       const std::string trackingBackendName = argv[argIndex + 1];
       if (trackingBackendName != "face-pipeline" &&
           trackingBackendName != "synthetic-helper" &&
+          trackingBackendName != "synthetic-frame-helper" &&
           trackingBackendName != "mediapipe-face-landmarker") {
         std::cerr << "Unsupported tracking backend: " << trackingBackendName
                   << ". Supported values are 'face-pipeline', "
-                     "'synthetic-helper', and 'mediapipe-face-landmarker'.\n";
+                     "'synthetic-helper', 'synthetic-frame-helper', and "
+                     "'mediapipe-face-landmarker'.\n";
         printUsage(std::cerr);
         return false;
       }
@@ -733,30 +745,50 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
     return false;
   }
 
-  // v0.13.0 synthetic helper backend configuration rules (#533). These fail
-  // closed at parse time, before any camera or helper is created.
+  // v0.13.0 synthetic helper backend configuration rules (#533), extended for
+  // the opt-in synthetic-frame-helper backend (#534). These fail closed at
+  // parse time, before any camera or helper is created.
   const bool syntheticHelperBackend =
       options.trackingBackendName == "synthetic-helper";
-  if (!options.helperExecutablePath.empty() && !syntheticHelperBackend) {
+  const bool syntheticFrameHelperBackend =
+      options.trackingBackendName == "synthetic-frame-helper";
+  const bool helperBackendRequiringExecutable =
+      syntheticHelperBackend || syntheticFrameHelperBackend;
+
+  if (!options.helperExecutablePath.empty() &&
+      !helperBackendRequiringExecutable) {
     std::cerr << "--helper-executable requires --tracking-backend "
-                 "synthetic-helper.\n";
+                 "synthetic-helper or synthetic-frame-helper.\n";
     printUsage(std::cerr);
     return false;
   }
-  if (!options.helperArgs.empty() && !syntheticHelperBackend) {
-    std::cerr << "--helper-arg requires --tracking-backend synthetic-helper.\n";
+  if (!options.helperArgs.empty() && !helperBackendRequiringExecutable) {
+    std::cerr << "--helper-arg requires --tracking-backend synthetic-helper "
+                 "or synthetic-frame-helper.\n";
     printUsage(std::cerr);
     return false;
   }
-  if (syntheticHelperBackend && options.helperExecutablePath.empty()) {
-    std::cerr << "--tracking-backend synthetic-helper requires "
-                 "--helper-executable PATH.\n";
+  if (helperBackendRequiringExecutable &&
+      options.helperExecutablePath.empty()) {
+    std::cerr << "--tracking-backend " << options.trackingBackendName
+              << " requires --helper-executable PATH.\n";
     printUsage(std::cerr);
     return false;
   }
-  if (syntheticHelperBackend && !options.helperRuntimeSmokePath.empty()) {
+  if (helperBackendRequiringExecutable &&
+      !options.helperRuntimeSmokePath.empty()) {
     std::cerr << "--helper-runtime-smoke cannot be combined with "
-                 "--tracking-backend synthetic-helper; choose one mode.\n";
+                 "--tracking-backend "
+              << options.trackingBackendName << "; choose one mode.\n";
+    printUsage(std::cerr);
+    return false;
+  }
+  // The frame-transport backend additionally requires a real OpenCV camera
+  // source: it has nothing to normalize/send otherwise. Checked here, at
+  // parse time, so it fails before any helper or camera is created.
+  if (syntheticFrameHelperBackend && options.camera.sourceName != "opencv") {
+    std::cerr << "--tracking-backend synthetic-frame-helper requires "
+                 "--camera-source opencv.\n";
     printUsage(std::cerr);
     return false;
   }
@@ -820,6 +852,19 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // v0.13.0 (#534): the frame-transport backend requires OpenCV camera
+  // support at compile time. Checked here, before any helper or camera is
+  // created, so an unavailable/misconfigured selection fails closed.
+  if (options.trackingBackendName == "synthetic-frame-helper" &&
+      !LVK_HAS_OPENCV_CAMERA) {
+    std::cerr << "The synthetic-frame-helper backend requires OpenCV camera "
+                 "support, which is not enabled in this build. Install "
+                 "OpenCV development packages (core + videoio) and "
+                 "reconfigure, or use --tracking-backend face-pipeline "
+                 "(default) or synthetic-helper instead.\n";
+    return 1;
+  }
+
   auto cameraSource = lvk::tracker::createCameraSource(options.camera);
   if (!cameraSource) {
     if (options.camera.sourceName == "opencv" && !LVK_HAS_OPENCV_CAMERA) {
@@ -870,6 +915,22 @@ int main(int argc, char *argv[]) {
     trackingBackend =
         std::make_unique<lvk::tracker::SyntheticHelperTrackingBackend>(
             std::move(helperConfig));
+  } else if (options.trackingBackendName == "synthetic-frame-helper") {
+#if LVK_HAS_OPENCV_CAMERA
+    lvk::tracker::HelperSessionConfig helperConfig;
+    helperConfig.executablePath = options.helperExecutablePath;
+    helperConfig.extraArgs = options.helperArgs;
+    helperConfig.enableFrameTransport = true;
+    trackingBackend =
+        std::make_unique<lvk::tracker::SyntheticFrameHelperTrackingBackend>(
+            std::move(helperConfig));
+#else
+    // Unreachable: the earlier availability check above returns 1 before
+    // this point whenever LVK_HAS_OPENCV_CAMERA is 0.
+    trackingBackend =
+        std::make_unique<lvk::tracker::FaceTrackingPipelineBackend>(
+            *faceDetector, motionTracker, options.faceDetectorName);
+#endif
   } else {
     trackingBackend =
         std::make_unique<lvk::tracker::FaceTrackingPipelineBackend>(
