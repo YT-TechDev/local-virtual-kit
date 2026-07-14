@@ -5,15 +5,30 @@
 // directly on hand-built in-memory buffers. No OpenCV, no camera, no
 // process/pipe I/O, no MotionFrame. Deterministic and CI-safe with zero
 // OpenCV installed. See docs/TRACKING_HELPER_PROCESS_H2_PIPE_FRAMING_CONTRACT.md.
+//
+// v0.13.0 (#535): also supports one opt-in, test-only fixture mode
+// ("--emit-python-frame-input-fixture") that emits one tiny synthetic
+// request/header/payload fixture built from the actual current
+// encodeFramePacketHeader() and fnv1a32(), so a separate Python decoder can
+// be proven to interoperate with the real C++ encoder/checksum. It performs
+// no camera, file, network, or temp-file I/O, and never prints the fixture
+// values through any other path. This does not alter the default no-argument
+// smoke behavior.
 
 #include "helper_frame_packet.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 namespace {
 
@@ -441,9 +456,7 @@ void testNormalizeBgr24RowsRejectsBadInput() {
       "normalizeBgr24Rows: null source rejected as InvalidDimensions");
 }
 
-}  // namespace
-
-int main() {
+int runDefaultSmoke() {
   testValidPacketRoundTrip();
   testExactHeaderSize();
   testMaxPayloadBoundaryWithoutLargeAllocation();
@@ -468,4 +481,86 @@ int main() {
   }
   std::cout << "helper-frame-packet smoke OK\n";
   return 0;
+}
+
+std::string toLowerHex(const std::vector<std::uint8_t>& bytes) {
+  static const char kDigits[] = "0123456789abcdef";
+  std::string out;
+  out.reserve(bytes.size() * 2);
+  for (std::uint8_t byteValue : bytes) {
+    out.push_back(kDigits[(byteValue >> 4) & 0x0F]);
+    out.push_back(kDigits[byteValue & 0x0F]);
+  }
+  return out;
+}
+
+// v0.13.0 (#535): opt-in, test-only fixture mode. Builds one tiny synthetic
+// request/header/payload fixture using the actual current
+// encodeFramePacketHeader() and fnv1a32(), and emits exactly three
+// LF-delimited lines (request JSON, packet hex, checksum decimal) so a
+// separate Python decoder/test can prove real cross-runtime parity. The
+// request JSON line is a source-mirrored synthetic fixture, not a call into
+// HelperProcessSession's private buildRequestLine(). No camera, file,
+// network, or temp-file I/O; no diagnostic payload/path content on failure.
+int runEmitPythonFrameInputFixture() {
+#ifdef _WIN32
+  // Ensures each LF delimiter below stays exactly one literal '\n' byte
+  // instead of being translated to CRLF by a text-mode stdout.
+  _setmode(_fileno(stdout), _O_BINARY);
+#endif
+
+  using lvk::tracker::FramePacketHeader;
+  using lvk::tracker::kFramePacketFormatBgr24;
+  using lvk::tracker::kFramePacketHeaderBytes;
+
+  FramePacketHeader header;
+  header.sequence = 7;
+  header.frameTimestampMs = -123;
+  header.width = 2;
+  header.height = 2;
+  header.rowStrideBytes = 6;
+  header.pixelFormat = kFramePacketFormatBgr24;
+  header.payloadBytes = 12;
+
+  std::uint8_t headerBytes[kFramePacketHeaderBytes];
+  lvk::tracker::encodeFramePacketHeader(header, headerBytes);
+
+  const std::vector<std::uint8_t> payload = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+  const std::uint32_t checksum =
+      lvk::tracker::fnv1a32(payload.data(), payload.size());
+
+  std::vector<std::uint8_t> packetBytes(
+      headerBytes, headerBytes + kFramePacketHeaderBytes);
+  packetBytes.insert(packetBytes.end(), payload.begin(), payload.end());
+
+  const std::string requestLine =
+      "{\"type\":\"request\",\"schemaVersion\":1,\"requestId\":7,"
+      "\"frameTimestampMs\":-123}";
+  const std::string packetHex = toLowerHex(packetBytes);
+  const std::string checksumDecimal = std::to_string(checksum);
+
+  if (std::fputs(requestLine.c_str(), stdout) == EOF ||
+      std::fputc('\n', stdout) == EOF ||
+      std::fputs(packetHex.c_str(), stdout) == EOF ||
+      std::fputc('\n', stdout) == EOF ||
+      std::fputs(checksumDecimal.c_str(), stdout) == EOF ||
+      std::fputc('\n', stdout) == EOF || std::fflush(stdout) == EOF) {
+    std::cerr << "[helper-frame-packet-smoke] fixture write failed\n";
+    return 1;
+  }
+  return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  if (argc == 1) {
+    return runDefaultSmoke();
+  }
+  if (argc == 2 &&
+      std::string(argv[1]) == "--emit-python-frame-input-fixture") {
+    return runEmitPythonFrameInputFixture();
+  }
+  std::cerr << "[helper-frame-packet-smoke] unknown argument(s)\n";
+  return 1;
 }
