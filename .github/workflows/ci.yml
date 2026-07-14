@@ -66,6 +66,9 @@ jobs:
       - name: MediaPipe blendshape category adapter tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_blendshape_category_adapter.py
 
+      - name: MediaPipe face result selection tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_result_selection.py
+
       - name: MediaPipe matrix normalization tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_matrix_mapping.py
 
