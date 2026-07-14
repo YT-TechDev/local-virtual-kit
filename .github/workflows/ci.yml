@@ -54,3 +54,11 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: MediaPipe expression mapping tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_expression_mapping.py
