@@ -1235,9 +1235,16 @@ def _consume_cpp_frame_input_fixture(argv: list) -> int:
     if result is None:
         return 1
 
-    if not checksum_decimal or not checksum_decimal.isdigit():
+    if (
+        not checksum_decimal
+        or len(checksum_decimal) > 10
+        or any(character not in "0123456789" for character in checksum_decimal)
+    ):
         return 1
+
     expected_checksum = int(checksum_decimal)
+    if expected_checksum > _UINT32_MAX:
+        return 1
 
     if result.checksum != expected_checksum:
         return 1
@@ -1245,6 +1252,76 @@ def _consume_cpp_frame_input_fixture(argv: list) -> int:
     sys.stdout.buffer.write(b"helper-frame-input parity OK\n")
     sys.stdout.buffer.flush()
     return 0
+
+
+def _valid_cli_fixture_argv() -> list:
+    request_line = _valid_request_line(
+        request_id=_FIXTURE_REQUEST_ID, frame_timestamp_ms=_FIXTURE_FRAME_TIMESTAMP_MS
+    )
+    header_bytes = _encode_header(
+        sequence=_FIXTURE_REQUEST_ID,
+        frame_timestamp_ms=_FIXTURE_FRAME_TIMESTAMP_MS,
+        width=_FIXTURE_WIDTH,
+        height=_FIXTURE_HEIGHT,
+    )
+    payload_bytes = bytes(_FIXTURE_PAYLOAD_BYTES)
+    packet_hex = (header_bytes + payload_bytes).hex()
+    checksum_decimal = str(helper_frame_input._fnv1a32(payload_bytes))
+    return [request_line, packet_hex, checksum_decimal]
+
+
+class CliFixtureConsumerChecksumTest(unittest.TestCase):
+    def _run_with_checksum(self, checksum_decimal: str):
+        request_line, packet_hex, _ = _valid_cli_fixture_argv()
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            exit_code = _consume_cpp_frame_input_fixture(
+                [request_line, packet_hex, checksum_decimal]
+            )
+        return exit_code, out.getvalue(), err.getvalue()
+
+    def test_valid_known_fixture_checksum_accepted(self) -> None:
+        argv = _valid_cli_fixture_argv()
+        fake_stdout = mock.Mock()
+        fake_stdout.buffer = io.BytesIO()
+        err = io.StringIO()
+        with mock.patch("sys.stdout", fake_stdout), contextlib.redirect_stderr(err):
+            exit_code = _consume_cpp_frame_input_fixture(argv)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(fake_stdout.buffer.getvalue(), b"helper-frame-input parity OK\n")
+        self.assertEqual(err.getvalue(), "")
+
+    def test_non_ascii_digit_checksum_rejected(self) -> None:
+        exit_code, out, err = self._run_with_checksum("١٢٣")
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "")
+
+    def test_checksum_longer_than_int_conversion_digit_limit_rejected(self) -> None:
+        exit_code, out, err = self._run_with_checksum("1" * 5000)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "")
+
+    def test_ten_digit_checksum_above_uint32_max_rejected(self) -> None:
+        exit_code, out, err = self._run_with_checksum(str(_UINT32_MAX + 1).zfill(10))
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "")
+
+    def test_empty_checksum_rejected(self) -> None:
+        exit_code, out, err = self._run_with_checksum("")
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "")
+
+    def test_checksum_with_non_digit_characters_rejected(self) -> None:
+        for checksum_decimal in ("-1", "+1", "1 ", " 1", "1.0", "1e5", "1_0"):
+            with self.subTest(checksum_decimal=checksum_decimal):
+                exit_code, out, err = self._run_with_checksum(checksum_decimal)
+                self.assertNotEqual(exit_code, 0)
+                self.assertEqual(out, "")
+                self.assertEqual(err, "")
 
 
 if __name__ == "__main__":
