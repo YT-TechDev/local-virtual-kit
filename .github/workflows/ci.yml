@@ -98,3 +98,6 @@ jobs:
 
       - name: MediaPipe Face Landmarker runtime tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_runtime.py
+
+      - name: MediaPipe Face Landmarker inference tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_inference.py
