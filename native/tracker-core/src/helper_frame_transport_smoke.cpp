@@ -49,6 +49,7 @@ void expect(bool condition, const std::string& what) {
 
 using lvk::tracker::FramePixelView;
 using lvk::tracker::HelperDiagnosticCategory;
+using lvk::tracker::HelperInvocationMode;
 using lvk::tracker::HelperProcessCleanupRegistry;
 using lvk::tracker::HelperProcessSession;
 using lvk::tracker::HelperSessionConfig;
@@ -1397,6 +1398,255 @@ void testReadySourceInvalidExpectedFailsBeforeLaunch(
   session.stop();
 }
 
+// v0.13.0 (#568): exact helper invocation mode. These cases exercise the
+// platform-independent argument-selection boundary in
+// HelperProcessSession::start() -- never platformLaunch() itself -- using the
+// strict, exact-argc/argv synthetic-helper probes (A/B/C/D) added alongside
+// this change. A strict probe only enters its normal session/frame path on a
+// byte-for-byte exact argv match, so a passing exchange here is itself proof
+// that no extra, missing, reordered, or implicitly injected argument reached
+// the child.
+
+// 1. Default synthetic argument order: the existing "--session" + extraArgs
+// contract, no frame transport. Strict probe A proves the exact current argc
+// and order (no implicit "--session-frame-mode" was added).
+void testExactInvocationDefaultSyntheticArgumentOrder(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.enableFrameTransport = false;
+  config.extraArgs = {"--strict-synthetic-session-probe"};
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "exact-invocation default-synthetic-order: session starts (strict "
+         "probe A matched the exact current argv)");
+  if (session.state() != HelperSessionState::Ready) {
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(10000);
+  expect(outcome.ok,
+         "exact-invocation default-synthetic-order: one track() exchange "
+         "succeeds");
+  session.stop();
+}
+
+// 2. Synthetic frame argument order: the existing "--session" +
+// "--session-frame-mode" + extraArgs contract. Strict probe B proves the
+// exact current argc and order with frame transport enabled.
+void testExactInvocationSyntheticFrameArgumentOrder(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.enableFrameTransport = true;
+  config.extraArgs = {"--strict-synthetic-frame-session-probe"};
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "exact-invocation synthetic-frame-order: session starts (strict "
+         "probe B matched the exact current argv)");
+  if (session.state() != HelperSessionState::Ready) {
+    return;
+  }
+  const std::vector<std::uint8_t> frame = makeDeterministicBgr24(2, 2);
+  const FramePixelView view{frame.data(), 2, 2};
+  const HelperTrackOutcome outcome = session.trackWithFrame(11000, view);
+  expect(outcome.ok,
+         "exact-invocation synthetic-frame-order: one trackWithFrame() "
+         "exchange succeeds and frameAck validates");
+  session.stop();
+}
+
+// 3. Exact argument order and count: ExactArguments mode passes only the
+// configured argv, in order, with no injected "--session". Any implicit
+// "--session" would change argc/order and strict probe C would reject
+// startup -- a passing exchange is the required proof.
+void testExactInvocationExactArgumentOrderAndCount(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.invocationMode = HelperInvocationMode::ExactArguments;
+  config.exactArguments = {
+      "--strict-exact-session-probe", "argument with spaces", "exact-tail"};
+  config.enableFrameTransport = false;
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "exact-invocation exact-order-and-count: session starts (strict "
+         "probe C matched the exact configured argv, no injected "
+         "\"--session\")");
+  if (session.state() != HelperSessionState::Ready) {
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(12000);
+  expect(outcome.ok,
+         "exact-invocation exact-order-and-count: one track() exchange "
+         "succeeds");
+  session.stop();
+}
+
+// 4. Exact arguments with private frame transport: ExactArguments mode with
+// enableFrameTransport = true still passes only the configured argv -- no
+// injected "--session" or "--session-frame-mode". Strict probe D requires the
+// exact same tail whether or not frame transport is enabled, so a passing
+// trackWithFrame()/frameAck exchange is the required proof that frame
+// endpoint creation is independent from synthetic CLI injection.
+void testExactInvocationExactArgumentsWithFrameTransport(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.invocationMode = HelperInvocationMode::ExactArguments;
+  config.exactArguments = {
+      "--strict-exact-frame-session-probe", "frame argument with spaces",
+      "exact-frame-tail"};
+  config.enableFrameTransport = true;
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "exact-invocation exact-with-frame-transport: session starts "
+         "(strict probe D matched the exact configured argv, no injected "
+         "\"--session\"/\"--session-frame-mode\")");
+  if (session.state() != HelperSessionState::Ready) {
+    return;
+  }
+  const std::vector<std::uint8_t> frame = makeDeterministicBgr24(2, 2);
+  const FramePixelView view{frame.data(), 2, 2};
+  const HelperTrackOutcome outcome = session.trackWithFrame(13000, view);
+  expect(outcome.ok,
+         "exact-invocation exact-with-frame-transport: one trackWithFrame() "
+         "exchange succeeds and frameAck validates");
+  session.stop();
+}
+
+// 5. ExactArguments mode combined with non-empty legacy extraArgs is
+// ambiguous argv ownership: start() must reject it BEFORE any child is
+// created, with the same generic MalformedMessage category the
+// expectedReadySource preflight check already uses.
+void testExactInvocationRejectsMixedModeExtraArgs(
+    const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "exact-invocation reject-mixed-extra-args: registry drained before "
+         "test");
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.invocationMode = HelperInvocationMode::ExactArguments;
+  config.exactArguments = {"--strict-exact-session-probe"};
+  config.extraArgs = {"--strict-synthetic-session-probe"};
+  HelperProcessSession session(config);
+  expect(!session.start(),
+         "exact-invocation reject-mixed-extra-args: start() fails closed "
+         "before launch");
+  expect(session.state() == HelperSessionState::Failed,
+         "exact-invocation reject-mixed-extra-args: state is Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "exact-invocation reject-mixed-extra-args: diagnostic is "
+         "MalformedMessage");
+  expect(!session.testOnlyDirectlyOwnsChild(),
+         "exact-invocation reject-mixed-extra-args: no child was ever "
+         "created");
+  expect(!session.testOnlyHasPreparedChildFallback(),
+         "exact-invocation reject-mixed-extra-args: no prepared child "
+         "fallback remains");
+  expect(registryCount() == 0,
+         "exact-invocation reject-mixed-extra-args: durable registry stays "
+         "at baseline");
+  session.stop();  // idempotent no-op on a never-launched session
+}
+
+// 6. SyntheticSession mode combined with non-empty exactArguments is the
+// mirror-image ambiguous configuration: start() must reject it BEFORE any
+// child is created, with the same pre-launch evidence as case 5.
+void testExactInvocationRejectsMixedModeExactArguments(
+    const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "exact-invocation reject-mixed-exact-args: registry drained before "
+         "test");
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.exactArguments = {"--strict-exact-session-probe"};
+  HelperProcessSession session(config);
+  expect(!session.start(),
+         "exact-invocation reject-mixed-exact-args: start() fails closed "
+         "before launch");
+  expect(session.state() == HelperSessionState::Failed,
+         "exact-invocation reject-mixed-exact-args: state is Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "exact-invocation reject-mixed-exact-args: diagnostic is "
+         "MalformedMessage");
+  expect(!session.testOnlyDirectlyOwnsChild(),
+         "exact-invocation reject-mixed-exact-args: no child was ever "
+         "created");
+  expect(!session.testOnlyHasPreparedChildFallback(),
+         "exact-invocation reject-mixed-exact-args: no prepared child "
+         "fallback remains");
+  expect(registryCount() == 0,
+         "exact-invocation reject-mixed-exact-args: durable registry stays "
+         "at baseline");
+  session.stop();  // idempotent no-op on a never-launched session
+}
+
+// 7. An unsupported HelperInvocationMode value (constructed via a deliberate
+// invalid enum cast, never reachable through the closed public enum) must be
+// rejected with the same pre-launch evidence as cases 5 and 6.
+void testExactInvocationRejectsUnsupportedMode(const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "exact-invocation reject-unsupported-mode: registry drained before "
+         "test");
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.invocationMode = static_cast<HelperInvocationMode>(
+      static_cast<int>(HelperInvocationMode::ExactArguments) + 1);
+  HelperProcessSession session(config);
+  expect(!session.start(),
+         "exact-invocation reject-unsupported-mode: start() fails closed "
+         "before launch");
+  expect(session.state() == HelperSessionState::Failed,
+         "exact-invocation reject-unsupported-mode: state is Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "exact-invocation reject-unsupported-mode: diagnostic is "
+         "MalformedMessage");
+  expect(!session.testOnlyDirectlyOwnsChild(),
+         "exact-invocation reject-unsupported-mode: no child was ever "
+         "created");
+  expect(!session.testOnlyHasPreparedChildFallback(),
+         "exact-invocation reject-unsupported-mode: no prepared child "
+         "fallback remains");
+  expect(registryCount() == 0,
+         "exact-invocation reject-unsupported-mode: durable registry stays "
+         "at baseline");
+  session.stop();  // idempotent no-op on a never-launched session
+}
+
+// 8. An empty exactArguments vector is valid configuration (an executable can
+// require no arguments) and must reach the existing bounded platform launch
+// path rather than being rejected as malformed configuration. Pairing it with
+// a deliberately nonexistent executable path proves this: the failure must be
+// LaunchFailure, not MalformedMessage.
+void testExactInvocationEmptyExactArgumentsReachesLaunch(
+    const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "exact-invocation empty-exact-args: registry drained before test");
+  HelperSessionConfig config;
+  config.executablePath = helperPath + ".does-not-exist-lvk568";
+  config.invocationMode = HelperInvocationMode::ExactArguments;
+  HelperProcessSession session(config);
+  expect(!session.start(),
+         "exact-invocation empty-exact-args: start() fails (bad exec path)");
+  expect(session.state() == HelperSessionState::Failed,
+         "exact-invocation empty-exact-args: state is Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::LaunchFailure,
+         "exact-invocation empty-exact-args: diagnostic is LaunchFailure, "
+         "proving the empty vector passed configuration validation and "
+         "reached the existing bounded platform launch path (not rejected "
+         "as MalformedMessage)");
+  expect(!session.testOnlyDirectlyOwnsChild(),
+         "exact-invocation empty-exact-args: no child remains directly "
+         "owned");
+  expect(!session.testOnlyHasPreparedChildFallback(),
+         "exact-invocation empty-exact-args: no prepared child fallback "
+         "remains");
+  expect(registryCount() == 0,
+         "exact-invocation empty-exact-args: durable registry returns to "
+         "baseline");
+  session.stop();  // idempotent no-op on a never-launched session
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1450,6 +1700,15 @@ int main(int argc, char** argv) {
   testReadySourceDefaultExpectedMediaPipeEmittingHelper(helperPath);
   testReadySourceMediaPipeExpectedDefaultSyntheticHelper(helperPath);
   testReadySourceInvalidExpectedFailsBeforeLaunch(helperPath);
+
+  testExactInvocationDefaultSyntheticArgumentOrder(helperPath);
+  testExactInvocationSyntheticFrameArgumentOrder(helperPath);
+  testExactInvocationExactArgumentOrderAndCount(helperPath);
+  testExactInvocationExactArgumentsWithFrameTransport(helperPath);
+  testExactInvocationRejectsMixedModeExtraArgs(helperPath);
+  testExactInvocationRejectsMixedModeExactArguments(helperPath);
+  testExactInvocationRejectsUnsupportedMode(helperPath);
+  testExactInvocationEmptyExactArgumentsReachesLaunch(helperPath);
 
   // No lifecycle test may leak a durable cleanup entry.
   expect(pumpUntilEmptyOrDeadline(5000) == 0,

@@ -2409,6 +2409,49 @@ const char* helperDiagnosticCategoryLabel(HelperDiagnosticCategory category) {
   return "none";
 }
 
+namespace {
+
+// v0.13.0 (#568): the ONLY place that selects the child's final argv from
+// HelperSessionConfig. platformLaunch() (both platforms) receives this
+// already-complete vector and never itself injects "--session" or
+// "--session-frame-mode" -- that stays true after this change. Returns false
+// on any ambiguous/invalid configuration (mixed-mode or an unsupported enum
+// value); the caller must fail closed on MalformedMessage before ever calling
+// platformLaunch().
+bool buildHelperChildArguments(
+    const HelperSessionConfig& config,
+    std::vector<std::string>& argumentsOut) {
+  switch (config.invocationMode) {
+    case HelperInvocationMode::SyntheticSession: {
+      if (!config.exactArguments.empty()) {
+        return false;
+      }
+      argumentsOut.clear();
+      argumentsOut.reserve(2 + config.extraArgs.size());
+      argumentsOut.push_back("--session");
+      if (config.enableFrameTransport) {
+        argumentsOut.push_back("--session-frame-mode");
+      }
+      for (const std::string& extra : config.extraArgs) {
+        argumentsOut.push_back(extra);
+      }
+      return true;
+    }
+    case HelperInvocationMode::ExactArguments: {
+      if (!config.extraArgs.empty()) {
+        return false;
+      }
+      // Empty is valid here: an executable can require no arguments (see
+      // HelperSessionConfig::exactArguments).
+      argumentsOut = config.exactArguments;
+      return true;
+    }
+  }
+  return false;  // Unsupported enum value: reject before platformLaunch().
+}
+
+}  // namespace
+
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
 long long HelperProcessSession::testOnlyRetainedChildPid() const {
 #ifdef _WIN32
@@ -2697,14 +2740,17 @@ bool HelperProcessSession::start() {
     return false;
   }
 
+  // v0.13.0 (#568): select the final child argv before any child exists.
+  // Mixed-mode configuration (extraArgs with ExactArguments, exactArguments
+  // with SyntheticSession) and an unsupported invocationMode value all fail
+  // closed here, with no launch attempt at all (MalformedMessage, not
+  // LaunchFailure) -- identical in shape to the expectedReadySource check
+  // above.
   std::vector<std::string> arguments;
-  arguments.reserve(2 + config_.extraArgs.size());
-  arguments.push_back("--session");
-  if (config_.enableFrameTransport) {
-    arguments.push_back("--session-frame-mode");
-  }
-  for (const std::string& extra : config_.extraArgs) {
-    arguments.push_back(extra);
+  if (!buildHelperChildArguments(config_, arguments)) {
+    lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
+    state_ = HelperSessionState::Failed;
+    return false;
   }
   // Structured launch result: every failure has already conclusively
   // released or committed the child to the durable registry inside

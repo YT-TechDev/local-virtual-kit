@@ -11,25 +11,32 @@
 namespace lvk::tracker {
 
 // v0.13.0 reusable, opt-in, Native Core-owned helper session (#533), extended
-// with an opt-in bounded private frame transport (#534).
+// with an opt-in bounded private frame transport (#534) and a closed
+// child-invocation-mode selector (#568).
 //
-// Owns a single synthetic helper child process, a bounded private control
-// channel (parent->child stdin, child->parent stdout, child->parent stderr),
-// and, only when HelperSessionConfig::enableFrameTransport is set, a second
+// Owns a single helper child process, a bounded private control channel
+// (parent->child stdin, child->parent stdout, child->parent stderr), and,
+// only when HelperSessionConfig::enableFrameTransport is set, a second
 // private anonymous pipe carrying exactly one bounded BGR24 frame packet per
-// track() exchange (see helper_frame_packet.h for the packet format). It
-// drives the existing lvk-synthetic-helper in its interactive "--session"
-// mode: one bounded request/(frame)/result exchange per track()/
+// track() exchange (see helper_frame_packet.h for the packet format). By
+// default (HelperInvocationMode::SyntheticSession) it drives the existing
+// lvk-synthetic-helper in its interactive "--session" mode; in
+// HelperInvocationMode::ExactArguments it launches the configured executable
+// with the caller's exact argv instead, e.g. a real interpreter/script child.
+// Either way this is one bounded request/(frame)/result exchange per track()/
 // trackWithFrame() call, mapped to a TrackingSample by the caller through the
 // existing createTrackingSampleFromHelperResult boundary.
 //
 // #533's track() sends NO camera frame pixels and is completely unchanged
-// when enableFrameTransport is false (the default). All helper stdout/stderr
-// stay private to Native Core; only generic parent diagnostic categories are
-// ever exposed. The session state is Native Core-internal and is never added
-// to MotionFrame. This layer adds no socket, shared-memory, temp-file, or
-// network behavior; the frame pipe is a second private anonymous pipe, not a
-// named pipe, socket, or file.
+// when enableFrameTransport is false (the default). enableFrameTransport
+// controls only the private frame endpoint's creation/inheritance and frame
+// writes -- it is independent of argv construction, including in
+// ExactArguments mode, where it never adds "--session-frame-mode" or any
+// other flag. All helper stdout/stderr stay private to Native Core; only
+// generic parent diagnostic categories are ever exposed. The session state is
+// Native Core-internal and is never added to MotionFrame. This layer adds no
+// socket, shared-memory, temp-file, or network behavior; the frame pipe is a
+// second private anonymous pipe, not a named pipe, socket, or file.
 
 // Native Core-internal session lifecycle. Never serialized into MotionFrame.
 enum class HelperSessionState {
@@ -75,14 +82,42 @@ struct FramePixelView {
   std::uint32_t height = 0;
 };
 
+// v0.13.0 (#568): closed child-invocation-mode selector. SyntheticSession is
+// the existing default compatibility mode: start() builds the same
+// "--session"/"--session-frame-mode"/extraArgs argv it always has.
+// ExactArguments is an explicit caller-owned argv mode for a real child (e.g.
+// an interpreter plus script plus flags): start() passes exactArguments
+// verbatim, with no injected session flags and no extraArgs. In both modes
+// enableFrameTransport controls only the private frame endpoint's
+// creation/inheritance and frame writes; it never alters argv in
+// ExactArguments mode. Native Core-internal only -- never serialized into
+// MotionFrame and never exposed through a public CLI.
+enum class HelperInvocationMode {
+  SyntheticSession,
+  ExactArguments,
+};
+
 struct HelperSessionConfig {
   std::string executablePath;
   // Extra helper arguments appended after "--session" (and after
-  // "--session-frame-mode" when enableFrameTransport is set). Empty in normal
-  // use; a development-only pass-through used to exercise the synthetic
-  // helper's deterministic session fault modes in automated tests. No camera
-  // frame data is ever passed here.
+  // "--session-frame-mode" when enableFrameTransport is set). Only used in the
+  // default SyntheticSession invocation mode; empty in normal use, a
+  // development-only pass-through used to exercise the synthetic helper's
+  // deterministic session fault modes in automated tests. No camera frame
+  // data is ever passed here. Must be empty when invocationMode is
+  // ExactArguments (start() fails closed on MalformedMessage otherwise).
   std::vector<std::string> extraArgs;
+  // v0.13.0 (#568): selects between the default synthetic argv contract and
+  // an explicit caller-owned argv. Defaults to SyntheticSession so every
+  // existing caller is source- and behavior-compatible.
+  HelperInvocationMode invocationMode = HelperInvocationMode::SyntheticSession;
+  // v0.13.0 (#568): the exact, ordered child argv used only when
+  // invocationMode is ExactArguments; start() passes these entries verbatim
+  // with no injected "--session"/"--session-frame-mode" and no extraArgs. An
+  // empty vector is valid (some executables require no arguments). Must be
+  // empty when invocationMode is SyntheticSession (start() fails closed on
+  // MalformedMessage otherwise).
+  std::vector<std::string> exactArguments;
   // v0.13.0 (#556): the exact ready source start() requires from the child's
   // "ready" line. Defaults to the existing synthetic route so every current
   // caller is unchanged. Must be one of the two approved identities in
