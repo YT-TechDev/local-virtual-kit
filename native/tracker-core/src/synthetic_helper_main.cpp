@@ -1160,6 +1160,91 @@ int runSyntheticHelperSession(const HelperOptions &options) {
   return 0;
 }
 
+// v0.13.0 (#568): strict, test-only invocation probes proving the exact
+// current synthetic argv contract AND the new exact-invocation-mode argv
+// contract. Each probe requires a complete, ordered, exact-count argv match
+// before entering session mode; any extra, missing, reordered, or implicitly
+// injected argument fails startup instead of silently falling back to the
+// generic option parser below. Never prints argv on success or failure. ----
+
+enum class StrictProbeOutcome { NotAProbe, Matched, Failed };
+
+// Any of these markers appearing anywhere in argv commits to the strict probe
+// path below -- deliberately broader than an exact prefix check so a
+// mismatched/reordered/padded invocation carrying a probe marker still fails
+// here rather than falling through to the generic parser (which would either
+// reject an unrecognized token or, worse, silently accept a subset of it).
+bool argumentTailContainsStrictProbeMarker(
+    const std::vector<std::string> &argumentTail) {
+  static const char *const kMarkers[] = {
+      "--strict-synthetic-session-probe",
+      "--strict-synthetic-frame-session-probe",
+      "--strict-exact-session-probe",
+      "--strict-exact-frame-session-probe",
+  };
+  for (const std::string &argument : argumentTail) {
+    for (const char *marker : kMarkers) {
+      if (argument == marker) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+StrictProbeOutcome tryParseStrictProbe(
+    const std::vector<std::string> &argumentTail, HelperOptions &options) {
+  if (!argumentTailContainsStrictProbeMarker(argumentTail)) {
+    return StrictProbeOutcome::NotAProbe;
+  }
+
+  // A. Synthetic session probe: proves the current default
+  // "--session" + extraArgs contract with frame mode NOT enabled.
+  if (argumentTail ==
+      std::vector<std::string>{
+          "--session", "--strict-synthetic-session-probe"}) {
+    options.sessionMode = true;
+    return StrictProbeOutcome::Matched;
+  }
+
+  // B. Synthetic frame session probe: proves the current
+  // "--session" + "--session-frame-mode" + extraArgs contract.
+  if (argumentTail ==
+      std::vector<std::string>{
+          "--session", "--session-frame-mode",
+          "--strict-synthetic-frame-session-probe"}) {
+    options.sessionMode = true;
+    options.sessionFrameMode = true;
+    return StrictProbeOutcome::Matched;
+  }
+
+  // C. Exact session probe: proves ExactArguments mode never receives an
+  // implicit "--session". The embedded-space token exercises the current
+  // Windows command-line quoting and POSIX argv path with a safe token.
+  if (argumentTail ==
+      std::vector<std::string>{
+          "--strict-exact-session-probe", "argument with spaces",
+          "exact-tail"}) {
+    options.sessionMode = true;
+    return StrictProbeOutcome::Matched;
+  }
+
+  // D. Exact frame session probe: proves ExactArguments mode with private
+  // frame transport enabled never receives an implicit "--session" or
+  // "--session-frame-mode" -- the required proof that frame endpoint
+  // creation is independent from synthetic CLI injection.
+  if (argumentTail ==
+      std::vector<std::string>{
+          "--strict-exact-frame-session-probe",
+          "frame argument with spaces", "exact-frame-tail"}) {
+    options.sessionMode = true;
+    options.sessionFrameMode = true;
+    return StrictProbeOutcome::Matched;
+  }
+
+  return StrictProbeOutcome::Failed;
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -1170,7 +1255,17 @@ int main(int argc, char *argv[]) {
   }
 
   HelperOptions options;
-  if (!parseHelperOptions(argc, argv, options)) {
+
+  const std::vector<std::string> argumentTail(argv + 1, argv + argc);
+  const StrictProbeOutcome probeOutcome =
+      tryParseStrictProbe(argumentTail, options);
+  if (probeOutcome == StrictProbeOutcome::Failed) {
+    std::cerr << "[helper] strict probe: argv mismatch "
+                 "(reason=synthetic-strict-probe-mismatch)\n";
+    return 1;
+  }
+  if (probeOutcome == StrictProbeOutcome::NotAProbe &&
+      !parseHelperOptions(argc, argv, options)) {
     return 1;
   }
 
