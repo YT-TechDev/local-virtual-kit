@@ -92,3 +92,6 @@ jobs:
 
       - name: MediaPipe helper RGB frame tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_frame_rgb.py
+
+      - name: MediaPipe Face Landmarker options tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_options.py
