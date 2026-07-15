@@ -83,6 +83,12 @@ struct HelperSessionConfig {
   // helper's deterministic session fault modes in automated tests. No camera
   // frame data is ever passed here.
   std::vector<std::string> extraArgs;
+  // v0.13.0 (#556): the exact ready source start() requires from the child's
+  // "ready" line. Defaults to the existing synthetic route so every current
+  // caller is unchanged. Must be one of the two approved identities in
+  // helper_message.h; start() validates this before launching the child and
+  // fails closed (Failed / MalformedMessage, no launch) if it is not.
+  std::string expectedReadySource = kSyntheticHelperReadySource;
   // Bounded waits. Kept small so failures surface quickly and deterministically
   // without ever blocking Native Core's frame loop indefinitely.
   int readyTimeoutMs = 2000;

@@ -2687,6 +2687,16 @@ bool HelperProcessSession::start() {
   }
 
   state_ = HelperSessionState::Starting;
+
+  // v0.13.0 (#556): validate the configured expected ready source BEFORE
+  // launching a child. An unsupported value fails closed with no launch
+  // attempt at all (MalformedMessage, not LaunchFailure).
+  if (!isSupportedHelperReadySource(config_.expectedReadySource)) {
+    lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
+    state_ = HelperSessionState::Failed;
+    return false;
+  }
+
   std::vector<std::string> arguments;
   arguments.reserve(2 + config_.extraArgs.size());
   arguments.push_back("--session");
@@ -2725,7 +2735,7 @@ bool HelperProcessSession::start() {
 
   std::string reason;
   if (classifyHelperLine(line) != HelperLineType::Ready ||
-      !parseHelperReadyLine(line, reason)) {
+      !parseHelperReadyLine(line, config_.expectedReadySource, reason)) {
     lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
     state_ = HelperSessionState::Failed;
     return false;
