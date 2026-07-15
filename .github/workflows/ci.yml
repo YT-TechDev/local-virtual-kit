@@ -110,3 +110,6 @@ jobs:
 
       - name: MediaPipe Face Landmarker runtime smoke tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_runtime_smoke.py
+
+      - name: MediaPipe Face Landmarker helper session tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_helper_session.py
