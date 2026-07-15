@@ -1350,10 +1350,12 @@ struct HelperSessionHandles {
 
 namespace {
 
-// Fixed child fd for the private frame pipe (v0.13.0, #534), established via
-// dup2 before exec. Only meaningful when the child was also launched with
-// "--session-frame-mode". No value needs to be communicated to the child --
-// POSIX fd numbers are stable across exec via dup2, unlike Windows handles.
+// Fixed child fd for the private frame pipe, established via dup2 before exec.
+// Its creation is controlled only by enableFrameTransport. SyntheticSession
+// additionally communicates frame mode through --session-frame-mode;
+// ExactArguments callers own their argv and receive no injected flag. No
+// value needs to be communicated to the child -- POSIX fd numbers are stable
+// across exec via dup2, unlike Windows handles.
 constexpr int kFrameTransportChildFd = 3;
 
 void sleepMs(int milliseconds) {
