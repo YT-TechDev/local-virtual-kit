@@ -40,6 +40,11 @@ _MAX_LINE_CONTENT_BYTES = 2048
 # is never duplicated here: it is read only from the decoded header.
 _FRAME_HEADER_BYTES = 48
 
+# Fixed cap on consecutive EINTR retries within one _read_exact() operation.
+# Bounds the child-side retry loop: repeated interruption fails the
+# operation instead of retrying without limit.
+_MAX_INTERRUPTED_READ_RETRIES = 8
+
 # Fixed child fd for the private frame pipe (v0.13.0, #534), established via
 # dup2 by Native Core before exec. See helper_process_session.cpp
 # (kFrameTransportChildFd).
@@ -321,10 +326,14 @@ class HelperFrameInputReader:
         fd = self._frame_fd
         chunks: list[bytes] = []
         remaining = size
+        interrupted_count = 0
         while remaining > 0:
             try:
                 chunk = _read_from_fd(fd, remaining)  # type: ignore[arg-type]
             except InterruptedError:
+                interrupted_count += 1
+                if interrupted_count > _MAX_INTERRUPTED_READ_RETRIES:
+                    return ("failed", None)
                 continue
             except (KeyboardInterrupt, SystemExit):
                 raise

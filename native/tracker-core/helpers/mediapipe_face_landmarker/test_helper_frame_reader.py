@@ -722,6 +722,121 @@ class FrameFailuresTest(unittest.TestCase):
 
 
 # =============================================================================
+# Bounded EINTR retry
+# =============================================================================
+
+_MAX_INTERRUPTED_READ_RETRIES = helper_frame_reader._MAX_INTERRUPTED_READ_RETRIES
+
+
+class InterruptedReadBoundTest(unittest.TestCase):
+    def test_one_interruption_then_valid_data_succeeds(self) -> None:
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        side_effect = [InterruptedError(), _valid_header_bytes(), _VALID_PAYLOAD]
+        with (
+            _posix(),
+            mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=side_effect),
+        ):
+            outcome = reader.read_next()
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME)
+        assert outcome.frame_input is not None
+        self.assertEqual(outcome.frame_input.bgr24_bytes, _VALID_PAYLOAD)
+
+    def test_cap_plus_one_header_interruptions_fail_header_read(self) -> None:
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        side_effect = [InterruptedError()] * (_MAX_INTERRUPTED_READ_RETRIES + 1)
+        with (
+            _posix(),
+            mock.patch.object(
+                helper_frame_reader, "_read_from_fd", side_effect=side_effect
+            ) as read_mock,
+        ):
+            outcome = reader.read_next()
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_HEADER_READ_FAILED)
+        self.assertEqual(read_mock.call_count, _MAX_INTERRUPTED_READ_RETRIES + 1)
+
+    def test_header_exhaustion_closes_endpoint_once_and_next_read_is_closed(self) -> None:
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n", _valid_stop_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        side_effect = [InterruptedError()] * (_MAX_INTERRUPTED_READ_RETRIES + 1)
+        with (
+            _posix(),
+            mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=side_effect),
+            mock.patch.object(helper_frame_reader, "_close_fd") as close_mock,
+        ):
+            outcome_one = reader.read_next()
+            outcome_two = reader.read_next()
+        self.assertEqual(outcome_one.status, HelperFrameInputReadStatus.FRAME_HEADER_READ_FAILED)
+        close_mock.assert_called_once_with(helper_frame_reader._POSIX_FRAME_FD)
+        self.assertEqual(outcome_two.status, HelperFrameInputReadStatus.CLOSED)
+
+    def test_valid_header_then_cap_plus_one_payload_interruptions_fails_payload_read(self) -> None:
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        side_effect = [_valid_header_bytes()] + [InterruptedError()] * (
+            _MAX_INTERRUPTED_READ_RETRIES + 1
+        )
+        with (
+            _posix(),
+            mock.patch.object(
+                helper_frame_reader, "_read_from_fd", side_effect=side_effect
+            ) as read_mock,
+        ):
+            outcome = reader.read_next()
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_PAYLOAD_READ_FAILED)
+        # One header read call, plus exactly cap + 1 bounded payload attempts.
+        self.assertEqual(read_mock.call_count, 1 + _MAX_INTERRUPTED_READ_RETRIES + 1)
+
+    def test_interrupted_count_not_reset_after_partial_short_read(self) -> None:
+        # A short (partial) successful read must not reset the interrupted
+        # count for the remainder of the same _read_exact() operation.
+        header = _valid_header_bytes()
+        side_effect = (
+            [header[:10]]
+            + [InterruptedError()] * (_MAX_INTERRUPTED_READ_RETRIES + 1)
+        )
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        with (
+            _posix(),
+            mock.patch.object(
+                helper_frame_reader, "_read_from_fd", side_effect=side_effect
+            ) as read_mock,
+        ):
+            outcome = reader.read_next()
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_HEADER_READ_FAILED)
+        self.assertEqual(read_mock.call_count, 1 + _MAX_INTERRUPTED_READ_RETRIES + 1)
+
+    def test_keyboard_interrupt_remains_visible_during_exact_read(self) -> None:
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        with (
+            _posix(),
+            mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=KeyboardInterrupt),
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                reader.read_next()
+
+    def test_system_exit_remains_visible_during_exact_read(self) -> None:
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream)
+        with (
+            _posix(),
+            mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=SystemExit),
+        ):
+            with self.assertRaises(SystemExit):
+                reader.read_next()
+
+    def test_no_timeout_sleep_or_deadline_module_used(self) -> None:
+        import inspect
+
+        source = inspect.getsource(helper_frame_reader)
+        for forbidden in ("time.sleep", "import time", "import threading", "signal.", "deadline"):
+            self.assertNotIn(forbidden, source)
+
+
+# =============================================================================
 # Platform seams
 # =============================================================================
 
