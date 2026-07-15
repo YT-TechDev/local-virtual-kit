@@ -18,6 +18,7 @@
 // from two threads.
 
 #include "helper_frame_packet.h"
+#include "helper_message.h"
 #include "helper_process_cleanup_registry.h"
 #include "helper_process_session.h"
 
@@ -1299,6 +1300,103 @@ void testPublicStreamPrivacy(const std::string& helperPath) {
   session.stop();
 }
 
+// v0.13.0 (#556): focused startup-only ready-source handshake cases. No
+// frame transport is involved -- these only exercise start()'s preflight
+// expected-source validation and the ready-line source match/mismatch path.
+
+void testReadySourceDefaultConfigDefaultSyntheticHelper(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  HelperProcessSession session(config);
+  expect(
+      session.start(),
+      "ready-source default-config+default-helper: start succeeds");
+  expect(
+      session.state() == HelperSessionState::Ready,
+      "ready-source default-config+default-helper: state becomes Ready");
+  session.stop();
+}
+
+void testReadySourceMediaPipeExpectedSyntheticHelperFlag(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.expectedReadySource =
+      lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
+  config.extraArgs = {"--session-ready-source-mediapipe"};
+  HelperProcessSession session(config);
+  expect(
+      session.start(),
+      "ready-source mediapipe-expected+mediapipe-flag: start succeeds");
+  expect(
+      session.state() == HelperSessionState::Ready,
+      "ready-source mediapipe-expected+mediapipe-flag: state becomes Ready");
+  session.stop();
+}
+
+void testReadySourceDefaultExpectedMediaPipeEmittingHelper(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.extraArgs = {"--session-ready-source-mediapipe"};
+  HelperProcessSession session(config);
+  expect(
+      !session.start(),
+      "ready-source default-expected+mediapipe-flag: start fails");
+  expect(
+      session.state() == HelperSessionState::Failed,
+      "ready-source default-expected+mediapipe-flag: state becomes Failed");
+  expect(
+      session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+      "ready-source default-expected+mediapipe-flag: diagnostic is "
+      "MalformedMessage");
+  session.stop();
+}
+
+void testReadySourceMediaPipeExpectedDefaultSyntheticHelper(
+    const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.expectedReadySource =
+      lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
+  HelperProcessSession session(config);
+  expect(
+      !session.start(),
+      "ready-source mediapipe-expected+default-helper: start fails");
+  expect(
+      session.state() == HelperSessionState::Failed,
+      "ready-source mediapipe-expected+default-helper: state becomes Failed");
+  expect(
+      session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+      "ready-source mediapipe-expected+default-helper: diagnostic is "
+      "MalformedMessage");
+  session.stop();
+}
+
+void testReadySourceInvalidExpectedFailsBeforeLaunch(
+    const std::string& helperPath) {
+  // A deliberately unusable executable path paired with an invalid expected
+  // source: the preflight expected-source check must reject BEFORE any
+  // launch attempt, so the diagnostic is MalformedMessage, never
+  // LaunchFailure.
+  HelperSessionConfig config;
+  config.executablePath = helperPath + ".does-not-exist-lvk556";
+  config.expectedReadySource = "arbitrary-unapproved-source";
+  HelperProcessSession session(config);
+  expect(
+      !session.start(),
+      "ready-source invalid-expected: start fails before child launch");
+  expect(
+      session.state() == HelperSessionState::Failed,
+      "ready-source invalid-expected: state becomes Failed");
+  expect(
+      session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+      "ready-source invalid-expected: diagnostic is MalformedMessage, not "
+      "LaunchFailure");
+  session.stop();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1347,6 +1445,11 @@ int main(int argc, char** argv) {
   testChecksumMismatchRejection(helperPath);
   testExactOnceCleanup(helperPath);
   testPublicStreamPrivacy(helperPath);
+  testReadySourceDefaultConfigDefaultSyntheticHelper(helperPath);
+  testReadySourceMediaPipeExpectedSyntheticHelperFlag(helperPath);
+  testReadySourceDefaultExpectedMediaPipeEmittingHelper(helperPath);
+  testReadySourceMediaPipeExpectedDefaultSyntheticHelper(helperPath);
+  testReadySourceInvalidExpectedFailsBeforeLaunch(helperPath);
 
   // No lifecycle test may leak a durable cleanup entry.
   expect(pumpUntilEmptyOrDeadline(5000) == 0,

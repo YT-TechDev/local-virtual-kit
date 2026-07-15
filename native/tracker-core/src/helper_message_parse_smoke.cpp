@@ -178,21 +178,157 @@ int runDefaultSmoke() {
       classifyHelperLine("{ this is not json") == HelperLineType::Unknown,
       "classify malformed as unknown");
 
-  // --- Lifecycle line validators. ---
+  // --- Lifecycle line validators: ready source parameterization (#556). ---
   {
+    using lvk::tracker::isSupportedHelperReadySource;
+    using lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
+    using lvk::tracker::kSyntheticHelperReadySource;
+
     std::string reason;
+
+    // Existing (2-arg) overload: accepts exact synthetic-helper only.
     expect(
         parseHelperReadyLine(
             "{\"type\":\"ready\",\"schemaVersion\":1,"
             "\"source\":\"synthetic-helper\"}",
             reason),
-        "valid ready line accepted");
+        "existing overload accepts exact synthetic-helper");
     expect(
         !parseHelperReadyLine(
             "{\"type\":\"ready\",\"schemaVersion\":10,"
             "\"source\":\"synthetic-helper\"}",
             reason),
         "ready with schemaVersion 10 rejected");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"mediapipe-face-landmarker\"}",
+            reason),
+        "existing overload rejects mediapipe-face-landmarker");
+
+    // Explicit synthetic expectation accepts only synthetic; explicit
+    // MediaPipe expectation accepts only MediaPipe; each route rejects the
+    // other route's source.
+    expect(
+        parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\"}",
+            kSyntheticHelperReadySource, reason),
+        "explicit synthetic expectation accepts synthetic source");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"mediapipe-face-landmarker\"}",
+            kSyntheticHelperReadySource, reason),
+        "explicit synthetic expectation rejects mediapipe source");
+    expect(
+        parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"mediapipe-face-landmarker\"}",
+            kMediaPipeFaceLandmarkerReadySource, reason),
+        "explicit mediapipe expectation accepts mediapipe source");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\"}",
+            kMediaPipeFaceLandmarkerReadySource, reason),
+        "explicit mediapipe expectation rejects synthetic source");
+
+    // Unsupported / empty / control-character expected source is rejected
+    // before the line is even inspected.
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\"}",
+            "arbitrary-unapproved-source", reason),
+        "unsupported expected source rejected");
+    expect(
+        reason.find("arbitrary-unapproved-source") == std::string::npos,
+        "unsupported-expected-source reason omits supplied source text");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\"}",
+            "", reason),
+        "empty expected source rejected");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\"}",
+            std::string("synthetic-helper\x01"), reason),
+        "control-character expected source rejected");
+
+    // Missing / duplicate / non-string received source is rejected.
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1}",
+            kSyntheticHelperReadySource, reason),
+        "missing source rejected");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\","
+            "\"source\":\"synthetic-helper\"}",
+            kSyntheticHelperReadySource, reason),
+        "duplicate source rejected");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,\"source\":1}",
+            kSyntheticHelperReadySource, reason),
+        "non-string source rejected");
+
+    // Empty / control-character received source is rejected.
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":1,\"source\":\"\"}",
+            kSyntheticHelperReadySource, reason),
+        "empty received source rejected");
+    expect(
+        !parseHelperReadyLine(
+            std::string(
+                "{\"type\":\"ready\",\"schemaVersion\":1,\"source\":\"\x01"
+                "\"}"),
+            kSyntheticHelperReadySource, reason),
+        "control-character received source rejected");
+
+    // Schema and type validation remain strict under the parameterized
+    // parser.
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"not-ready\",\"schemaVersion\":1,"
+            "\"source\":\"synthetic-helper\"}",
+            kSyntheticHelperReadySource, reason),
+        "wrong type rejected under parameterized parser");
+    expect(
+        !parseHelperReadyLine(
+            "{\"type\":\"ready\",\"schemaVersion\":10,"
+            "\"source\":\"synthetic-helper\"}",
+            kSyntheticHelperReadySource, reason),
+        "wrong schemaVersion rejected under parameterized parser");
+
+    // Rejection reasons never contain an approved source identity or any
+    // supplied test source text.
+    std::string mismatchReason;
+    parseHelperReadyLine(
+        "{\"type\":\"ready\",\"schemaVersion\":1,"
+        "\"source\":\"mediapipe-face-landmarker\"}",
+        kSyntheticHelperReadySource, mismatchReason);
+    expect(
+        mismatchReason.find(kSyntheticHelperReadySource) ==
+                std::string::npos &&
+            mismatchReason.find(kMediaPipeFaceLandmarkerReadySource) ==
+                std::string::npos,
+        "mismatch reason omits both approved source identities");
+
+    expect(
+        isSupportedHelperReadySource(kSyntheticHelperReadySource) &&
+            isSupportedHelperReadySource(kMediaPipeFaceLandmarkerReadySource),
+        "isSupportedHelperReadySource accepts the two approved identities");
+    expect(
+        !isSupportedHelperReadySource("") &&
+            !isSupportedHelperReadySource("arbitrary"),
+        "isSupportedHelperReadySource rejects unapproved values");
+
     expect(
         parseHelperStoppedLine(
             "{\"type\":\"stopped\",\"schemaVersion\":1,"

@@ -465,7 +465,19 @@ HelperLineType classifyHelperLine(const std::string& line) {
   return HelperLineType::Unknown;
 }
 
-bool parseHelperReadyLine(const std::string& line, std::string& reason) {
+bool isSupportedHelperReadySource(const std::string& source) {
+  return source == kSyntheticHelperReadySource ||
+      source == kMediaPipeFaceLandmarkerReadySource;
+}
+
+bool parseHelperReadyLine(
+    const std::string& line,
+    const std::string& expectedSource,
+    std::string& reason) {
+  if (!isSupportedHelperReadySource(expectedSource)) {
+    reason = "invalid expected ready source";
+    return false;
+  }
   JsonValue root;
   if (!parseObjectLine(line, root, reason)) {
     return false;
@@ -480,11 +492,15 @@ bool parseHelperReadyLine(const std::string& line, std::string& reason) {
   if (!getString(root.object, "source", source, reason)) {
     return false;
   }
-  if (source != "synthetic-helper") {
+  if (source != expectedSource) {
     reason = "unexpected ready source";
     return false;
   }
   return true;
+}
+
+bool parseHelperReadyLine(const std::string& line, std::string& reason) {
+  return parseHelperReadyLine(line, kSyntheticHelperReadySource, reason);
 }
 
 bool parseHelperStoppedLine(const std::string& line, std::string& reason) {

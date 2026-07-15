@@ -33,6 +33,15 @@ namespace lvk::tracker {
 // rejected.
 constexpr std::size_t kHelperMaxLineBytes = 2048;
 
+// v0.13.0 (#556): the exact, approved private helper "ready" source
+// identities. The synthetic route is the existing default; the MediaPipe
+// route is opt-in through HelperSessionConfig::expectedReadySource (#557).
+// No other source value is ever accepted -- no wildcard, prefix, substring,
+// case-folded, whitespace-trimmed, or arbitrary configured value.
+inline constexpr char kSyntheticHelperReadySource[] = "synthetic-helper";
+inline constexpr char kMediaPipeFaceLandmarkerReadySource[] =
+    "mediapipe-face-landmarker";
+
 enum class HelperLineType {
   Ready,
   Result,
@@ -75,9 +84,28 @@ struct ParsedHelperResult {
 // Returns Unknown for any malformed line or unrecognized/absent type.
 HelperLineType classifyHelperLine(const std::string& line);
 
-// Strictly parse a "ready" lifecycle line. Requires an object with exactly a
-// recognized shape: type=="ready", schemaVersion==1, and
-// source=="synthetic-helper". Returns false + reason on any deviation.
+// True only for the exact two approved ready source identities
+// (kSyntheticHelperReadySource / kMediaPipeFaceLandmarkerReadySource). No
+// wildcard, prefix, substring, case-folded, or whitespace-trimmed match.
+bool isSupportedHelperReadySource(const std::string& source);
+
+// Strictly parse a "ready" lifecycle line against an explicit expected
+// source. Requires an object with exactly a recognized shape: type=="ready",
+// schemaVersion==1, and source==expectedSource. `expectedSource` itself must
+// be one of the two approved identities (see isSupportedHelperReadySource);
+// an unsupported expected source is rejected before the line is even
+// inspected. Returns false + reason on any deviation. Reasons are bounded and
+// generic ("invalid expected ready source", "unexpected ready source", or an
+// existing structural reason) and never include the expected or received
+// source text.
+bool parseHelperReadyLine(
+    const std::string& line,
+    const std::string& expectedSource,
+    std::string& reason);
+
+// Strictly parse a "ready" lifecycle line against the default synthetic
+// route. Equivalent to parseHelperReadyLine(line, kSyntheticHelperReadySource,
+// reason); preserves every existing caller's default behavior.
 bool parseHelperReadyLine(const std::string& line, std::string& reason);
 
 // Strictly parse a "stopped" lifecycle line: type=="stopped" and

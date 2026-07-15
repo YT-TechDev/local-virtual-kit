@@ -15,6 +15,7 @@
 //   - stderr: safe diagnostics only (no raw pixels/images/paths/secrets)
 
 #include "helper_frame_packet.h"
+#include "helper_message.h"
 
 #include <chrono>
 #include <cstdint>
@@ -122,6 +123,12 @@ struct HelperOptions {
   bool sessionFrameShortRead = false;
   bool sessionFrameExitDuringTransfer = false;
   bool sessionFrameBadAck = false;
+  // v0.13.0 (#556): test-only, session-mode-only ready source override. Off
+  // by default so the default session ready line is byte-for-byte unchanged
+  // (source=synthetic-helper). This fixture stays synthetic-only: it emits
+  // only the approved mediapipe-face-landmarker identity string and touches
+  // no MediaPipe package, model, path, frame, or runtime behavior.
+  bool sessionReadySourceMediaPipe = false;
 };
 
 // v0.13.0 (#534): the private frame endpoint the parent inherits into this
@@ -364,6 +371,14 @@ void printUsage(std::ostream &output) {
             "--session-frame-bad-ack are deterministic test-only frame fault "
             "modes; combine with --session-stale-request-id to model a "
             "stale frameAck.sequence.\n";
+  output << "--session-ready-source-mediapipe (v0.13.0, #556) is a "
+            "deterministic test-only session-mode flag that changes only the "
+            "\"source\" value emitted on the session's \"ready\" line from "
+            "\"synthetic-helper\" to \"mediapipe-face-landmarker\"; every "
+            "other session behavior (results, stopped, frame transport) is "
+            "unchanged. This fixture remains synthetic only: it emits no "
+            "real MediaPipe package, model, path, frame, or runtime "
+            "behavior.\n";
   output << "This helper is synthetic only: it does not access a camera, files, "
             "models, sockets, or raw frames, and it does not emit MotionFrame.\n";
 }
@@ -581,6 +596,10 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
       options.sessionFrameBadAck = true;
       continue;
     }
+    if (argument == "--session-ready-source-mediapipe") {
+      options.sessionReadySourceMediaPipe = true;
+      continue;
+    }
 
     if (argument == "--fail-after") {
       if (argIndex + 1 >= argc) {
@@ -610,11 +629,11 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
   return true;
 }
 
-void writeReadyLine(std::ostream &output) {
+void writeReadyLine(std::ostream &output, const std::string &source) {
   output << "{"
          << "\"type\":\"ready\","
          << "\"schemaVersion\":" << kHelperSchemaVersion << ","
-         << "\"source\":\"synthetic-helper\"}\n";
+         << "\"source\":\"" << source << "\"}\n";
 }
 
 // Emits a malformed "ready" line with an invalid schema version (10 instead of
@@ -629,7 +648,8 @@ void writeMalformedReadyLine(std::ostream &output) {
   output << "{"
          << "\"type\":\"ready\","
          << "\"schemaVersion\":10,"
-         << "\"source\":\"synthetic-helper\"}\n";
+         << "\"source\":\"" << lvk::tracker::kSyntheticHelperReadySource
+         << "\"}\n";
 }
 
 // Emits a single safe, synthetic helper-style line carrying an unknown type.
@@ -966,7 +986,11 @@ int runSyntheticHelperSession(const HelperOptions &options) {
     std::cerr << "[helper] session: skipping ready "
                  "(reason=synthetic-session-skip-ready)\n";
   } else {
-    writeReadyLine(std::cout);
+    writeReadyLine(
+        std::cout,
+        options.sessionReadySourceMediaPipe
+            ? lvk::tracker::kMediaPipeFaceLandmarkerReadySource
+            : lvk::tracker::kSyntheticHelperReadySource);
     std::cout.flush();
   }
 
@@ -1181,7 +1205,7 @@ int main(int argc, char *argv[]) {
                  "(reason=synthetic-malformed-ready)\n";
     writeMalformedReadyLine(std::cout);
   } else if (!options.skipReady) {
-    writeReadyLine(std::cout);
+    writeReadyLine(std::cout, lvk::tracker::kSyntheticHelperReadySource);
   } else {
     std::cerr << "[helper] startup: skipping ready line "
                  "(reason=synthetic-skip-ready)\n";
