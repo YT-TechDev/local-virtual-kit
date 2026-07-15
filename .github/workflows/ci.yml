@@ -95,3 +95,6 @@ jobs:
 
       - name: MediaPipe Face Landmarker options tests
         run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_options.py
+
+      - name: MediaPipe Face Landmarker runtime tests
+        run: python -B native/tracker-core/helpers/mediapipe_face_landmarker/test_face_landmarker_runtime.py
