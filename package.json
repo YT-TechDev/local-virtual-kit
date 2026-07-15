@@ -10,7 +10,7 @@
     "dev:motion-bridge": "node tools/motion-ws-bridge.mjs",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm test:native-diagnostics-summarize && pnpm test:motion-validator-import && pnpm test:motion-ws-bridge && pnpm test:electron-helper-spawn-diagnostic && pnpm test:electron-helper-lifecycle-exit-diagnostic && pnpm test:electron-native-status-accessibility && pnpm test:electron-runtime-settings-persistence && pnpm test:electron-lifecycle-controls && pnpm test:electron-obs-setup-actions && pnpm test:electron-native-runtime-status-contract && pnpm test:electron-native-pipeline-lifecycle-transitions && pnpm test:electron-native-runtime-root-resolution && pnpm test:electron-runtime-status-summary && pnpm test:electron-runtime-message-panel && pnpm test:electron-native-runtime-capabilities && pnpm test:electron-native-no-frame-startup-warning && pnpm test:web-preview-native-frame-status && pnpm test:native-runtime-capabilities && pnpm test:native-dummy-backend-boundary && pnpm test:native-opencv-baseline-boundary && pnpm test:native-backend-parity-motionframe && pnpm test:helper-message-parse && pnpm test:helper-frame-packet && pnpm test:native-landmark-helper-session && pnpm test:native-landmark-frame-transport && pnpm test:native-mediapipe-build-feasibility-boundary && pnpm test:native-mediapipe-candidate-boundary && pnpm -r --if-present test",
+    "test": "pnpm test:native-diagnostics-summarize && pnpm test:motion-validator-import && pnpm test:motion-ws-bridge && pnpm test:electron-helper-spawn-diagnostic && pnpm test:electron-helper-lifecycle-exit-diagnostic && pnpm test:electron-native-status-accessibility && pnpm test:electron-runtime-settings-persistence && pnpm test:electron-lifecycle-controls && pnpm test:electron-obs-setup-actions && pnpm test:electron-native-runtime-status-contract && pnpm test:electron-native-pipeline-lifecycle-transitions && pnpm test:electron-native-runtime-root-resolution && pnpm test:electron-runtime-status-summary && pnpm test:electron-runtime-message-panel && pnpm test:electron-native-runtime-capabilities && pnpm test:electron-native-no-frame-startup-warning && pnpm test:web-preview-native-frame-status && pnpm test:native-runtime-capabilities && pnpm test:native-dummy-backend-boundary && pnpm test:native-opencv-baseline-boundary && pnpm test:native-backend-parity-motionframe && pnpm test:helper-message-parse && pnpm test:helper-frame-packet && pnpm test:native-landmark-helper-session && pnpm test:native-landmark-frame-transport && pnpm test:native-mediapipe-build-feasibility-boundary && pnpm test:native-mediapipe-candidate-boundary && pnpm test:mediapipe-face-landmarker-runtime-smoke && pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -54,7 +54,9 @@
     "prep:native-runtime:verify:local": "node tools/copy-opencv-runtime-dlls.mjs --manifest native/tracker-core/manifests/opencv-runtime-windows-x64-release.json --verify --dest-dir .lvk-native-runtime/bin",
     "test:native-backend-parity-motionframe": "node tools/check-native-backend-parity-motionframe.mjs",
     "test:native-mediapipe-build-feasibility-boundary": "node tools/check-native-mediapipe-build-feasibility-boundary.mjs",
-    "test:native-mediapipe-candidate-boundary": "node tools/check-native-mediapipe-candidate-boundary.mjs"
+    "test:native-mediapipe-candidate-boundary": "node tools/check-native-mediapipe-candidate-boundary.mjs",
+    "test:mediapipe-face-landmarker-runtime-smoke": "node tools/check-mediapipe-face-landmarker-runtime-smoke.mjs --self-test",
+    "smoke:mediapipe-face-landmarker-runtime:local": "node tools/check-mediapipe-face-landmarker-runtime-smoke.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"
