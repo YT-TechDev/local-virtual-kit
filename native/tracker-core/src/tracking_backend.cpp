@@ -81,11 +81,41 @@ SyntheticHelperTrackingBackend::lastDetectionDiagnostics() const {
 }
 
 #if LVK_HAS_OPENCV_CAMERA
-SyntheticFrameHelperTrackingBackend::SyntheticFrameHelperTrackingBackend(
-    HelperSessionConfig config)
+namespace {
+
+// Safe bytes only: non-empty, bounded, lowercase ASCII letters/digits/hyphen.
+// This is internal-misuse protection only -- the public constructor accepts
+// nothing but a code-owned string literal -- so a rejected label never
+// reaches here in practice, and its bytes are never printed.
+bool isValidFrameHelperBackendLabel(const char* data, std::size_t len) {
+  if (data == nullptr || len == 0 || len > kMaxFrameHelperBackendLabelBytes) {
+    return false;
+  }
+  for (std::size_t i = 0; i < len; ++i) {
+    const char c = data[i];
+    const bool lowerAlpha = c >= 'a' && c <= 'z';
+    const bool digit = c >= '0' && c <= '9';
+    const bool hyphen = c == '-';
+    if (!lowerAlpha && !digit && !hyphen) {
+      return false;
+    }
+  }
+  return true;
+}
+
+constexpr char kFrameHelperFallbackLabel[] = "frame-helper";
+
+}  // namespace
+
+FrameHelperTrackingBackend::FrameHelperTrackingBackend(
+    HelperSessionConfig config,
+    const char* backendLabel,
+    std::size_t backendLabelBytes)
     : session_(std::move(config)),
       diagnostics_(FaceDetectionDiagnostics{
-          "synthetic-frame-helper",
+          isValidFrameHelperBackendLabel(backendLabel, backendLabelBytes)
+              ? std::string(backendLabel, backendLabelBytes)
+              : std::string(kFrameHelperFallbackLabel),
           false,
           0.0,
           FaceBounds{0, 0, 0, 0},
@@ -94,11 +124,11 @@ SyntheticFrameHelperTrackingBackend::SyntheticFrameHelperTrackingBackend(
           FaceDetectionResultSource::None,
       }) {}
 
-bool SyntheticFrameHelperTrackingBackend::start() {
+bool FrameHelperTrackingBackend::start() {
   return session_.start();
 }
 
-void SyntheticFrameHelperTrackingBackend::stop() {
+void FrameHelperTrackingBackend::stop() {
   session_.stop();
   // Surface only a generic, path-free category if a healthy session did not shut
   // down cleanly (no valid stopped line and/or a forced termination). Never
@@ -110,7 +140,7 @@ void SyntheticFrameHelperTrackingBackend::stop() {
   }
 }
 
-TrackingSample SyntheticFrameHelperTrackingBackend::track(
+TrackingSample FrameHelperTrackingBackend::track(
     const PreprocessedFrame& frame) {
   const long long frameTimestampMs = frame.cameraFrame.timestampMs;
 
@@ -152,8 +182,33 @@ TrackingSample SyntheticFrameHelperTrackingBackend::track(
 }
 
 const FaceDetectionDiagnostics&
-SyntheticFrameHelperTrackingBackend::lastDetectionDiagnostics() const {
+FrameHelperTrackingBackend::lastDetectionDiagnostics() const {
   return diagnostics_;
+}
+
+SyntheticFrameHelperTrackingBackend::SyntheticFrameHelperTrackingBackend(
+    HelperSessionConfig config)
+    : backend_(
+          std::move(config),
+          "synthetic-frame-helper",
+          sizeof("synthetic-frame-helper") - 1) {}
+
+bool SyntheticFrameHelperTrackingBackend::start() {
+  return backend_.start();
+}
+
+void SyntheticFrameHelperTrackingBackend::stop() {
+  backend_.stop();
+}
+
+TrackingSample SyntheticFrameHelperTrackingBackend::track(
+    const PreprocessedFrame& frame) {
+  return backend_.track(frame);
+}
+
+const FaceDetectionDiagnostics&
+SyntheticFrameHelperTrackingBackend::lastDetectionDiagnostics() const {
+  return backend_.lastDetectionDiagnostics();
 }
 #endif  // LVK_HAS_OPENCV_CAMERA
 
