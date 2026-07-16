@@ -90,7 +90,14 @@ function findMatchingBracket(masked, openIndex, openChar, closeChar) {
 }
 
 function extractClassBody(masked, original, className) {
-  const marker = `class ${className}`;
+  // "final" disambiguates the real class definition from an earlier
+  // `friend class ${className};` declaration inside a different class body
+  // (e.g. FrameHelperTrackingBackend's trusted-wrapper friend list): every
+  // real class definition in this codebase (and the self-test sample below)
+  // is declared `final`, but a friend declaration never is, so a bare
+  // `class ${className}` marker would otherwise match the friend line first
+  // and return the wrong class's body.
+  const marker = `class ${className} final`;
   const markerIdx = masked.indexOf(marker);
   if (markerIdx === -1) return null;
   const braceIdx = masked.indexOf("{", markerIdx);
@@ -306,6 +313,17 @@ function main() {
   const genericPrivateMasked = genericClass.masked.slice(privateMarkerIdx);
   const genericPrivateOriginal = genericClass.original.slice(privateMarkerIdx);
 
+  // The two explicitly trusted friend wrappers (#569 synthetic, #572
+  // MediaPipe). Both are named-friend declarations, not logic, so they are
+  // stripped out of the forbidden-term scan further below (section E) --
+  // otherwise the MediaPipe wrapper's own name would falsely look like
+  // "MediaPipe...logic entering generic mechanics" when it is really just
+  // the trust boundary declaration itself.
+  const trustedFriendDeclarations = [
+    "friend class SyntheticFrameHelperTrackingBackend;",
+    "friend class MediaPipeFaceLandmarkerHelperTrackingBackend;",
+  ];
+
   // A. Generic public surface: only the TrackingBackend operations are
   // public. There is no public constructor of any shape -- no
   // char-array-reference literal-typed constructor, no const char*, and no
@@ -331,12 +349,10 @@ function main() {
   assert(!genericPublicMasked.includes("backendLabel"));
 
   // B. Generic private construction: exactly one constructor declaration,
-  // private, reachable only through an explicit friend wrapper.
-  assert(
-    genericPrivateMasked.includes(
-      "friend class SyntheticFrameHelperTrackingBackend;",
-    ),
-  );
+  // private, reachable only through the explicitly trusted friend wrappers.
+  for (const friendDeclaration of trustedFriendDeclarations) {
+    assert(genericPrivateMasked.includes(friendDeclaration));
+  }
   assert(
     countOccurrences(genericClass.masked, "FrameHelperTrackingBackend(") === 1,
   );
@@ -547,9 +563,133 @@ function main() {
       "return backend_.lastDetectionDiagnostics();",
   );
 
+  // --- D2. Second thin trusted wrapper (#572 MediaPipe) -----------------------
+  const mediaPipeWrapperClass = extractClassBody(
+    headerMasked,
+    headerSrc,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend",
+  );
+  assert(mediaPipeWrapperClass !== null);
+  assert(
+    countOccurrences(
+      mediaPipeWrapperClass.original,
+      "FrameHelperTrackingBackend backend_;",
+    ) === 1,
+  );
+  assert(
+    countOccurrences(mediaPipeWrapperClass.original, "HelperProcessSession") ===
+      0,
+  );
+  assert(
+    countOccurrences(
+      mediaPipeWrapperClass.original,
+      "FaceDetectionDiagnostics diagnostics_;",
+    ) === 0,
+  );
+  assert(
+    countOccurrences(mediaPipeWrapperClass.original, "HelperTrackingResult") ===
+      0,
+  );
+  assert(
+    countOccurrences(mediaPipeWrapperClass.original, "HelperTrackOutcome") ===
+      0,
+  );
+  assert(
+    mediaPipeWrapperClass.masked.includes(
+      "explicit MediaPipeFaceLandmarkerHelperTrackingBackend(HelperSessionConfig config);",
+    ),
+  );
+
+  // C2. MediaPipe wrapper construction: the trusted wrapper invokes the
+  // private pointer+length constructor directly with one fixed code-owned
+  // literal and its compile-time sizeof-derived length -- never strlen, a
+  // runtime variable, or a two-argument call.
+  const mediaPipeWrapperCtorInit = extractInitList(
+    cppMasked,
+    cppSrc,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend::" +
+      "MediaPipeFaceLandmarkerHelperTrackingBackend(",
+  );
+  assert(mediaPipeWrapperCtorInit !== null);
+  assert(mediaPipeWrapperCtorInit.masked.includes("backend_("));
+  assert(mediaPipeWrapperCtorInit.masked.includes("std::move(config)"));
+  assert(
+    countOccurrences(
+      mediaPipeWrapperCtorInit.original,
+      '"mediapipe-face-landmarker"',
+    ) === 2,
+  );
+  assert(
+    normalizeWhitespace(mediaPipeWrapperCtorInit.original).includes(
+      'sizeof("mediapipe-face-landmarker") - 1',
+    ),
+  );
+  assert(countOccurrences(mediaPipeWrapperCtorInit.masked, ",") === 2);
+  assert(!mediaPipeWrapperCtorInit.masked.includes("strlen("));
+  assert(!mediaPipeWrapperCtorInit.masked.includes("std::string("));
+
+  const mediaPipeWrapperStart = extractMethodBody(
+    cppMasked,
+    cppSrc,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend::start(",
+  );
+  const mediaPipeWrapperStop = extractMethodBody(
+    cppMasked,
+    cppSrc,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend::stop(",
+  );
+  const mediaPipeWrapperTrack = extractMethodBody(
+    cppMasked,
+    cppSrc,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend::track(",
+  );
+  const mediaPipeWrapperLastDiag = extractMethodBody(
+    cppMasked,
+    cppSrc,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend::lastDetectionDiagnostics(",
+  );
+  assert(mediaPipeWrapperStart !== null);
+  assert(mediaPipeWrapperStop !== null);
+  assert(mediaPipeWrapperTrack !== null);
+  assert(mediaPipeWrapperLastDiag !== null);
+
+  assert(
+    normalizeWhitespace(mediaPipeWrapperStart.masked) ===
+      "return backend_.start();",
+  );
+  assert(
+    normalizeWhitespace(mediaPipeWrapperStop.masked) === "backend_.stop();",
+  );
+  assert(
+    normalizeWhitespace(mediaPipeWrapperTrack.masked) ===
+      "return backend_.track(frame);",
+  );
+  assert(
+    normalizeWhitespace(mediaPipeWrapperLastDiag.masked) ===
+      "return backend_.lastDetectionDiagnostics();",
+  );
+
   // --- E. Boundary isolation ---------------------------------------------------
+  //
+  // The generic class body legitimately names its trusted friend wrappers by
+  // class name (including "MediaPipeFaceLandmarkerHelperTrackingBackend",
+  // which itself starts with "MediaPipe"). That is a construction-trust
+  // declaration, not MediaPipe/Python/path/CLI logic entering generic frame
+  // mechanics, so the two friend declarations are stripped out of the region
+  // before the forbidden-term scan below -- every other occurrence of a
+  // forbidden term anywhere else in the generic class/cpp regions still
+  // fails this check.
+  let genericClassMaskedForTermScan = genericClass.masked;
+  for (const friendDeclaration of trustedFriendDeclarations) {
+    assert(genericClassMaskedForTermScan.includes(friendDeclaration));
+    genericClassMaskedForTermScan = genericClassMaskedForTermScan.replace(
+      friendDeclaration,
+      " ".repeat(friendDeclaration.length),
+    );
+  }
+
   const genericRegionLower = [
-    genericClass.masked,
+    genericClassMaskedForTermScan,
     anonNamespace.masked,
     ctorInitList.masked,
     startBody.masked,
@@ -580,11 +720,35 @@ function main() {
     mainMasked,
     "SyntheticFrameHelperTrackingBackend",
   );
+  const mediaPipeWrapperNameCount = countOccurrences(
+    mainMasked,
+    "MediaPipeFaceLandmarkerHelperTrackingBackend",
+  );
+  // The generic name only ever appears as a suffix of one of the two trusted
+  // wrapper names in main.cpp -- it proves main.cpp never names the generic
+  // FrameHelperTrackingBackend bare. MediaPipeFaceLandmarkerHelperTrackingBackend
+  // does not contain "FrameHelperTrackingBackend" as a substring, so it is
+  // verified independently below instead of folding into this equality.
   assert(genericNameCount === syntheticNameCount);
   assert(syntheticNameCount >= 1);
+  assert(mediaPipeWrapperNameCount >= 1);
   assert(
     mainMasked.includes(
       "make_unique<lvk::tracker::SyntheticFrameHelperTrackingBackend>",
+    ),
+  );
+  assert(
+    mainMasked.includes(
+      "make_unique<lvk::tracker::MediaPipeFaceLandmarkerHelperTrackingBackend>",
+    ),
+  );
+  // Main composition: the MediaPipe wrapper is only ever constructed from
+  // the sole #570 factory's successful result, moved in -- never a
+  // default-constructed or ad hoc HelperSessionConfig.
+  assert(mainMasked.includes("createMediaPipeHelperRouteConfig("));
+  assert(
+    normalizeWhitespace(mainSrc).includes(
+      "std::make_unique<lvk::tracker::MediaPipeFaceLandmarkerHelperTrackingBackend>( std::move(*mediaPipeHelperRouteConfig));",
     ),
   );
 }
