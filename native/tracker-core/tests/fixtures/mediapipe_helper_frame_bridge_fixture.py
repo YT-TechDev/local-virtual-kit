@@ -19,11 +19,12 @@ reuses the production entry points unchanged:
 The only injected behavior is a bounded, test-only output-stream adapter that
 wraps sys.stdout and, based solely on the production result's
 frameTimestampMs (one of four fixed values: 571001/571002/571003/571004),
-either forwards the real serialized result unchanged or applies one bounded
-post-serialization mutation before exiting. It never touches control-line
-reading, frame reading, RGB conversion, inference, or composition -- those
-remain the real production code paths, exercised against a real fd/handle
-frame endpoint.
+either forwards the real serialized result unchanged (571001, and 571004
+before exiting) or applies one bounded post-serialization mutation and
+reserialization before exiting (571002, 571003). It never touches
+control-line reading, frame reading, RGB conversion, inference, or
+composition -- those remain the real production code paths, exercised
+against a real fd/handle frame endpoint.
 
 Standard library only, with no third-party test-double framework, no scratch
 file storage, no file I/O beyond the lexical sys.path setup, no child process
@@ -171,9 +172,12 @@ def _fake_module_importer(name: str) -> object:
 def _apply_fault_injection(document: dict) -> tuple[dict, bool]:
     """Returns (possibly-mutated document, should_exit_after_flush).
 
-    Selects behavior only from document["frameTimestampMs"]. Any timestamp
-    other than the three injected-failure values (including the normal
-    571001 success value) is left unmutated with should_exit=False.
+    Selects behavior only from document["frameTimestampMs"]. Only the two
+    mutation-target timestamps (571002/571003) are mutated and reserialized;
+    every other timestamp (including the normal 571001 success value) is
+    left unmutated with should_exit=False. The 571004 early-exit case is
+    handled earlier in _transform() -- via an unmodified, non-reserialized
+    line -- and never reaches this function.
     """
     timestamp = document.get("frameTimestampMs")
 
@@ -191,9 +195,6 @@ def _apply_fault_injection(document: dict) -> tuple[dict, bool]:
                 frame_ack["checksum"] = (checksum + 1) & 0xFFFFFFFF
         return document, True
 
-    if timestamp == _EARLY_EXIT_TIMESTAMP_MS:
-        return document, True
-
     return document, False
 
 
@@ -201,12 +202,14 @@ class _ResultFaultInjectionStream:
     """Wraps sys.stdout to inject bounded post-serialization result faults.
 
     Only ever transforms a "result" line matching one of the three fixed
-    failure timestamps; every other line (ready/stopping/stopped, or a
+    scenario timestamps; every other line (ready/stopping/stopped, or a
     result at the normal 571001 timestamp) is forwarded completely
-    unchanged. Never reads a control line, a frame, or calls into RGB
-    conversion, inference, composition, or the serializer itself -- this
-    adapter only ever sees the line the production serializer already
-    produced.
+    unchanged. Of the three, only 571002/571003 are mutated and
+    reserialized; 571004 forwards the original production serializer line
+    byte-for-byte (no parse/reserialize round trip) before exiting. Never
+    reads a control line, a frame, or calls into RGB conversion, inference,
+    composition, or the serializer itself -- this adapter only ever sees the
+    line the production serializer already produced.
     """
 
     def __init__(self, real_stream: object) -> None:
@@ -227,6 +230,12 @@ class _ResultFaultInjectionStream:
             return None
         if document.get("type") != "result":
             return None
+
+        if document.get("frameTimestampMs") == _EARLY_EXIT_TIMESTAMP_MS:
+            # Byte-for-byte preservation: forward the original production
+            # serializer line unchanged (never parsed/reserialized) and
+            # exit after it is flushed.
+            return line, True
 
         mutated, should_exit = _apply_fault_injection(document)
         if not should_exit:
