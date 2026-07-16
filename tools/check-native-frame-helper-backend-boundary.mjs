@@ -251,6 +251,18 @@ function runSelfTests() {
   assert(countOccurrences("aXaXaX", "aXa") === 1);
   assert(countOccurrences("foo(); foo(); foo();", "foo()") === 3);
   assert(countOccurrences("no match here", "zzz") === 0);
+
+  // Models the "reject any second generic constructor declaration" guard:
+  // a class body with two same-named constructor declarations must count 2,
+  // not be collapsed or miscounted.
+  const twoCtorSample = [
+    "class Sample {",
+    " private:",
+    "  Sample(int x);",
+    "  Sample(int x, int y);",
+    "};",
+  ].join("\n");
+  assert(countOccurrences(twoCtorSample, "Sample(") === 2);
 }
 
 // --- main boundary checks -----------------------------------------------------
@@ -294,12 +306,11 @@ function main() {
   const genericPrivateMasked = genericClass.masked.slice(privateMarkerIdx);
   const genericPrivateOriginal = genericClass.original.slice(privateMarkerIdx);
 
-  assert(genericPublicMasked.includes("template <std::size_t N>"));
-  assert(genericPublicMasked.includes("const char (&backendLabel)[N])"));
-  assert(genericPublicMasked.includes("static_assert(N > 1"));
-  assert(
-    genericPublicMasked.includes("N - 1 <= kMaxFrameHelperBackendLabelBytes"),
-  );
+  // A. Generic public surface: only the TrackingBackend operations are
+  // public. There is no public constructor of any shape -- no
+  // char-array-reference literal-typed constructor, no const char*, and no
+  // std::string label constructor -- so construction access, not parameter
+  // typing, is what keeps the label code-owned.
   assert(genericPublicMasked.includes("bool start() override;"));
   assert(genericPublicMasked.includes("void stop() override;"));
   assert(
@@ -312,8 +323,23 @@ function main() {
       "const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;",
     ),
   );
-  assert(!genericPublicMasked.includes("const char* backendLabel"));
+  assert(!genericPublicMasked.includes("FrameHelperTrackingBackend("));
+  assert(!genericPublicMasked.includes("template <std::size_t N>"));
+  assert(!genericPublicMasked.includes("const char (&backendLabel)[N])"));
+  assert(!genericPublicMasked.includes("const char*"));
+  assert(!genericPublicMasked.includes("std::string"));
+  assert(!genericPublicMasked.includes("backendLabel"));
 
+  // B. Generic private construction: exactly one constructor declaration,
+  // private, reachable only through an explicit friend wrapper.
+  assert(
+    genericPrivateMasked.includes(
+      "friend class SyntheticFrameHelperTrackingBackend;",
+    ),
+  );
+  assert(
+    countOccurrences(genericClass.masked, "FrameHelperTrackingBackend(") === 1,
+  );
   assert(genericPrivateMasked.includes("const char* backendLabel"));
   assert(genericPrivateMasked.includes("std::size_t backendLabelBytes"));
   assert(
@@ -458,17 +484,30 @@ function main() {
     ),
   );
 
+  // C. Wrapper construction: the trusted wrapper invokes the private
+  // pointer+length constructor directly with one fixed code-owned literal
+  // and its compile-time sizeof-derived length -- never strlen, a runtime
+  // variable, or a two-argument call.
   const wrapperCtorInit = extractInitList(
     cppMasked,
     cppSrc,
     "SyntheticFrameHelperTrackingBackend::SyntheticFrameHelperTrackingBackend(",
   );
   assert(wrapperCtorInit !== null);
-  assert(wrapperCtorInit.masked.includes("backend_(std::move(config),"));
+  assert(wrapperCtorInit.masked.includes("backend_("));
+  assert(wrapperCtorInit.masked.includes("std::move(config)"));
   assert(
     countOccurrences(wrapperCtorInit.original, '"synthetic-frame-helper"') ===
-      1,
+      2,
   );
+  assert(
+    normalizeWhitespace(wrapperCtorInit.original).includes(
+      'sizeof("synthetic-frame-helper") - 1',
+    ),
+  );
+  assert(countOccurrences(wrapperCtorInit.masked, ",") === 2);
+  assert(!wrapperCtorInit.masked.includes("strlen("));
+  assert(!wrapperCtorInit.masked.includes("std::string("));
 
   const wrapperStart = extractMethodBody(
     cppMasked,

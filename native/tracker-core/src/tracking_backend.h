@@ -75,7 +75,8 @@ class SyntheticHelperTrackingBackend final : public TrackingBackend {
 #if LVK_HAS_OPENCV_CAMERA
 // Bound on a code-owned frame-helper backend/diagnostic label (#569). Callers
 // never supply arbitrary CLI/child/model/script text here; the only accepted
-// input is a compile-time string literal.
+// input is a fixed code-owned string literal, passed by an explicitly
+// trusted friend wrapper (see FrameHelperTrackingBackend below).
 constexpr std::size_t kMaxFrameHelperBackendLabelBytes = 64;
 
 // v0.13.0 (#569) generalized frame-helper tracking backend. Owns the reusable
@@ -89,31 +90,30 @@ constexpr std::size_t kMaxFrameHelperBackendLabelBytes = 64;
 // transport failure it returns a safe lost sample and never reuses stale
 // tracking. Not the default backend.
 //
-// The backend/diagnostic label is accepted only as a literal string (via the
-// templated constructor below), never as a raw std::string: this keeps
+// The backend/diagnostic label has no public constructor: this class cannot
+// be constructed with a label from outside this translation unit's trust
+// boundary. Construction is private, and only explicitly trusted wrapper
+// classes -- named via `friend` below -- may invoke it. This keeps
 // MediaPipe/Python/CLI/child-controlled text out of the generic backend's
-// identity. An internally invalid label (wrong charset, empty, or over
+// identity by construction access, not by parameter typing (a const
+// char-array-reference parameter would still accept a runtime-populated
+// fixed-size array, so that shape alone cannot enforce a literal origin).
+// An internally invalid label (wrong charset, empty, or over
 // kMaxFrameHelperBackendLabelBytes) fails closed to the fixed "frame-helper"
 // diagnostic label without throwing or printing the rejected bytes.
 class FrameHelperTrackingBackend final : public TrackingBackend {
  public:
-  template <std::size_t N>
-  FrameHelperTrackingBackend(
-      HelperSessionConfig config, const char (&backendLabel)[N])
-      : FrameHelperTrackingBackend(
-            std::move(config), backendLabel, N - 1) {
-    static_assert(N > 1, "backendLabel must not be empty");
-    static_assert(
-        N - 1 <= kMaxFrameHelperBackendLabelBytes,
-        "backendLabel exceeds kMaxFrameHelperBackendLabelBytes");
-  }
-
   bool start() override;
   void stop() override;
   TrackingSample track(const PreprocessedFrame& frame) override;
   const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;
 
  private:
+  // Only SyntheticFrameHelperTrackingBackend is currently trusted to
+  // construct this backend. Any future caller must be added here explicitly;
+  // there is no public construction path.
+  friend class SyntheticFrameHelperTrackingBackend;
+
   FrameHelperTrackingBackend(
       HelperSessionConfig config,
       const char* backendLabel,

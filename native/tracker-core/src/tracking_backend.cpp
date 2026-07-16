@@ -188,7 +188,10 @@ FrameHelperTrackingBackend::lastDetectionDiagnostics() const {
 
 SyntheticFrameHelperTrackingBackend::SyntheticFrameHelperTrackingBackend(
     HelperSessionConfig config)
-    : backend_(std::move(config), "synthetic-frame-helper") {}
+    : backend_(
+          std::move(config),
+          "synthetic-frame-helper",
+          sizeof("synthetic-frame-helper") - 1) {}
 
 bool SyntheticFrameHelperTrackingBackend::start() {
   return backend_.start();
