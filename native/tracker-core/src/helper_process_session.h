@@ -131,8 +131,9 @@ struct HelperSessionConfig {
   int stopTimeoutMs = 1000;
   // v0.13.0 (#534): opt-in bounded private frame transport. Off by default so
   // #533 result-only sessions are byte-for-byte unchanged. When true, start()
-  // additionally establishes a private parent->child frame pipe and passes
-  // "--session-frame-mode" to the helper; trackWithFrame() becomes usable.
+  // establishes a private parent->child frame pipe. SyntheticSession also
+  // injects "--session-frame-mode"; ExactArguments keeps argv entirely
+  // caller-owned. trackWithFrame() becomes usable.
   bool enableFrameTransport = false;
   // Bounded deadline for one frame packet write (header + payload together,
   // one ceiling). Distinct from resultTimeoutMs because a large payload write
