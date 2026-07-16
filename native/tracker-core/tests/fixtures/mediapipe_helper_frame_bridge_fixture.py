@@ -204,12 +204,15 @@ class _ResultFaultInjectionStream:
     Only ever transforms a "result" line matching one of the three fixed
     scenario timestamps; every other line (ready/stopping/stopped, or a
     result at the normal 571001 timestamp) is forwarded completely
-    unchanged. Of the three, only 571002/571003 are mutated and
-    reserialized; 571004 forwards the original production serializer line
-    byte-for-byte (no parse/reserialize round trip) before exiting. Never
-    reads a control line, a frame, or calls into RGB conversion, inference,
-    composition, or the serializer itself -- this adapter only ever sees the
-    line the production serializer already produced.
+    unchanged. Every candidate line is parsed only to identify its protocol
+    type and frameTimestampMs. Of the three, only 571002/571003 are then
+    mutated and reserialized; 571004 is parsed only for that result/
+    timestamp selection, then the original production serializer line is
+    forwarded unchanged, byte-for-byte, without reserialization, before
+    exiting. Never reads a control line, a frame, or calls into RGB
+    conversion, inference, composition, or the serializer itself -- this
+    adapter only ever sees the line the production serializer already
+    produced.
     """
 
     def __init__(self, real_stream: object) -> None:
@@ -232,9 +235,10 @@ class _ResultFaultInjectionStream:
             return None
 
         if document.get("frameTimestampMs") == _EARLY_EXIT_TIMESTAMP_MS:
-            # Byte-for-byte preservation: forward the original production
-            # serializer line unchanged (never parsed/reserialized) and
-            # exit after it is flushed.
+            # Byte-for-byte preservation: this line was already parsed
+            # above only to identify its result type and timestamp: it is
+            # never reserialized. Forward the original production
+            # serializer line unchanged and exit after it is flushed.
             return line, True
 
         mutated, should_exit = _apply_fault_injection(document)
