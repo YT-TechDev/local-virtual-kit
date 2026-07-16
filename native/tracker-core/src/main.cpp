@@ -958,6 +958,25 @@ int main(int argc, char *argv[]) {
         lvk::tracker::createMediaPipeHelperRouteConfig(mediaPipeRouteInput);
   }
 
+  // v0.13.0 (#572 review fix): a route selection requires the earlier
+  // factory call to have actually succeeded, and this must be enforced
+  // BEFORE the capability-query early return below -- otherwise an invalid
+  // route-selected capability query (all three flags omitted, or supplied
+  // but rejected by the factory) could bypass rejection, print capabilities,
+  // and exit 0. This rejects both "all three flags omitted" (never
+  // attempted above) and "all three flags supplied but invalid" (attempted
+  // and failed) uniformly, with no path echo --
+  // createMediaPipeHelperRouteConfig() already never prints the rejected
+  // values. Partial presence was already rejected at parse time. A bare
+  // capability query (no route selection) is unaffected: this check only
+  // fires when mediaPipeHelperRouteBackend is true.
+  if (mediaPipeHelperRouteBackend && !mediaPipeHelperRouteConfig.has_value()) {
+    std::cerr << "--tracking-backend mediapipe-face-landmarker requires "
+                 "valid --mediapipe-python, --mediapipe-helper-script, and "
+                 "--mediapipe-model-asset values.\n";
+    return 1;
+  }
+
   if (options.printRuntimeCapabilities) {
     printRuntimeCapabilities(
         std::cout, mediaPipeHelperRouteConfig.has_value());
@@ -973,20 +992,6 @@ int main(int argc, char *argv[]) {
         },
         std::cout,
         std::cerr);
-  }
-
-  // v0.13.0 (#572): a real invocation of the mediapipe-face-landmarker route
-  // requires the earlier factory call to have actually succeeded. This
-  // rejects both "all three flags omitted" (never attempted above) and "all
-  // three flags supplied but invalid" (attempted and failed) uniformly, with
-  // no path echo -- createMediaPipeHelperRouteConfig() already never prints
-  // the rejected values. Partial presence was already rejected at parse
-  // time.
-  if (mediaPipeHelperRouteBackend && !mediaPipeHelperRouteConfig.has_value()) {
-    std::cerr << "--tracking-backend mediapipe-face-landmarker requires "
-                 "valid --mediapipe-python, --mediapipe-helper-script, and "
-                 "--mediapipe-model-asset values.\n";
-    return 1;
   }
 
   // v0.13.0 (#572): the mediapipe-face-landmarker route requires OpenCV

@@ -139,6 +139,12 @@ function assertNoCameraDiagnostics(stderr) {
   }
 }
 
+function assertNoCapabilityOutput(stdout) {
+  if ((stdout ?? "").includes("LVK native runtime capabilities")) {
+    fail();
+  }
+}
+
 function assertNoPrivateMarkers(result) {
   const combined = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   for (const marker of privateMarkers) {
@@ -258,6 +264,108 @@ if (
 ) {
   fail();
 }
+
+// A3. Invalid route-selected capability queries: selecting the route via
+// --tracking-backend mediapipe-face-landmarker (unlike the bare query in A1,
+// which never selects the route at all) obligates the invocation to supply
+// a fully valid configuration -- an invalid configuration must be rejected
+// with a non-zero exit and zero public/capability stdout, even though
+// --print-runtime-capabilities is present. This guards the ordering fix:
+// config-validity rejection must run before the capability-query early
+// return, not after it.
+function assertRejectedCapabilityQuery(args) {
+  const result = run(args);
+  assertRunCompleted(result);
+  if (result.status === 0) {
+    fail();
+  }
+  assertNoMotionFrameLines(result.stdout);
+  assertNoCapabilityOutput(result.stdout);
+  assertNoCameraDiagnostics(result.stderr);
+  assertNoPrivateMarkers(result);
+}
+
+// A3a. Route selected, camera-source opencv, all three private flags
+// omitted.
+assertRejectedCapabilityQuery([
+  "--print-runtime-capabilities",
+  "--tracking-backend",
+  "mediapipe-face-landmarker",
+  "--camera-source",
+  "opencv",
+]);
+
+// A3b. Each explicitly empty private flag, independently, in an otherwise
+// fully-supplied capability query.
+assertRejectedCapabilityQuery([
+  "--print-runtime-capabilities",
+  "--tracking-backend",
+  "mediapipe-face-landmarker",
+  "--camera-source",
+  "opencv",
+  "--mediapipe-python",
+  "",
+  "--mediapipe-helper-script",
+  fixtureHelperScriptPath,
+  "--mediapipe-model-asset",
+  fixtureModelAssetPath,
+]);
+assertRejectedCapabilityQuery([
+  "--print-runtime-capabilities",
+  "--tracking-backend",
+  "mediapipe-face-landmarker",
+  "--camera-source",
+  "opencv",
+  "--mediapipe-python",
+  fixturePythonPath,
+  "--mediapipe-helper-script",
+  "",
+  "--mediapipe-model-asset",
+  fixtureModelAssetPath,
+]);
+assertRejectedCapabilityQuery([
+  "--print-runtime-capabilities",
+  "--tracking-backend",
+  "mediapipe-face-landmarker",
+  "--camera-source",
+  "opencv",
+  "--mediapipe-python",
+  fixturePythonPath,
+  "--mediapipe-helper-script",
+  fixtureHelperScriptPath,
+  "--mediapipe-model-asset",
+  "",
+]);
+
+// A3c. Factory-invalid configured inputs: a relative path and a
+// control-byte-containing path, each substituted for one of the three
+// flags in an otherwise fully-supplied capability query.
+assertRejectedCapabilityQuery([
+  "--print-runtime-capabilities",
+  "--tracking-backend",
+  "mediapipe-face-landmarker",
+  "--camera-source",
+  "opencv",
+  "--mediapipe-python",
+  fixtureRelativePath,
+  "--mediapipe-helper-script",
+  fixtureHelperScriptPath,
+  "--mediapipe-model-asset",
+  fixtureModelAssetPath,
+]);
+assertRejectedCapabilityQuery([
+  "--print-runtime-capabilities",
+  "--tracking-backend",
+  "mediapipe-face-landmarker",
+  "--camera-source",
+  "opencv",
+  "--mediapipe-python",
+  fixturePythonPath,
+  "--mediapipe-helper-script",
+  fixtureControlBytePath,
+  "--mediapipe-model-asset",
+  fixtureModelAssetPath,
+]);
 
 // --- B. CLI/runtime boundary -------------------------------------------------
 
