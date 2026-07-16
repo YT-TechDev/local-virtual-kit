@@ -140,6 +140,8 @@ const forbiddenPatterns = [
   /\bfopen\s*\(/,
   /\bfreopen\s*\(/,
   /\bopen\s*\(/,
+  /\bread\s*\(/,
+  /\bwrite\s*\(/,
   /\bfread\s*\(/,
   /\bfwrite\s*\(/,
   /\bstat\s*\(/,
