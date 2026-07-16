@@ -86,6 +86,21 @@ for (const requiredText of [
   }
 }
 
+// v0.13.0 (#570/#571): these two dependency-free smoke targets, and their
+// own "mediapipe_helper_*" sources, are approved, non-MediaPipe identifiers
+// (see mediapipe_helper_route_config.* and
+// mediapipe_helper_frame_bridge_smoke.cpp/native/tracker-core/tests/
+// fixtures) -- never a real MediaPipe package/library reference. Strip them
+// out before the generic "mediapipe" substring scan below so a target name
+// or source filename alone can never be mistaken for real integration; a
+// genuine MediaPipe reference (e.g. a "mediapipe::"-namespaced link target)
+// is unaffected and still rejected.
+const cmakeWithoutApprovedMediaPipeIdentifiers = cmakeWithoutComments
+  .replace(/lvk-mediapipe-helper-route-config-smoke/gu, "")
+  .replace(/lvk-mediapipe-helper-frame-bridge-smoke/gu, "")
+  .replace(/mediapipe_helper_route_config(?:_smoke)?\.(?:h|cpp)/gu, "")
+  .replace(/mediapipe_helper_frame_bridge_smoke\.cpp/gu, "");
+
 // Run targeted integration rejection without comments so explanatory notes
 // can mention forbidden commands without being mistaken for real integration.
 for (const [pattern, message] of [
@@ -109,7 +124,7 @@ for (const [pattern, message] of [
   ],
   [/ExternalProject_Add\s*\([^)]*mediapipe/iu, "MediaPipe ExternalProject_Add"],
 ]) {
-  if (pattern.test(cmakeWithoutComments)) {
+  if (pattern.test(cmakeWithoutApprovedMediaPipeIdentifiers)) {
     fail(`${message} must not be introduced`);
   }
 }
