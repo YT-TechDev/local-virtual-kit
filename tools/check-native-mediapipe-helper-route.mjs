@@ -99,6 +99,9 @@ const fixtureHelperExecutablePath = fakeAbsolutePath(
 const fixtureLaunchFailurePythonPath = fakeAbsolutePath(
   "nonexistent-python-marker-572007.exe",
 );
+const fixtureHelperRuntimeSmokePath = fakeAbsolutePath(
+  "helper-runtime-smoke-marker-572008",
+);
 
 const privateMarkers = [
   fixturePythonPath,
@@ -108,7 +111,19 @@ const privateMarkers = [
   fixtureControlBytePath,
   fixtureHelperExecutablePath,
   fixtureLaunchFailurePythonPath,
+  fixtureHelperRuntimeSmokePath,
 ];
+
+// The exact fixed, path-free mutual-exclusion diagnostic main.cpp prints
+// when --helper-runtime-smoke is combined with
+// --tracking-backend mediapipe-face-landmarker. Asserting this exact text
+// (not just a non-zero exit) distinguishes correct parse-time rejection
+// from a later launch failure against a nonexistent smoke fixture, which
+// would also exit non-zero but for the wrong reason and after attempting a
+// launch.
+const helperRuntimeSmokeConflictDiagnostic =
+  "--helper-runtime-smoke cannot be combined with --tracking-backend " +
+  "mediapipe-face-landmarker; choose one mode.";
 
 function run(args) {
   return spawnSync(executablePath, args, {
@@ -551,6 +566,52 @@ assertRejectedBeforeMotionFrame([
   "--frames",
   "1",
 ]);
+
+// B6.5. Conflicting execution modes: an otherwise fully-valid MediaPipe
+// route selection combined with --helper-runtime-smoke must never be
+// silently replaced by helper runtime smoke execution. This must be
+// rejected at parse time, before any helper launch, camera operation,
+// capability output, or MotionFrame output -- so it is asserted more
+// strictly than the generic assertRejectedBeforeMotionFrame helper: stdout
+// must be completely empty (not merely free of MotionFrame/capability
+// lines), and stderr must contain the exact fixed, path-free
+// mutual-exclusion diagnostic. Checking only for a non-zero exit would not
+// distinguish this correct parse-time rejection from a later launch
+// failure against the (deliberately nonexistent) smoke fixture path.
+{
+  const conflictResult = run([
+    "--tracking-backend",
+    "mediapipe-face-landmarker",
+    "--camera-source",
+    "opencv",
+    "--mediapipe-python",
+    fixturePythonPath,
+    "--mediapipe-helper-script",
+    fixtureHelperScriptPath,
+    "--mediapipe-model-asset",
+    fixtureModelAssetPath,
+    "--helper-runtime-smoke",
+    fixtureHelperRuntimeSmokePath,
+  ]);
+  assertRunCompleted(conflictResult);
+  if (conflictResult.status === 0) {
+    fail();
+  }
+  if ((conflictResult.stdout ?? "").trim() !== "") {
+    fail();
+  }
+  assertNoCapabilityOutput(conflictResult.stdout);
+  assertNoMotionFrameLines(conflictResult.stdout);
+  assertNoCameraDiagnostics(conflictResult.stderr);
+  assertNoPrivateMarkers(conflictResult);
+  if (
+    !(conflictResult.stderr ?? "").includes(
+      helperRuntimeSmokeConflictDiagnostic,
+    )
+  ) {
+    fail();
+  }
+}
 
 // B7. Route-support/launch-boundary evidence. Honestly conditioned on
 // whether this build actually has OpenCV camera support -- never converts

@@ -900,6 +900,21 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
     return false;
   }
 
+  // v0.13.0 (#572 review fix): --helper-runtime-smoke is a separate,
+  // synthetic-only execution mode (see the helperBackendRequiringExecutable
+  // conflict check above). mediapipe-face-landmarker is intentionally never
+  // added to helperBackendRequiringExecutable -- it must not require
+  // --helper-executable -- so it needs its own independent mutual-exclusion
+  // check here: an explicit MediaPipe route selection must never be
+  // silently replaced by helper runtime smoke execution.
+  if (mediaPipeHelperRouteBackend && !options.helperRuntimeSmokePath.empty()) {
+    std::cerr << "--helper-runtime-smoke cannot be combined with "
+                 "--tracking-backend mediapipe-face-landmarker; choose one "
+                 "mode.\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
   return true;
 }
 
