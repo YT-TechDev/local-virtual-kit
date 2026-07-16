@@ -2,6 +2,7 @@
 #include "face_detector.h"
 #include "frame_preprocessor.h"
 #include "helper_runtime_smoke.h"
+#include "mediapipe_helper_route_config.h"
 #include "motion_frame_writer.h"
 #include "tracker.h"
 #include "tracking_backend.h"
@@ -16,6 +17,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -28,9 +30,13 @@
 #define LVK_HAS_OPENCV_FACE_DETECTOR 0
 #endif
 
-// MediaPipe Face Landmarker candidate backend support. This v0.6.0 scaffold
-// keeps the candidate disabled by default: no MediaPipe dependency, task/
-// model file, or runtime download is added. See
+// MediaPipe Face Landmarker in-process/native-integration candidate support.
+// Always 0: no MediaPipe dependency, task/model file, or runtime download is
+// added to lvk-tracker-core itself. This is distinct from the opt-in
+// mediapipe-face-landmarker EXTERNAL Python helper route (v0.13.0, #572),
+// which is gated on LVK_HAS_OPENCV_CAMERA instead -- see
+// createMediaPipeHelperRouteConfig() and
+// MediaPipeFaceLandmarkerHelperTrackingBackend. See
 // docs/TRACKING_BACKEND_V0_6_CANDIDATE_ROUTE_DECISION.md.
 #ifndef LVK_HAS_MEDIAPIPE_FACE_LANDMARKER
 #define LVK_HAS_MEDIAPIPE_FACE_LANDMARKER 0
@@ -69,6 +75,14 @@ struct TrackerOptions {
   std::string trackingBackendName = "face-pipeline";
   std::string helperExecutablePath;
   std::vector<std::string> helperArgs;
+  // v0.13.0 (#572): presence-aware storage for the mediapipe-face-landmarker
+  // route's three private CLI values. An unset optional means "omitted"; a
+  // set optional holding an empty string means "explicitly supplied empty" --
+  // the two are never conflated. See createMediaPipeHelperRouteConfig() for
+  // the sole validation boundary; main.cpp only checks presence/completeness.
+  std::optional<std::string> mediapipePythonPath;
+  std::optional<std::string> mediapipeHelperScriptPath;
+  std::optional<std::string> mediapipeModelAssetPath;
   std::string helperRuntimeSmokePath;
   lvk::tracker::HelperRuntimeSmokeCase helperRuntimeSmokeCase =
       lvk::tracker::HelperRuntimeSmokeCase::Normal;
@@ -161,6 +175,7 @@ void printUsage(std::ostream &output) {
             "[--face-detector noop|opencv] [--face-cascade PATH] "
             "[--tracking-backend face-pipeline|synthetic-helper|synthetic-frame-helper|mediapipe-face-landmarker] "
             "[--helper-executable PATH] "
+            "[--mediapipe-python PATH] [--mediapipe-helper-script PATH] [--mediapipe-model-asset PATH] "
             "[--helper-runtime-smoke PATH [--helper-runtime-smoke-case normal|launch-failure|nonzero-exit|timeout|unsafe-diagnostic|helper-lifecycle-handshake|helper-lifecycle-handshake-nonzero-exit|helper-lifecycle-handshake-timeout|helper-lifecycle-handshake-missing-ready|helper-lifecycle-handshake-missing-stopped|helper-lifecycle-handshake-malformed-ready|helper-lifecycle-handshake-ready-timeout|malformed-result-schema|malformed-stopped-schema|malformed-ready-schema|unknown-stdout-line|malformed-stdout-line|bounded-oversized-stdout-line|synthetic-adapter]]\n";
   output << "--frames N must be an integer between 0 and " << kMaxFrameCount
          << ".\n";
@@ -192,19 +207,35 @@ void printUsage(std::ostream &output) {
   output << "--tracking-backend selects the Native Core tracking backend; supported values are 'face-pipeline', 'synthetic-helper', 'synthetic-frame-helper', and 'mediapipe-face-landmarker'. "
             "The synthetic-helper backend is an opt-in, development-only backend that drives the local synthetic helper session and requires --helper-executable PATH; it sends no camera frames to the helper. "
             "The synthetic-frame-helper backend (v0.13.0, #534) additionally sends one bounded BGR24 frame per request over a private frame pipe; it requires --helper-executable PATH and --camera-source opencv, and is only available when this build has OpenCV camera support (see --print-runtime-capabilities). "
-            "The mediapipe-face-landmarker candidate is a fail-closed scaffold and is not enabled in this build.\n";
+            "The mediapipe-face-landmarker backend (v0.13.0, #572) is an opt-in, development-only route that drives the external Python MediaPipe Face Landmarker helper over the same private frame transport; it requires --camera-source opencv, --mediapipe-python PATH, --mediapipe-helper-script PATH, and --mediapipe-model-asset PATH together, and is only available when this build has OpenCV camera support (see --print-runtime-capabilities).\n";
   output << "--helper-executable PATH provides the local synthetic helper executable used by --tracking-backend synthetic-helper or synthetic-frame-helper; it is only valid with those backends.\n";
   output << "--helper-arg VALUE (repeatable) appends a development-only argument after the helper's '--session' flag; it is only valid with --tracking-backend synthetic-helper or synthetic-frame-helper and is used to exercise deterministic synthetic helper session fault modes in tests.\n";
+  output << "--mediapipe-python PATH provides the local Python interpreter used by --tracking-backend mediapipe-face-landmarker; only valid with that backend and required together with --mediapipe-helper-script and --mediapipe-model-asset. The supplied value is never echoed.\n";
+  output << "--mediapipe-helper-script PATH provides the local MediaPipe Face Landmarker Python helper script used by --tracking-backend mediapipe-face-landmarker; only valid with that backend and required together with --mediapipe-python and --mediapipe-model-asset. The supplied value is never echoed.\n";
+  output << "--mediapipe-model-asset PATH provides the local MediaPipe Face Landmarker model asset used by --tracking-backend mediapipe-face-landmarker; only valid with that backend and required together with --mediapipe-python and --mediapipe-helper-script. The supplied value is never echoed.\n";
   output << "--helper-runtime-smoke PATH runs the explicit synthetic helper runtime integration smoke and keeps default tracking unchanged when omitted.\n";
   output << "--helper-runtime-smoke-case selects a smoke-only helper runtime case and is only valid when --helper-runtime-smoke PATH is provided; supported values are normal, launch-failure, nonzero-exit, timeout, unsafe-diagnostic, helper-lifecycle-handshake, helper-lifecycle-handshake-nonzero-exit, helper-lifecycle-handshake-timeout, helper-lifecycle-handshake-missing-ready, helper-lifecycle-handshake-missing-stopped, helper-lifecycle-handshake-malformed-ready, helper-lifecycle-handshake-ready-timeout, malformed-result-schema, malformed-stopped-schema, malformed-ready-schema, unknown-stdout-line, malformed-stdout-line, bounded-oversized-stdout-line, and synthetic-adapter. Defaults to normal.\n";
   output << "--print-runtime-capabilities prints compile-time and local capability information to stdout and exits without opening a camera or emitting MotionFrame data.\n";
 }
 
-void printRuntimeCapabilities(std::ostream &output) {
+void printRuntimeCapabilities(
+    std::ostream &output,
+    bool mediaPipeFaceLandmarkerHelperRouteConfigured) {
   output << "LVK native runtime capabilities\n";
   output << "opencvCameraSupport=" << (LVK_HAS_OPENCV_CAMERA ? "true" : "false") << "\n";
   output << "opencvFaceDetectorSupport=" << (LVK_HAS_OPENCV_FACE_DETECTOR ? "true" : "false") << "\n";
   output << "mediapipeFaceLandmarkerSupport=" << (LVK_HAS_MEDIAPIPE_FACE_LANDMARKER ? "true" : "false") << "\n";
+  // v0.13.0 (#572): distinct from the native-integration meaning above. Route
+  // support tracks only whether this build can supply real current frames
+  // (OpenCV camera build support); configured tracks only whether this
+  // specific invocation supplied and validated all three private route
+  // values. Neither ever launches Python, imports a package, reads a model,
+  // or opens a camera to compute.
+  output << "mediapipeFaceLandmarkerHelperRouteSupport="
+         << (LVK_HAS_OPENCV_CAMERA ? "true" : "false") << "\n";
+  output << "mediapipeFaceLandmarkerHelperRouteConfigured="
+         << (mediaPipeFaceLandmarkerHelperRouteConfigured ? "true" : "false")
+         << "\n";
 
   std::string cameraSources = "dummy";
 #if LVK_HAS_OPENCV_CAMERA
@@ -220,10 +251,11 @@ void printRuntimeCapabilities(std::ostream &output) {
 
   std::string trackingBackends = "face-pipeline,synthetic-helper";
 #if LVK_HAS_OPENCV_CAMERA
-  trackingBackends += ",synthetic-frame-helper";
-#endif
-#if LVK_HAS_MEDIAPIPE_FACE_LANDMARKER
-  trackingBackends += ",mediapipe-face-landmarker";
+  // mediapipe-face-landmarker's route support equals OpenCV camera build
+  // support (#572); it does not depend on this invocation's configured
+  // state, and does not depend on the separate, permanently-false
+  // LVK_HAS_MEDIAPIPE_FACE_LANDMARKER native-integration macro above.
+  trackingBackends += ",synthetic-frame-helper,mediapipe-face-landmarker";
 #endif
   output << "supportedTrackingBackends=" << trackingBackends << "\n";
 
@@ -726,6 +758,45 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
       continue;
     }
 
+    if (argument == "--mediapipe-python") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --mediapipe-python.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      // Presence-aware: an explicitly supplied empty value is stored (and
+      // later rejected by createMediaPipeHelperRouteConfig()), never treated
+      // as "omitted".
+      options.mediapipePythonPath = std::string(argv[argIndex + 1]);
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--mediapipe-helper-script") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --mediapipe-helper-script.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.mediapipeHelperScriptPath = std::string(argv[argIndex + 1]);
+      ++argIndex;
+      continue;
+    }
+
+    if (argument == "--mediapipe-model-asset") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --mediapipe-model-asset.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+
+      options.mediapipeModelAssetPath = std::string(argv[argIndex + 1]);
+      ++argIndex;
+      continue;
+    }
+
     std::cerr << "Unknown argument: " << argument << "\n";
     printUsage(std::cerr);
     return false;
@@ -793,6 +864,42 @@ bool parseTrackerOptions(int argc, char *argv[], TrackerOptions &options) {
     return false;
   }
 
+  // v0.13.0 (#572) mediapipe-face-landmarker route: presence/scoping/
+  // camera-source rules only. Absolute-path validation, byte bounds,
+  // control-byte validation, and HelperSessionConfig construction are the
+  // sole responsibility of createMediaPipeHelperRouteConfig() and are never
+  // duplicated here.
+  const bool mediaPipeHelperRouteBackend =
+      options.trackingBackendName == "mediapipe-face-landmarker";
+  const int mediaPipeHelperRouteFlagCount =
+      (options.mediapipePythonPath.has_value() ? 1 : 0) +
+      (options.mediapipeHelperScriptPath.has_value() ? 1 : 0) +
+      (options.mediapipeModelAssetPath.has_value() ? 1 : 0);
+
+  if (mediaPipeHelperRouteFlagCount > 0 && !mediaPipeHelperRouteBackend) {
+    std::cerr << "--mediapipe-python, --mediapipe-helper-script, and "
+                 "--mediapipe-model-asset require --tracking-backend "
+                 "mediapipe-face-landmarker.\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
+  if (mediaPipeHelperRouteBackend && mediaPipeHelperRouteFlagCount > 0 &&
+      mediaPipeHelperRouteFlagCount < 3) {
+    std::cerr << "--tracking-backend mediapipe-face-landmarker requires "
+                 "--mediapipe-python, --mediapipe-helper-script, and "
+                 "--mediapipe-model-asset together.\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
+  if (mediaPipeHelperRouteBackend && options.camera.sourceName != "opencv") {
+    std::cerr << "--tracking-backend mediapipe-face-landmarker requires "
+                 "--camera-source opencv.\n";
+    printUsage(std::cerr);
+    return false;
+  }
+
   return true;
 }
 
@@ -825,8 +932,35 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // v0.13.0 (#572) runtime ordering step 2: create and validate the
+  // mediapipe-face-landmarker route's HelperSessionConfig once, through the
+  // sole #570 factory, BEFORE the capability-query early return -- so a
+  // configured capability query reports configured=true only after this
+  // factory actually succeeds, and still never launches Python, imports a
+  // package, reads a model, or opens a camera. Only attempted once all three
+  // values are present; partial presence was already rejected at parse time.
+  const bool mediaPipeHelperRouteBackend =
+      options.trackingBackendName == "mediapipe-face-landmarker";
+  const bool mediaPipeHelperRouteFlagsFullySupplied =
+      options.mediapipePythonPath.has_value() &&
+      options.mediapipeHelperScriptPath.has_value() &&
+      options.mediapipeModelAssetPath.has_value();
+  std::optional<lvk::tracker::HelperSessionConfig> mediaPipeHelperRouteConfig;
+  if (mediaPipeHelperRouteBackend && mediaPipeHelperRouteFlagsFullySupplied) {
+    lvk::tracker::MediaPipeHelperRouteConfigInput mediaPipeRouteInput;
+    mediaPipeRouteInput.pythonInterpreterPath =
+        std::move(*options.mediapipePythonPath);
+    mediaPipeRouteInput.helperScriptPath =
+        std::move(*options.mediapipeHelperScriptPath);
+    mediaPipeRouteInput.modelAssetPath =
+        std::move(*options.mediapipeModelAssetPath);
+    mediaPipeHelperRouteConfig =
+        lvk::tracker::createMediaPipeHelperRouteConfig(mediaPipeRouteInput);
+  }
+
   if (options.printRuntimeCapabilities) {
-    printRuntimeCapabilities(std::cout);
+    printRuntimeCapabilities(
+        std::cout, mediaPipeHelperRouteConfig.has_value());
     return 0;
   }
 
@@ -841,14 +975,31 @@ int main(int argc, char *argv[]) {
         std::cerr);
   }
 
-  if (options.trackingBackendName == "mediapipe-face-landmarker" &&
-      !LVK_HAS_MEDIAPIPE_FACE_LANDMARKER) {
-    std::cerr
-        << "The MediaPipe Face Landmarker candidate backend is not enabled "
-           "in this build. This v0.6.0 scaffold does not add MediaPipe "
-           "runtime, task/model files, runtime downloads, or production "
-           "backend selection. Use --tracking-backend face-pipeline "
-           "(default) instead.\n";
+  // v0.13.0 (#572): a real invocation of the mediapipe-face-landmarker route
+  // requires the earlier factory call to have actually succeeded. This
+  // rejects both "all three flags omitted" (never attempted above) and "all
+  // three flags supplied but invalid" (attempted and failed) uniformly, with
+  // no path echo -- createMediaPipeHelperRouteConfig() already never prints
+  // the rejected values. Partial presence was already rejected at parse
+  // time.
+  if (mediaPipeHelperRouteBackend && !mediaPipeHelperRouteConfig.has_value()) {
+    std::cerr << "--tracking-backend mediapipe-face-landmarker requires "
+                 "valid --mediapipe-python, --mediapipe-helper-script, and "
+                 "--mediapipe-model-asset values.\n";
+    return 1;
+  }
+
+  // v0.13.0 (#572): the mediapipe-face-landmarker route requires OpenCV
+  // camera build support (the same requirement as synthetic-frame-helper
+  // below), checked only after the capability-query early return above so a
+  // configured capability query still succeeds even when this build lacks
+  // OpenCV camera support.
+  if (mediaPipeHelperRouteBackend && !LVK_HAS_OPENCV_CAMERA) {
+    std::cerr << "The mediapipe-face-landmarker backend requires OpenCV "
+                 "camera support, which is not enabled in this build. "
+                 "Install OpenCV development packages (core + videoio) and "
+                 "reconfigure, or use --tracking-backend face-pipeline "
+                 "(default) or synthetic-helper instead.\n";
     return 1;
   }
 
@@ -924,6 +1075,18 @@ int main(int argc, char *argv[]) {
     trackingBackend =
         std::make_unique<lvk::tracker::SyntheticFrameHelperTrackingBackend>(
             std::move(helperConfig));
+#else
+    // Unreachable: the earlier availability check above returns 1 before
+    // this point whenever LVK_HAS_OPENCV_CAMERA is 0.
+    trackingBackend =
+        std::make_unique<lvk::tracker::FaceTrackingPipelineBackend>(
+            *faceDetector, motionTracker, options.faceDetectorName);
+#endif
+  } else if (options.trackingBackendName == "mediapipe-face-landmarker") {
+#if LVK_HAS_OPENCV_CAMERA
+    trackingBackend =
+        std::make_unique<lvk::tracker::MediaPipeFaceLandmarkerHelperTrackingBackend>(
+            std::move(*mediaPipeHelperRouteConfig));
 #else
     // Unreachable: the earlier availability check above returns 1 before
     // this point whenever LVK_HAS_OPENCV_CAMERA is 0.

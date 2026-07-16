@@ -210,6 +210,32 @@ const FaceDetectionDiagnostics&
 SyntheticFrameHelperTrackingBackend::lastDetectionDiagnostics() const {
   return backend_.lastDetectionDiagnostics();
 }
+
+MediaPipeFaceLandmarkerHelperTrackingBackend::MediaPipeFaceLandmarkerHelperTrackingBackend(
+    HelperSessionConfig config)
+    : backend_(
+          std::move(config),
+          "mediapipe-face-landmarker",
+          sizeof("mediapipe-face-landmarker") - 1) {}
+
+bool MediaPipeFaceLandmarkerHelperTrackingBackend::start() {
+  return backend_.start();
+}
+
+void MediaPipeFaceLandmarkerHelperTrackingBackend::stop() {
+  backend_.stop();
+}
+
+TrackingSample MediaPipeFaceLandmarkerHelperTrackingBackend::track(
+    const PreprocessedFrame& frame) {
+  return backend_.track(frame);
+}
+
+const FaceDetectionDiagnostics&
+MediaPipeFaceLandmarkerHelperTrackingBackend::lastDetectionDiagnostics()
+    const {
+  return backend_.lastDetectionDiagnostics();
+}
 #endif  // LVK_HAS_OPENCV_CAMERA
 
 }  // namespace lvk::tracker

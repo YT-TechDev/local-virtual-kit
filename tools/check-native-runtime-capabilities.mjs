@@ -117,8 +117,12 @@ const stdout = result.stdout;
 const requiredKeys = [
   "opencvCameraSupport=",
   "opencvFaceDetectorSupport=",
+  "mediapipeFaceLandmarkerSupport=",
+  "mediapipeFaceLandmarkerHelperRouteSupport=",
+  "mediapipeFaceLandmarkerHelperRouteConfigured=",
   "supportedCameraSources=",
   "supportedFaceDetectors=",
+  "supportedTrackingBackends=",
   "cameraOpened=false",
   "motionFramesEmitted=false",
   "localOnly=true",
@@ -135,6 +139,72 @@ for (const key of requiredKeys) {
 if (!stdout.includes("LVK native runtime capabilities")) {
   fail(
     `expected stdout to include header "LVK native runtime capabilities"\nActual stdout:\n${stdout}`,
+  );
+}
+
+// v0.13.0 (#572): a bare capability query (no mediapipe-face-landmarker
+// route flags supplied) must always report configured=false -- omitting the
+// three private route values is the one tolerated incomplete state, and this
+// checker never supplies any of them.
+if (!stdout.includes("mediapipeFaceLandmarkerHelperRouteConfigured=false")) {
+  fail(
+    `expected a bare capability query to report mediapipeFaceLandmarkerHelperRouteConfigured=false\nActual stdout:\n${stdout}`,
+  );
+}
+
+// mediapipeFaceLandmarkerSupport reports the old native-integration meaning
+// and must remain permanently false in this route (#572 does not set
+// LVK_HAS_MEDIAPIPE_FACE_LANDMARKER=1 or redefine the old CMake feasibility
+// probe).
+if (!stdout.includes("mediapipeFaceLandmarkerSupport=false")) {
+  fail(
+    `expected mediapipeFaceLandmarkerSupport=false\nActual stdout:\n${stdout}`,
+  );
+}
+
+function extractCapabilityValue(source, key) {
+  const match = source.match(new RegExp(`^${key}=(.+)$`, "mu"));
+  return match ? match[1] : null;
+}
+
+const opencvCameraSupport = extractCapabilityValue(
+  stdout,
+  "opencvCameraSupport",
+);
+const mediaPipeHelperRouteSupport = extractCapabilityValue(
+  stdout,
+  "mediapipeFaceLandmarkerHelperRouteSupport",
+);
+const supportedTrackingBackends =
+  extractCapabilityValue(stdout, "supportedTrackingBackends") ?? "";
+
+if (
+  opencvCameraSupport === null ||
+  mediaPipeHelperRouteSupport === null ||
+  opencvCameraSupport !== mediaPipeHelperRouteSupport
+) {
+  fail(
+    `expected mediapipeFaceLandmarkerHelperRouteSupport to equal opencvCameraSupport\nActual stdout:\n${stdout}`,
+  );
+}
+
+const supportedBackendsList = supportedTrackingBackends
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+const includesMediaPipeRoute = supportedBackendsList.includes(
+  "mediapipe-face-landmarker",
+);
+
+if (mediaPipeHelperRouteSupport === "true" && !includesMediaPipeRoute) {
+  fail(
+    `expected supportedTrackingBackends to include mediapipe-face-landmarker when route support is true\nActual stdout:\n${stdout}`,
+  );
+}
+
+if (mediaPipeHelperRouteSupport === "false" && includesMediaPipeRoute) {
+  fail(
+    `expected supportedTrackingBackends to exclude mediapipe-face-landmarker when route support is false\nActual stdout:\n${stdout}`,
   );
 }
 

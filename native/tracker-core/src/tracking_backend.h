@@ -109,10 +109,11 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
   const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;
 
  private:
-  // Only SyntheticFrameHelperTrackingBackend is currently trusted to
-  // construct this backend. Any future caller must be added here explicitly;
-  // there is no public construction path.
+  // Only these explicitly trusted wrappers may construct this backend. Any
+  // future caller must be added here explicitly; there is no public
+  // construction path.
   friend class SyntheticFrameHelperTrackingBackend;
+  friend class MediaPipeFaceLandmarkerHelperTrackingBackend;
 
   FrameHelperTrackingBackend(
       HelperSessionConfig config,
@@ -132,6 +133,29 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
 class SyntheticFrameHelperTrackingBackend final : public TrackingBackend {
  public:
   explicit SyntheticFrameHelperTrackingBackend(HelperSessionConfig config);
+
+  bool start() override;
+  void stop() override;
+  TrackingSample track(const PreprocessedFrame& frame) override;
+  const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;
+
+ private:
+  FrameHelperTrackingBackend backend_;
+};
+
+// v0.13.0 (#572) thin trusted wrapper composing the merged MediaPipe Face
+// Landmarker Python helper route (#568 exact invocation, #569 generic
+// frame-helper mechanics, #570 route configuration factory, #571 deterministic
+// frame bridge) into a TrackingBackend. All mechanics (frame validation,
+// normalization, session exchange, mapping, fallback, diagnostics,
+// start/stop) live only in FrameHelperTrackingBackend; this wrapper is
+// delegation only, via composition (not inheritance), and owns no
+// HelperProcessSession directly. Uses only the fixed code-owned label
+// "mediapipe-face-landmarker"; main.cpp never supplies a CLI/child-controlled
+// label here. Development-only route; not the default backend.
+class MediaPipeFaceLandmarkerHelperTrackingBackend final : public TrackingBackend {
+ public:
+  explicit MediaPipeFaceLandmarkerHelperTrackingBackend(HelperSessionConfig config);
 
   bool start() override;
   void stop() override;
