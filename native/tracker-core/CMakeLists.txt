@@ -270,3 +270,28 @@ if(MSVC)
 else()
   target_compile_options(lvk-mediapipe-helper-route-config-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Native Core-to-Python MediaPipe helper frame bridge smoke (v0.13.0, #571).
+# Standalone executable that launches a real Python child (a test-only
+# fixture under tests/fixtures, never the production helper directly) through
+# the real HelperProcessSession and the merged #568/#570 exact-invocation
+# route, proving one real cross-runtime request/frame/result exchange and
+# graceful shutdown. No OpenCV, no MediaPipe, no Python library/embed
+# linkage, no new dependency; not wired into the lvk-tracker-core runtime.
+add_executable(lvk-mediapipe-helper-frame-bridge-smoke
+  src/helper_frame_packet.cpp
+  src/helper_message.cpp
+  src/helper_process_cleanup_registry.cpp
+  src/helper_process_session.cpp
+  src/mediapipe_helper_route_config.cpp
+  src/mediapipe_helper_frame_bridge_smoke.cpp
+)
+
+target_compile_features(lvk-mediapipe-helper-frame-bridge-smoke PRIVATE cxx_std_17)
+target_link_libraries(lvk-mediapipe-helper-frame-bridge-smoke PRIVATE Threads::Threads)
+
+if(MSVC)
+  target_compile_options(lvk-mediapipe-helper-frame-bridge-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-mediapipe-helper-frame-bridge-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
