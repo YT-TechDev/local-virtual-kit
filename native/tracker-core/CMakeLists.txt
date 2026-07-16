@@ -63,6 +63,7 @@ add_executable(lvk-tracker-core
   src/helper_runtime_smoke.cpp
   src/helper_tracking_result.cpp
   src/main.cpp
+  src/mediapipe_helper_route_config.cpp
   src/motion_frame_writer.cpp
   src/tracker.cpp
   src/tracking_backend.cpp
@@ -248,4 +249,24 @@ if(MSVC)
   target_compile_options(lvk-helper-frame-transport-smoke PRIVATE /W4)
 else()
   target_compile_options(lvk-helper-frame-transport-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# MediaPipe helper route configuration smoke (v0.13.0, #570). Standalone,
+# standard-library-only executable that asserts
+# createMediaPipeHelperRouteConfig()'s path validation and
+# HelperSessionConfig construction directly on hand-built synthetic path
+# fixtures. No process spawning, no filesystem access beyond a lexical
+# std::filesystem::path parse, no camera, no OpenCV, no MediaPipe, no
+# Python, and not wired into the lvk-tracker-core runtime.
+add_executable(lvk-mediapipe-helper-route-config-smoke
+  src/mediapipe_helper_route_config.cpp
+  src/mediapipe_helper_route_config_smoke.cpp
+)
+
+target_compile_features(lvk-mediapipe-helper-route-config-smoke PRIVATE cxx_std_17)
+
+if(MSVC)
+  target_compile_options(lvk-mediapipe-helper-route-config-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-mediapipe-helper-route-config-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
