@@ -50,6 +50,25 @@ const smokePath = join(
 );
 const cmakePath = join(repoRoot, "native", "tracker-core", "CMakeLists.txt");
 
+// v0.13.0 (#580): the closed stderr-policy selector lives in the shared helper
+// session header; the two generic production entry points must never select
+// the opaque policy (that ownership belongs solely to the route factory).
+const sessionHeaderPath = join(
+  repoRoot,
+  "native",
+  "tracker-core",
+  "src",
+  "helper_process_session.h",
+);
+const mainPath = join(repoRoot, "native", "tracker-core", "src", "main.cpp");
+const trackingBackendPath = join(
+  repoRoot,
+  "native",
+  "tracker-core",
+  "src",
+  "tracking_backend.cpp",
+);
+
 function readRequired(path) {
   if (!existsSync(path)) {
     fail("missing required source file");
@@ -97,10 +116,43 @@ const requiredInSource = [
   '"--model-asset-path"',
   "kMediaPipeFaceLandmarkerReadySource",
   "enableFrameTransport = true",
+  // v0.13.0 (#580): the MediaPipe route is the sole selector of the bounded
+  // opaque discard stderr policy.
+  "stderrPolicy = HelperStderrPolicy::BoundedOpaqueDiscard",
 ];
 for (const marker of requiredInSource) {
   if (!sourceStripped.includes(marker)) {
     fail("missing required production source contract marker");
+  }
+}
+
+// --- A1b: closed stderr-policy selector + ownership boundary (#580) ---------
+
+const sessionHeaderStripped = stripCppComments(readRequired(sessionHeaderPath));
+const requiredInSessionHeader = [
+  "HelperStderrPolicy",
+  "StrictPrefixedDiagnostics",
+  "BoundedOpaqueDiscard",
+  "kHelperOpaqueStderrMaxBytes",
+  // The fixed 64 KiB bound and the strict default must both be present.
+  "64ull * 1024ull",
+  "stderrPolicy = HelperStderrPolicy::StrictPrefixedDiagnostics",
+];
+for (const marker of requiredInSessionHeader) {
+  if (!sessionHeaderStripped.includes(marker)) {
+    fail("missing required stderr-policy contract marker in session header");
+  }
+}
+
+// The bounded opaque discard policy must never be selected by the generic
+// production entry points -- only by the route factory validated above.
+for (const boundaryPath of [mainPath, trackingBackendPath]) {
+  if (
+    stripCppComments(readRequired(boundaryPath)).includes(
+      "BoundedOpaqueDiscard",
+    )
+  ) {
+    fail("bounded opaque discard policy selected outside the route factory");
   }
 }
 

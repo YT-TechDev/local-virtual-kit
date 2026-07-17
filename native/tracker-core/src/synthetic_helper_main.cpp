@@ -129,7 +129,24 @@ struct HelperOptions {
   // only the approved mediapipe-face-landmarker identity string and touches
   // no MediaPipe package, model, path, frame, or runtime behavior.
   bool sessionReadySourceMediaPipe = false;
+  // v0.13.0 (#580): deterministic, session-mode-only opaque/oversized stderr
+  // fault modes used to exercise the bounded-opaque-discard stderr policy and
+  // the strict oversized-line guard. All default off / disabled so existing
+  // behavior is byte-for-byte unchanged. Both emit only fixed ASCII filler or a
+  // generic synthetic marker on stderr: no raw data, paths, secrets, pixels,
+  // tensors, or model contents, and never any real MediaPipe log wording.
+  // sessionOpaqueStderrBytes >= 0 emits exactly that many unprefixed opaque
+  // filler bytes on the request path (modeling a compiled native library
+  // writing directly to the stderr fd); -1 disables it.
+  long long sessionOpaqueStderrBytes = -1;
+  bool sessionOversizedStderr = false;
 };
+
+// v0.13.0 (#580): upper bound for the deterministic opaque-stderr fault mode.
+// Large enough to exceed the 64 KiB session policy bound (and typical OS pipe
+// capacity) for the fail-closed/no-deadlock proof, but still fixed and
+// memory-safe.
+constexpr long long kMaxOpaqueStderrBytes = 1024LL * 1024LL;
 
 // v0.13.0 (#534): the private frame endpoint the parent inherits into this
 // process. On POSIX it is always a fixed fd (matching
@@ -371,6 +388,25 @@ void printUsage(std::ostream &output) {
             "--session-frame-bad-ack are deterministic test-only frame fault "
             "modes; combine with --session-stale-request-id to model a "
             "stale frameAck.sequence.\n";
+  output << "--session-opaque-stderr-bytes N (v0.13.0, #580) is a "
+            "deterministic test-only session-mode flag that emits exactly N "
+            "bytes of unprefixed fixed ASCII filler to stderr on each request, "
+            "modeling a compiled third-party native library writing opaque "
+            "diagnostics directly to the stderr file descriptor. N must be "
+            "between 0 and "
+         << kMaxOpaqueStderrBytes
+         << ". Combine with --session-hang-result to withhold the result and "
+            "drive the parent's bounded-opaque-discard policy over its byte "
+            "bound. It stays synthetic only (repeated 'x' filler, no raw data, "
+            "paths, secrets, or real MediaPipe log wording) and is not a "
+            "MotionFrame.\n";
+  output << "--session-oversized-stderr (v0.13.0, #580) is a deterministic "
+            "test-only session-mode flag that emits one oversized, "
+            "\"[helper] \"-prefixed stderr line (exceeding the session's "
+            "bounded line size) on each request, so the strict "
+            "prefixed-diagnostics policy's bounded-line guard can be proven to "
+            "still reject it. It stays synthetic only and is not a "
+            "MotionFrame.\n";
   output << "--session-ready-source-mediapipe (v0.13.0, #556) is a "
             "deterministic test-only session-mode flag that changes only the "
             "\"source\" value emitted on the session's \"ready\" line from "
@@ -598,6 +634,29 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
     }
     if (argument == "--session-ready-source-mediapipe") {
       options.sessionReadySourceMediaPipe = true;
+      continue;
+    }
+    if (argument == "--session-opaque-stderr-bytes") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --session-opaque-stderr-bytes.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+      int opaqueBytes = 0;
+      if (!parseIntInRange(
+              argv[argIndex + 1], 0, static_cast<int>(kMaxOpaqueStderrBytes),
+              opaqueBytes)) {
+        std::cerr << "Invalid value for --session-opaque-stderr-bytes: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+      options.sessionOpaqueStderrBytes = opaqueBytes;
+      ++argIndex;
+      continue;
+    }
+    if (argument == "--session-oversized-stderr") {
+      options.sessionOversizedStderr = true;
       continue;
     }
 
@@ -951,6 +1010,41 @@ void writeSessionResult(
   output << "}\n";
 }
 
+// v0.13.0 (#580): emit exactly `byteCount` bytes of fixed ASCII filler to
+// stderr WITHOUT the "[helper] " prefix, modeling a compiled third-party
+// native library writing opaque diagnostics directly to the stderr file
+// descriptor. Written in bounded chunks and flushed so the parent observes it
+// promptly. Carries no raw data, paths, secrets, pixels, tensors, or model
+// contents, and no real MediaPipe log wording -- just repeated 'x'.
+void emitOpaqueStderrFiller(long long byteCount) {
+  static const std::string chunk(1024, 'x');
+  long long remaining = byteCount;
+  while (remaining > 0) {
+    const long long take =
+        remaining < static_cast<long long>(chunk.size())
+            ? remaining
+            : static_cast<long long>(chunk.size());
+    std::cerr.write(chunk.data(), static_cast<std::streamsize>(take));
+    remaining -= take;
+  }
+  std::cerr.flush();
+}
+
+// v0.13.0 (#580): emit one oversized, "[helper] "-prefixed stderr line that
+// exceeds the session's kHelperMaxLineBytes bound, so the strict
+// prefixed-diagnostics policy's bounded-line guard (scanBoundedLine Oversized)
+// can be proven to still reject it regardless of the safe prefix. The line
+// carries only the safe prefix, a generic marker, and fixed ASCII filler.
+void emitOversizedStderrLine() {
+  std::cerr << "[helper] native-diagnostic: ";
+  for (int fillerIndex = 0; fillerIndex < kSessionOversizedFillerBytes;
+       ++fillerIndex) {
+    std::cerr << 'x';
+  }
+  std::cerr << "\n";
+  std::cerr.flush();
+}
+
 // Runs the interactive session: emit ready, then one result envelope per parent
 // request, until a parent stop request or stdin EOF. stdout is flushed after
 // every protocol line so the parent's bounded reads observe them promptly. All
@@ -1050,6 +1144,18 @@ int runSyntheticHelperSession(const HelperOptions &options) {
       const long long requestId = sessionExtractLong(line, "requestId", 0);
       const long long frameTimestampMs =
           sessionExtractLong(line, "frameTimestampMs", 0);
+
+      // v0.13.0 (#580): opaque/oversized stderr fault modes emit on the request
+      // path so a parent track()/trackWithFrame() exchange reliably observes
+      // them while waiting for the result. Emitted before the withhold/exit/
+      // frame handling below so they can be combined (e.g. an over-bound opaque
+      // flood together with --session-hang-result to withhold the result).
+      if (options.sessionOpaqueStderrBytes >= 0) {
+        emitOpaqueStderrFiller(options.sessionOpaqueStderrBytes);
+      }
+      if (options.sessionOversizedStderr) {
+        emitOversizedStderrLine();
+      }
 
       if (options.sessionUnsafeStderr) {
         // Emitted on the request path (not at ready) so Native Core reliably

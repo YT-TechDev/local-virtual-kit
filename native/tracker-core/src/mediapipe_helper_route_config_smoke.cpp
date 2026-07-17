@@ -19,6 +19,7 @@ namespace {
 using lvk::tracker::createMediaPipeHelperRouteConfig;
 using lvk::tracker::HelperInvocationMode;
 using lvk::tracker::HelperSessionConfig;
+using lvk::tracker::HelperStderrPolicy;
 using lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
 using lvk::tracker::kMediaPipeHelperRoutePathMaxBytes;
 using lvk::tracker::MediaPipeHelperRouteConfigInput;
@@ -85,8 +86,21 @@ bool checkValidConfiguration() {
   ok = ok &&
        (config.expectedReadySource == kMediaPipeFaceLandmarkerReadySource);
   ok = ok && (config.enableFrameTransport == true);
+  // v0.13.0 (#580): the MediaPipe route is the sole owner that selects the
+  // bounded opaque discard stderr policy for genuine native-library
+  // diagnostics.
+  ok = ok && (config.stderrPolicy == HelperStderrPolicy::BoundedOpaqueDiscard);
   ok = ok && config.extraArgs.empty();
   return ok;
+}
+
+// v0.13.0 (#580): a default-constructed HelperSessionConfig must keep the
+// strict prefixed-diagnostics policy, proving the route factory explicitly
+// overrides the default rather than the default having changed for all
+// sessions.
+bool checkDefaultStderrPolicyStrict() {
+  HelperSessionConfig defaults;
+  return defaults.stderrPolicy == HelperStderrPolicy::StrictPrefixedDiagnostics;
 }
 
 bool checkDefaultPreservation() {
@@ -254,6 +268,7 @@ int main() {
 
   bool ok = true;
   ok = checkValidConfiguration() && ok;
+  ok = checkDefaultStderrPolicyStrict() && ok;
   ok = checkDefaultPreservation() && ok;
   ok = checkMissingValues() && ok;
   ok = checkRelativeValues() && ok;

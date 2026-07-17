@@ -69,6 +69,14 @@ std::optional<HelperSessionConfig> createMediaPipeHelperRouteConfig(
   };
   config.expectedReadySource = kMediaPipeFaceLandmarkerReadySource;
   config.enableFrameTransport = true;
+  // v0.13.0 (#580): the MediaPipe Face Landmarker child inherits a compiled
+  // third-party native library that writes its own unprefixed diagnostic lines
+  // directly to the stderr file descriptor. Select the bounded opaque discard
+  // policy so those genuine diagnostics do not fail the session closed, while
+  // still never being parsed, forwarded, or persisted. This is the sole route
+  // factory allowed to select the non-default policy; every generic helper
+  // session keeps the strict prefixed-diagnostics default.
+  config.stderrPolicy = HelperStderrPolicy::BoundedOpaqueDiscard;
 
   return config;
 }
