@@ -147,6 +147,22 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
   TrackingSample track(const PreprocessedFrame& frame) override;
   const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;
 
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  // Test-target-only owner-boundary observability. Compiled ONLY when
+  // LVK_HELPER_LIFECYCLE_TEST_SEAM is defined (the bounded-recovery smoke
+  // target sets it; lvk-tracker-core never does), so production binaries carry
+  // none of this surface. It forwards the owned session's existing
+  // cross-platform child-ownership observability -- adding no new
+  // HelperProcessSession seam -- so the smoke can assert generation cleanup at
+  // this boundary. Exposes no raw pid/HANDLE/path/frame bytes: only a bool and
+  // the remaining lifetime recovery budget.
+  bool testOnlyDirectlyOwnsChild() const {
+    return session_ && session_->testOnlyDirectlyOwnsChild();
+  }
+  bool testOnlyHasSession() const { return static_cast<bool>(session_); }
+  int testOnlyRemainingRecoveryBudget() const { return recoveryBudget_; }
+#endif
+
  private:
   // Only these explicitly trusted wrappers may construct this backend. Any
   // future caller must be added here explicitly; there is no public
@@ -154,19 +170,65 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
   friend class SyntheticFrameHelperTrackingBackend;
   friend class MediaPipeFaceLandmarkerHelperTrackingBackend;
 
+  // v0.13.0 (#589): closed, code-owned recovery policy for this shared owner
+  // boundary. FrameHelperTrackingBackend is shared by the MediaPipe and
+  // synthetic frame-helper wrappers, so recovery must not be unconditional.
+  // This is not user-configurable and is never derived from backendLabel, CLI
+  // text, child/model paths, or any runtime string; it is not part of
+  // HelperSessionConfig, the helper protocol, MotionFrame, or any public API.
+  // Only the two trusted wrappers below select it: the MediaPipe route opts
+  // into exactly one lifetime attempt (SingleAttempt); the synthetic
+  // frame-helper route stays Disabled and retains its current behavior.
+  enum class RecoveryPolicy {
+    Disabled,
+    SingleAttempt,
+  };
+
   FrameHelperTrackingBackend(
       HelperSessionConfig config,
       const char* backendLabel,
-      std::size_t backendLabelBytes);
+      std::size_t backendLabelBytes,
+      RecoveryPolicy recoveryPolicy);
 
-  HelperProcessSession session_;
+  // v0.13.0 (#589): evaluated at the very beginning of track(), after the
+  // previous frame already returned LOST and emitted its #587 terminal line.
+  // Spends at most the single lifetime attempt to destroy a Failed
+  // ResultTimeout generation and construct a fresh one from retainedConfig_.
+  // See tracking_backend.cpp for the exact trigger and fail-closed teardown.
+  void maybeRecoverAfterResultTimeout();
+
+  // v0.13.0 (#589): retained copy of the exact HelperSessionConfig this backend
+  // was constructed with, used only to reconstruct a fresh HelperProcessSession
+  // for the single approved recovery attempt. Declared before session_ so it is
+  // fully initialized before the initial session is constructed from the
+  // moved-from constructor argument. Never logged or exposed; may hold a
+  // private interpreter/helper/model path.
+  HelperSessionConfig retainedConfig_;
+  // v0.13.0 (#589): owned helper session held by unique_ptr (not a value
+  // member) so the single approved recovery attempt can destroy the failed
+  // generation through the existing ~HelperProcessSession() -- bounded stop()
+  // plus its allocation-free, noexcept emergency child-ownership resolution --
+  // and construct a fresh generation from retainedConfig_. May be null only
+  // transiently if a replacement allocation fails; every entry point is
+  // null-safe and fails closed.
+  std::unique_ptr<HelperProcessSession> session_;
   FaceDetectionDiagnostics diagnostics_;
+  // v0.13.0 (#589): the closed recovery policy selected by the constructing
+  // wrapper. Only SingleAttempt ever recovers.
+  const RecoveryPolicy recoveryPolicy_;
+  // v0.13.0 (#589): remaining lifetime recovery attempts. SingleAttempt starts
+  // at 1, Disabled at 0. Decremented once when an attempt is spent, and never
+  // replenished by success, elapsed time, frame count, session duration, or any
+  // other event.
+  int recoveryBudget_;
   // Per-session disposition of the #587 terminal-failure diagnostic: armed
   // only by a successful start(), then latched to Reported by the first
   // terminal track()-path failure, so at most one
   // "[helper-session] session failed (category=<label>)" line is ever emitted
-  // for this backend/session. A fresh backend starts disarmed and never
-  // inherits a prior session's disposition.
+  // per successfully-started session generation. A fresh backend starts
+  // disarmed; the #589 recovery attempt explicitly resets this to
+  // SuppressedUntilStarted for the replacement generation and re-arms it only
+  // on a successful replacement start().
   HelperTerminalDiagnosticDisposition terminalDiagnostic_ =
       HelperTerminalDiagnosticDisposition::SuppressedUntilStarted;
 };
@@ -208,6 +270,18 @@ class MediaPipeFaceLandmarkerHelperTrackingBackend final : public TrackingBacken
   void stop() override;
   TrackingSample track(const PreprocessedFrame& frame) override;
   const FaceDetectionDiagnostics& lastDetectionDiagnostics() const override;
+
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  // Test-target-only forwarders to the owned FrameHelperTrackingBackend's
+  // #589 owner-boundary observability. Compiled out of production
+  // lvk-tracker-core; expose no raw pid/HANDLE/path/frame bytes.
+  bool testOnlyDirectlyOwnsChild() const {
+    return backend_.testOnlyDirectlyOwnsChild();
+  }
+  int testOnlyRemainingRecoveryBudget() const {
+    return backend_.testOnlyRemainingRecoveryBudget();
+  }
+#endif
 
  private:
   FrameHelperTrackingBackend backend_;

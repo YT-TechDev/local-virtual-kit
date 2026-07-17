@@ -177,6 +177,77 @@ function extractInitList(masked, original, signaturePrefix) {
   };
 }
 
+// v0.13.0 (#589): locates the FIRST `#ifdef ${guard} ... #endif` block within
+// `masked`/`original` (guard directives are never masked -- only comments and
+// string literals are). Returns the content strictly between the `#ifdef`
+// line's marker and the matching `#endif`, in both masked and original form,
+// so callers can both search it (masked, comment-free) and quote it
+// (original). Used to prove the #589 test-only lifecycle accessors live only
+// inside the existing LVK_HELPER_LIFECYCLE_TEST_SEAM guard.
+function extractIfdefBlock(masked, original, guard) {
+  const marker = `#ifdef ${guard}`;
+  const startIdx = masked.indexOf(marker);
+  if (startIdx === -1) return null;
+  const endMarker = "#endif";
+  const endIdx = masked.indexOf(endMarker, startIdx);
+  if (endIdx === -1) return null;
+  const contentStart = startIdx + marker.length;
+  return {
+    masked: masked.slice(contentStart, endIdx),
+    original: original.slice(contentStart, endIdx),
+  };
+}
+
+// v0.13.0 (#589): finds the MATCHING `#endif` for a `#if`/`#ifdef`/`#ifndef`
+// directive starting at `ifDirectiveIdx`, tracking nested #if*/#endif depth
+// (masked text keeps every real directive, since only comments/string
+// literals are masked out, so this only ever sees genuine directives). Plain
+// `masked.indexOf("#endif", ifDirectiveIdx)` -- the pre-#589 approach -- only
+// finds the FIRST #endif, which is wrong once nested guards (e.g. the #589
+// LVK_HELPER_LIFECYCLE_TEST_SEAM blocks inside the outer LVK_HAS_OPENCV_CAMERA
+// guard) exist. "#if" is a safe common prefix for #if/#ifdef/#ifndef and is
+// never a substring of "#endif" itself, so a single prefix scan finds all
+// three opener forms without extra cases. Returns -1 if unbalanced.
+function findMatchingEndif(masked, ifDirectiveIdx) {
+  let depth = 1;
+  let i = ifDirectiveIdx + 1;
+  while (i < masked.length) {
+    const nestedIfIdx = masked.indexOf("#if", i);
+    const endIdx = masked.indexOf("#endif", i);
+    if (endIdx === -1) return -1;
+    if (nestedIfIdx !== -1 && nestedIfIdx < endIdx) {
+      depth++;
+      i = nestedIfIdx + 3;
+      continue;
+    }
+    depth--;
+    if (depth === 0) return endIdx;
+    i = endIdx + 6;
+  }
+  return -1;
+}
+
+// The complement of extractIfdefBlock: returns `masked` with the ENTIRE first
+// `#ifdef ${guard} ... #endif` span (markers included) blanked out to spaces
+// of the same length, so callers can assert that a guarded-only symbol never
+// appears anywhere else in the surrounding region (production-build
+// isolation). A missing block is a no-op (returns `masked` unchanged) so this
+// stays safe to call defensively.
+function stripIfdefBlock(masked, guard) {
+  const marker = `#ifdef ${guard}`;
+  const startIdx = masked.indexOf(marker);
+  if (startIdx === -1) return masked;
+  const endMarker = "#endif";
+  const endIdx = masked.indexOf(endMarker, startIdx);
+  if (endIdx === -1) return masked;
+  const blockEnd = endIdx + endMarker.length;
+  return (
+    masked.slice(0, startIdx) +
+    " ".repeat(blockEnd - startIdx) +
+    masked.slice(blockEnd)
+  );
+}
+
 function countOccurrences(text, needle) {
   if (needle.length === 0) return 0;
   let count = 0;
@@ -270,6 +341,49 @@ function runSelfTests() {
     "};",
   ].join("\n");
   assert(countOccurrences(twoCtorSample, "Sample(") === 2);
+
+  // #589: #ifdef ... #endif block extraction / stripping self-test.
+  const ifdefSample = [
+    "class Seam {",
+    " public:",
+    "#ifdef LVK_TEST_GUARD",
+    "  int guarded() { return 1; }",
+    "#endif",
+    "  int visible() { return 2; }",
+    "};",
+  ].join("\n");
+  const ifdefMasked = maskCommentsAndStrings(ifdefSample);
+  const ifdefBlock = extractIfdefBlock(
+    ifdefMasked,
+    ifdefSample,
+    "LVK_TEST_GUARD",
+  );
+  assert(ifdefBlock !== null);
+  assert(ifdefBlock.original.includes("guarded()"));
+  assert(!ifdefBlock.original.includes("visible()"));
+  const strippedIfdef = stripIfdefBlock(ifdefMasked, "LVK_TEST_GUARD");
+  assert(!strippedIfdef.includes("guarded"));
+  assert(strippedIfdef.includes("visible"));
+
+  // #589: findMatchingEndif must skip nested #if*/#endif pairs and return the
+  // OUTER matching #endif, not the first one encountered.
+  const nestedGuardSample = [
+    "#if OUTER",
+    "before",
+    "#ifdef INNER",
+    "inner-only",
+    "#endif",
+    "after",
+    "#endif",
+    "outside",
+  ].join("\n");
+  const outerIfIdx = nestedGuardSample.indexOf("#if OUTER");
+  const outerEndifIdx = findMatchingEndif(nestedGuardSample, outerIfIdx);
+  assert(outerEndifIdx !== -1);
+  assert(nestedGuardSample.slice(outerIfIdx, outerEndifIdx).includes("after"));
+  assert(
+    !nestedGuardSample.slice(outerIfIdx, outerEndifIdx).includes("outside"),
+  );
 }
 
 // --- main boundary checks -----------------------------------------------------
@@ -292,7 +406,10 @@ function main() {
   const guardMarker = "#if LVK_HAS_OPENCV_CAMERA";
   const guardIdx = headerMasked.indexOf(guardMarker);
   assert(guardIdx !== -1);
-  const guardEndIdx = headerMasked.indexOf("#endif", guardIdx);
+  // #589: nesting-aware -- the guarded region now legitimately contains two
+  // nested `#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM` blocks (one per class), so
+  // the matching #endif is no longer simply the first one encountered.
+  const guardEndIdx = findMatchingEndif(headerMasked, guardIdx);
   assert(guardEndIdx !== -1);
   const guardedHeaderMasked = headerMasked.slice(guardIdx, guardEndIdx);
   const guardedHeaderOriginal = headerSrc.slice(guardIdx, guardEndIdx);
@@ -347,6 +464,9 @@ function main() {
   assert(!genericPublicMasked.includes("const char*"));
   assert(!genericPublicMasked.includes("std::string"));
   assert(!genericPublicMasked.includes("backendLabel"));
+  // #589: the recovery policy is private-only; the public surface never
+  // names it, so no caller can select or observe it from outside this class.
+  assert(!genericPublicMasked.includes("RecoveryPolicy"));
 
   // B. Generic private construction: exactly one constructor declaration,
   // private, reachable only through the explicitly trusted friend wrappers.
@@ -358,17 +478,77 @@ function main() {
   );
   assert(genericPrivateMasked.includes("const char* backendLabel"));
   assert(genericPrivateMasked.includes("std::size_t backendLabelBytes"));
+
+  // #589: the closed, code-owned recovery policy. Declared only under
+  // private:, so the public surface (checked above) can never name or select
+  // it -- no string-derived, CLI-derived, config-derived, or public policy
+  // selection is possible from outside this class.
+  assert(genericPrivateMasked.includes("enum class RecoveryPolicy {"));
+  const recoveryPolicyEnumIdx = genericPrivateMasked.indexOf(
+    "enum class RecoveryPolicy {",
+  );
+  const recoveryPolicyBraceIdx = genericPrivateMasked.indexOf(
+    "{",
+    recoveryPolicyEnumIdx,
+  );
+  const recoveryPolicyEndIdx = findMatchingBracket(
+    genericPrivateMasked,
+    recoveryPolicyBraceIdx,
+    "{",
+    "}",
+  );
+  assert(recoveryPolicyEndIdx !== -1);
+  assert(
+    normalizeWhitespace(
+      genericPrivateOriginal.slice(
+        recoveryPolicyBraceIdx + 1,
+        recoveryPolicyEndIdx,
+      ),
+    ) === "Disabled, SingleAttempt,",
+  );
+  assert(genericPrivateMasked.includes("RecoveryPolicy recoveryPolicy);"));
+
+  // #589: session_ is now an owning pointer (not a value member), so the
+  // single approved recovery attempt can destroy a failed generation through
+  // the existing ~HelperProcessSession() and construct a fresh one from the
+  // retained config. The old value-member form is explicitly rejected, not
+  // merely left unchecked. retainedConfig_ must be declared before session_
+  // so it is fully initialized before the initial session moves from it.
   assert(
     countOccurrences(
       genericPrivateOriginal,
-      "HelperProcessSession session_;",
+      "std::unique_ptr<HelperProcessSession> session_;",
     ) === 1,
   );
+  assert(!genericPrivateOriginal.includes("HelperProcessSession session_;"));
+  assert(
+    countOccurrences(
+      genericPrivateOriginal,
+      "HelperSessionConfig retainedConfig_;",
+    ) === 1,
+  );
+  const retainedConfigDeclIdx = genericPrivateOriginal.indexOf(
+    "HelperSessionConfig retainedConfig_;",
+  );
+  const sessionPtrDeclIdx = genericPrivateOriginal.indexOf(
+    "std::unique_ptr<HelperProcessSession> session_;",
+  );
+  assert(retainedConfigDeclIdx !== -1 && sessionPtrDeclIdx !== -1);
+  assert(retainedConfigDeclIdx < sessionPtrDeclIdx);
   assert(
     countOccurrences(
       genericPrivateOriginal,
       "FaceDetectionDiagnostics diagnostics_;",
     ) === 1,
+  );
+  assert(
+    countOccurrences(
+      genericPrivateOriginal,
+      "const RecoveryPolicy recoveryPolicy_;",
+    ) === 1,
+  );
+  assert(
+    countOccurrences(genericPrivateOriginal, "int recoveryBudget_;") === 1,
   );
 
   assert(!genericClass.masked.includes("std::string"));
@@ -414,6 +594,24 @@ function main() {
   );
   assert(!ctorInitList.masked.includes("cerr"));
 
+  // #589: exact ownership/recovery-state initialization -- retainedConfig_
+  // copies `config` (still intact at this point in the init list) before
+  // session_ moves from it; recoveryBudget_ is the finite, closed-form budget
+  // (exactly 1 for SingleAttempt, exactly 0 otherwise -- never a raw literal,
+  // a caller-supplied count, or any other derivation).
+  assert(ctorInitList.masked.includes("retainedConfig_(config)"));
+  assert(
+    ctorInitList.masked.includes(
+      "session_(std::make_unique<HelperProcessSession>(std::move(config)))",
+    ),
+  );
+  assert(ctorInitList.masked.includes("recoveryPolicy_(recoveryPolicy)"));
+  assert(
+    normalizeWhitespace(ctorInitList.original).includes(
+      "recoveryBudget_( recoveryPolicy == RecoveryPolicy::SingleAttempt ? 1 : 0)",
+    ),
+  );
+
   const startBody = extractMethodBody(
     cppMasked,
     cppSrc,
@@ -434,31 +632,89 @@ function main() {
     cppSrc,
     "FrameHelperTrackingBackend::lastDetectionDiagnostics(",
   );
+  const recoverBody = extractMethodBody(
+    cppMasked,
+    cppSrc,
+    "FrameHelperTrackingBackend::maybeRecoverAfterResultTimeout(",
+  );
   assert(startBody !== null);
   assert(stopBody !== null);
   assert(trackBody !== null);
   assert(lastDiagBody !== null);
+  assert(recoverBody !== null);
 
-  assert(startBody.masked.includes("session_.start()"));
-  assert(stopBody.masked.includes("session_.stop()"));
-  assert(stopBody.masked.includes("shutdownDiagnostic()"));
+  // #589: session_ is a pointer now -- every owner-boundary entry point uses
+  // the approved `session_->` call shape (never the old value-member `.`
+  // shape) and is null-safe / fail-closed.
+  assert(startBody.masked.includes("session_->start()"));
+  assert(!startBody.masked.includes("session_.start()"));
+  assert(startBody.masked.includes("if (!session_) {"));
+  assert(stopBody.masked.includes("session_->stop()"));
+  assert(!stopBody.masked.includes("session_.stop()"));
+  assert(stopBody.masked.includes("session_->shutdownDiagnostic()"));
+  assert(stopBody.masked.includes("if (!session_) {"));
   assert(lastDiagBody.masked.includes("diagnostics_"));
+
+  // #589: exact recovery boundary -- the single evaluation point relies on
+  // the closed policy, the finite budget, the per-generation #587
+  // disposition, and the exact ResultTimeout terminal state; then tears down
+  // through the existing owning-pointer reset and reconstructs from the
+  // retained config, re-arming only via the existing arming helper.
+  assert(recoverBody.masked.includes("RecoveryPolicy::SingleAttempt"));
+  assert(recoverBody.masked.includes("recoveryBudget_"));
+  assert(
+    recoverBody.masked.includes(
+      "HelperTerminalDiagnosticDisposition::Reported",
+    ),
+  );
+  assert(recoverBody.masked.includes("HelperSessionState::Failed"));
+  assert(
+    recoverBody.masked.includes("HelperDiagnosticCategory::ResultTimeout"),
+  );
+  assert(recoverBody.masked.includes("session_.reset()"));
+  assert(
+    recoverBody.masked.includes(
+      "HelperTerminalDiagnosticDisposition::SuppressedUntilStarted",
+    ),
+  );
+  assert(
+    recoverBody.masked.includes(
+      "std::make_unique<HelperProcessSession>(retainedConfig_)",
+    ),
+  );
+  assert(recoverBody.masked.includes("armHelperSessionTerminalDiagnostic("));
 
   // --- C. One implementation source within track() ---------------------------
   assert(countOccurrences(trackBody.masked, "normalizeBgr24Rows(") === 1);
-  assert(countOccurrences(trackBody.masked, "session_.trackWithFrame(") === 1);
+  assert(countOccurrences(trackBody.masked, "session_->trackWithFrame(") === 1);
+  assert(!trackBody.masked.includes("session_.trackWithFrame("));
+  // #589: the recovery attempt adds exactly one more safe-fallback return
+  // (the null-session fail-closed path), so the existing two-mapping-call
+  // count becomes three -- still the ONLY three mapping call sites, and the
+  // "lost" fallback construction now appears twice (once for the null-session
+  // path, once for the existing outcome.ok==false path).
   assert(
     countOccurrences(
       trackBody.masked,
       "createTrackingSampleFromHelperResult(",
-    ) === 2,
+    ) === 3,
   );
   assert(trackBody.masked.includes("std::vector<std::uint8_t> payload;"));
   assert(trackBody.masked.includes("HelperTrackOutcome outcome;"));
-  assert(trackBody.masked.includes("HelperTrackingResult lost;"));
-  assert(trackBody.masked.includes("lost.timestampMs = frameTimestampMs;"));
   assert(
-    trackBody.masked.includes("lost.status = HelperTrackingStatus::Lost;"),
+    countOccurrences(trackBody.masked, "HelperTrackingResult lost;") === 2,
+  );
+  assert(
+    countOccurrences(
+      trackBody.masked,
+      "lost.timestampMs = frameTimestampMs;",
+    ) === 2,
+  );
+  assert(
+    countOccurrences(
+      trackBody.masked,
+      "lost.status = HelperTrackingStatus::Lost;",
+    ) === 2,
   );
   assert(!trackBody.masked.includes("for ("));
   assert(!trackBody.masked.includes("for("));
@@ -466,11 +722,38 @@ function main() {
   assert(!trackBody.masked.includes("while("));
   assert(!trackBody.masked.includes("static "));
 
+  // #589: the single recovery evaluation happens exactly once, strictly
+  // before the null-session fail-closed check and before frame
+  // normalization/exchange -- so the rest of the method only ever observes a
+  // post-recovery session (a fresh replacement, or fail-closed null), never a
+  // stale pre-recovery one.
+  assert(
+    countOccurrences(trackBody.masked, "maybeRecoverAfterResultTimeout()") ===
+      1,
+  );
+  const recoverCallIdx = trackBody.masked.indexOf(
+    "maybeRecoverAfterResultTimeout();",
+  );
+  const nullSessionCheckIdx = trackBody.masked.indexOf("if (!session_) {");
+  const normalizeCallIdx = trackBody.masked.indexOf("normalizeBgr24Rows(");
+  const frameExchangeCallIdx = trackBody.masked.indexOf(
+    "session_->trackWithFrame(",
+  );
+  assert(recoverCallIdx !== -1);
+  assert(nullSessionCheckIdx !== -1);
+  assert(normalizeCallIdx !== -1);
+  assert(frameExchangeCallIdx !== -1);
+  assert(recoverCallIdx < nullSessionCheckIdx);
+  assert(recoverCallIdx < normalizeCallIdx);
+  assert(recoverCallIdx < frameExchangeCallIdx);
+
   // Whole-file uniqueness: these two calls are specific to the frame-transport
   // path (distinct from the result-only session_.track() used elsewhere), so
-  // a file-wide count of 1 proves no second call site exists anywhere.
+  // a file-wide count of 1 proves no second call site exists anywhere. The old
+  // value-member call shape must never reappear anywhere in the file.
   assert(countOccurrences(cppMasked, "normalizeBgr24Rows(") === 1);
-  assert(countOccurrences(cppMasked, "session_.trackWithFrame(") === 1);
+  assert(countOccurrences(cppMasked, "session_->trackWithFrame(") === 1);
+  assert(countOccurrences(cppMasked, "session_.trackWithFrame(") === 0);
 
   // --- D. Thin compatibility wrapper ------------------------------------------
   const wrapperClass = extractClassBody(
@@ -521,7 +804,16 @@ function main() {
       'sizeof("synthetic-frame-helper") - 1',
     ),
   );
-  assert(countOccurrences(wrapperCtorInit.masked, ",") === 2);
+  // #589: the synthetic frame-helper route stays Disabled -- a fixed,
+  // code-owned literal, never a variable, config field, or CLI-derived value.
+  assert(
+    countOccurrences(
+      wrapperCtorInit.original,
+      "FrameHelperTrackingBackend::RecoveryPolicy::Disabled",
+    ) === 1,
+  );
+  assert(!wrapperCtorInit.original.includes("RecoveryPolicy::SingleAttempt"));
+  assert(countOccurrences(wrapperCtorInit.masked, ",") === 3);
   assert(!wrapperCtorInit.masked.includes("strlen("));
   assert(!wrapperCtorInit.masked.includes("std::string("));
 
@@ -624,7 +916,19 @@ function main() {
       'sizeof("mediapipe-face-landmarker") - 1',
     ),
   );
-  assert(countOccurrences(mediaPipeWrapperCtorInit.masked, ",") === 2);
+  // #589: the MediaPipe route is the sole approved SingleAttempt opt-in -- a
+  // fixed, code-owned literal, never a variable, config field, or CLI-derived
+  // value.
+  assert(
+    countOccurrences(
+      mediaPipeWrapperCtorInit.original,
+      "FrameHelperTrackingBackend::RecoveryPolicy::SingleAttempt",
+    ) === 1,
+  );
+  assert(
+    !mediaPipeWrapperCtorInit.original.includes("RecoveryPolicy::Disabled"),
+  );
+  assert(countOccurrences(mediaPipeWrapperCtorInit.masked, ",") === 3);
   assert(!mediaPipeWrapperCtorInit.masked.includes("strlen("));
   assert(!mediaPipeWrapperCtorInit.masked.includes("std::string("));
 
@@ -669,6 +973,63 @@ function main() {
       "return backend_.lastDetectionDiagnostics();",
   );
 
+  // --- F. Test-only lifecycle observability surface (#589) -------------------
+  //
+  // The bounded-recovery smoke needs to observe generation cleanup and the
+  // remaining recovery budget without a new HelperProcessSession seam. Both
+  // accessors are permitted ONLY inside the existing
+  // LVK_HELPER_LIFECYCLE_TEST_SEAM guard (defined solely on the recovery smoke
+  // target, never on lvk-tracker-core) and must expose no raw pid/HANDLE/
+  // path/frame/diagnostic detail -- only a bool and the remaining int budget.
+  const LIFECYCLE_TEST_SEAM_GUARD = "LVK_HELPER_LIFECYCLE_TEST_SEAM";
+
+  const genericSeamBlock = extractIfdefBlock(
+    genericClass.masked,
+    genericClass.original,
+    LIFECYCLE_TEST_SEAM_GUARD,
+  );
+  assert(genericSeamBlock !== null);
+  assert(genericSeamBlock.masked.includes("testOnlyDirectlyOwnsChild"));
+  assert(genericSeamBlock.masked.includes("testOnlyRemainingRecoveryBudget"));
+
+  const mediaPipeSeamBlock = extractIfdefBlock(
+    mediaPipeWrapperClass.masked,
+    mediaPipeWrapperClass.original,
+    LIFECYCLE_TEST_SEAM_GUARD,
+  );
+  assert(mediaPipeSeamBlock !== null);
+  assert(mediaPipeSeamBlock.masked.includes("testOnlyDirectlyOwnsChild"));
+  assert(mediaPipeSeamBlock.masked.includes("testOnlyRemainingRecoveryBudget"));
+
+  // Masked (comment-free) code-only scan: the accessor bodies themselves must
+  // never touch a raw handle/pid/path/frame/diagnostic value. (The doc
+  // comments above them legitimately DISCLAIM exposing those things in
+  // English prose -- using the masked text, not the original, keeps that
+  // prose from ever being able to trip this check.)
+  const seamForbiddenTerms = ["pid", "handle", "path", "frame", "diag"];
+  for (const block of [genericSeamBlock, mediaPipeSeamBlock]) {
+    const lowerCode = block.masked.toLowerCase();
+    for (const term of seamForbiddenTerms) {
+      assert(!lowerCode.includes(term));
+    }
+  }
+
+  // Production-build isolation: outside the guarded block, neither class ever
+  // names the test-only accessors, and the .cpp translation unit (always
+  // compiled into lvk-tracker-core) never references them either.
+  assert(
+    !stripIfdefBlock(genericClass.masked, LIFECYCLE_TEST_SEAM_GUARD).includes(
+      "testOnly",
+    ),
+  );
+  assert(
+    !stripIfdefBlock(
+      mediaPipeWrapperClass.masked,
+      LIFECYCLE_TEST_SEAM_GUARD,
+    ).includes("testOnly"),
+  );
+  assert(!cppMasked.includes("testOnly"));
+
   // --- E. Boundary isolation ---------------------------------------------------
   //
   // The generic class body legitimately names its trusted friend wrappers by
@@ -696,6 +1057,7 @@ function main() {
     stopBody.masked,
     trackBody.masked,
     lastDiagBody.masked,
+    recoverBody.masked,
   ]
     .join(" ")
     .toLowerCase();

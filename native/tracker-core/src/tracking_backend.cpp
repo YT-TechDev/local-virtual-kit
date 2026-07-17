@@ -3,6 +3,7 @@
 #include "helper_tracking_result.h"
 
 #include <iostream>
+#include <memory>
 #include <utility>
 
 #if LVK_HAS_OPENCV_CAMERA
@@ -211,8 +212,13 @@ constexpr char kFrameHelperFallbackLabel[] = "frame-helper";
 FrameHelperTrackingBackend::FrameHelperTrackingBackend(
     HelperSessionConfig config,
     const char* backendLabel,
-    std::size_t backendLabelBytes)
-    : session_(std::move(config)),
+    std::size_t backendLabelBytes,
+    RecoveryPolicy recoveryPolicy)
+    // retainedConfig_ is declared before session_, so it copies the config
+    // (for exact #589 reconstruction) while `config` is still intact, before
+    // session_ moves from it.
+    : retainedConfig_(config),
+      session_(std::make_unique<HelperProcessSession>(std::move(config))),
       diagnostics_(FaceDetectionDiagnostics{
           isValidFrameHelperBackendLabel(backendLabel, backendLabelBytes)
               ? std::string(backendLabel, backendLabelBytes)
@@ -223,29 +229,134 @@ FrameHelperTrackingBackend::FrameHelperTrackingBackend(
           0.0,
           false,
           FaceDetectionResultSource::None,
-      }) {}
+      }),
+      recoveryPolicy_(recoveryPolicy),
+      recoveryBudget_(
+          recoveryPolicy == RecoveryPolicy::SingleAttempt ? 1 : 0) {}
 
 bool FrameHelperTrackingBackend::start() {
-  const bool started = session_.start();
+  // Null-safe: a backend can only reach here with a constructed session, but
+  // fail closed rather than dereference if a replacement ever left it null.
+  if (!session_) {
+    return false;
+  }
+  const bool started = session_->start();
   armHelperSessionTerminalDiagnostic(started, terminalDiagnostic_);
   return started;
 }
 
 void FrameHelperTrackingBackend::stop() {
-  session_.stop();
+  if (!session_) {
+    return;
+  }
+  session_->stop();
   // Surface only a generic, path-free category if a healthy session did not shut
   // down cleanly (no valid stopped line and/or a forced termination). Never
   // forwards raw child output.
-  const HelperDiagnosticCategory category = session_.shutdownDiagnostic();
+  const HelperDiagnosticCategory category = session_->shutdownDiagnostic();
   if (category != HelperDiagnosticCategory::None) {
     std::cerr << "[helper-session] shutdown incomplete (category="
               << helperDiagnosticCategoryLabel(category) << ")\n";
   }
 }
 
+// v0.13.0 (#589): the single, bounded, MediaPipe-route-only recovery. Evaluated
+// at the beginning of the next track() entry, AFTER the timeout-triggering
+// frame already returned LOST and emitted its #587 terminal line. It destroys
+// the Failed ResultTimeout generation through the existing
+// ~HelperProcessSession() and constructs a fresh generation from
+// retainedConfig_. The synthetic frame-helper route is Disabled and returns
+// here unchanged; other terminal categories, non-terminal failures, canonical
+// LOST, and legitimate no-face never reach the reconstruction below.
+void FrameHelperTrackingBackend::maybeRecoverAfterResultTimeout() {
+  // Closed, code-owned policy: only the MediaPipe route opts in.
+  if (recoveryPolicy_ != RecoveryPolicy::SingleAttempt) {
+    return;
+  }
+  // Lifetime budget: at most one attempt, never replenished.
+  if (recoveryBudget_ <= 0) {
+    return;
+  }
+  // Fail closed on a missing session; never dereference null.
+  if (!session_) {
+    return;
+  }
+  // Exact trigger. Every condition must hold for the current owned session:
+  //  - the #587 line was already reported for this generation, proving it
+  //    started successfully and its terminal track-path failure was reported
+  //    (Reported is unreachable without a prior successful start());
+  //  - the session is terminally Failed;
+  //  - the terminal category is exactly ResultTimeout (not MalformedMessage,
+  //    ChildExit, FrameWriteTimeout, FrameAckMismatch, or any start/ready/stop
+  //    category).
+  if (terminalDiagnostic_ != HelperTerminalDiagnosticDisposition::Reported) {
+    return;
+  }
+  if (session_->state() != HelperSessionState::Failed) {
+    return;
+  }
+  if (session_->lastDiagnostic() != HelperDiagnosticCategory::ResultTimeout) {
+    return;
+  }
+
+  // Spend the single lifetime attempt now, before the replacement's start
+  // result is known, so a failed replacement can never be retried and the
+  // budget stays consumed even if allocation/start below fails.
+  --recoveryBudget_;
+
+  // Destroy the failed generation through the existing ~HelperProcessSession()
+  // -- bounded stop() plus the allocation-free, noexcept emergency
+  // child-ownership resolution it already runs if stop() throws. Old-generation
+  // destruction completes here, before any replacement becomes authoritative or
+  // exchanges a frame; no stale pipe/request/result id can cross generations.
+  session_.reset();
+
+  // Reset the #587 disposition for the new generation. The failed generation
+  // latched Reported, which armHelperSessionTerminalDiagnostic() intentionally
+  // will not re-arm; the replacement must start clean so its own first terminal
+  // track-path failure can still report exactly one line.
+  terminalDiagnostic_ =
+      HelperTerminalDiagnosticDisposition::SuppressedUntilStarted;
+
+  // Construct and start a fresh generation from the retained config. Any
+  // failure here fails closed: session_ is left null and, because the budget is
+  // already spent, no further attempt ever occurs. Local exception containment
+  // exposes no raw exception text or private path and leaves child ownership
+  // resolved (a partially-started replacement is destroyed through its own
+  // destructor by reset()).
+  bool replacementStarted = false;
+  try {
+    session_ = std::make_unique<HelperProcessSession>(retainedConfig_);
+    replacementStarted = session_->start();
+  } catch (...) {
+    session_.reset();
+    replacementStarted = false;
+  }
+
+  // Arm the replacement generation only on a successful start; a failed
+  // start/ready stays suppressed and emits no #587 track-path line for it.
+  armHelperSessionTerminalDiagnostic(replacementStarted, terminalDiagnostic_);
+}
+
 TrackingSample FrameHelperTrackingBackend::track(
     const PreprocessedFrame& frame) {
   const long long frameTimestampMs = frame.cameraFrame.timestampMs;
+
+  // v0.13.0 (#589): evaluate the single, bounded, MediaPipe-route-only recovery
+  // at the very beginning of the call -- after the previous frame already
+  // returned LOST and emitted its #587 terminal line. The timeout-triggering
+  // frame itself never recovers; recovery begins here, on the following
+  // track() entry.
+  maybeRecoverAfterResultTimeout();
+
+  // Fail closed if no session is available (e.g. a replacement allocation/start
+  // could not complete). Never dereference a null session.
+  if (!session_) {
+    HelperTrackingResult lost;
+    lost.timestampMs = frameTimestampMs;
+    lost.status = HelperTrackingStatus::Lost;
+    return createTrackingSampleFromHelperResult(lost);
+  }
 
   // Only a valid CV_8UC3 CPU image with dimensions matching the preprocessed
   // frame is eligible for transport; anything else fails closed to safe lost
@@ -269,11 +380,11 @@ TrackingSample FrameHelperTrackingBackend::track(
       FramePixelView pixelView{
           payload.data(), static_cast<std::uint32_t>(frame.width),
           static_cast<std::uint32_t>(frame.height)};
-      outcome = session_.trackWithFrame(frameTimestampMs, pixelView);
+      outcome = session_->trackWithFrame(frameTimestampMs, pixelView);
     }
   }
 
-  reportHelperSessionTerminalFailure(session_, terminalDiagnostic_);
+  reportHelperSessionTerminalFailure(*session_, terminalDiagnostic_);
   if (!outcome.ok) {
     // Safe fallback: a neutral lost sample for this frame. No stale helper
     // tracking is ever reused after a failure.
@@ -292,10 +403,14 @@ FrameHelperTrackingBackend::lastDetectionDiagnostics() const {
 
 SyntheticFrameHelperTrackingBackend::SyntheticFrameHelperTrackingBackend(
     HelperSessionConfig config)
+    // Synthetic frame-helper route: recovery Disabled (#589). This route
+    // retains its current fail-closed-to-LOST behavior on every terminal
+    // category, including ResultTimeout.
     : backend_(
           std::move(config),
           "synthetic-frame-helper",
-          sizeof("synthetic-frame-helper") - 1) {}
+          sizeof("synthetic-frame-helper") - 1,
+          FrameHelperTrackingBackend::RecoveryPolicy::Disabled) {}
 
 bool SyntheticFrameHelperTrackingBackend::start() {
   return backend_.start();
@@ -317,10 +432,13 @@ SyntheticFrameHelperTrackingBackend::lastDetectionDiagnostics() const {
 
 MediaPipeFaceLandmarkerHelperTrackingBackend::MediaPipeFaceLandmarkerHelperTrackingBackend(
     HelperSessionConfig config)
+    // MediaPipe Face Landmarker route: the single approved opt-in to exactly
+    // one lifetime ResultTimeout recovery attempt (#589).
     : backend_(
           std::move(config),
           "mediapipe-face-landmarker",
-          sizeof("mediapipe-face-landmarker") - 1) {}
+          sizeof("mediapipe-face-landmarker") - 1,
+          FrameHelperTrackingBackend::RecoveryPolicy::SingleAttempt) {}
 
 bool MediaPipeFaceLandmarkerHelperTrackingBackend::start() {
   return backend_.start();

@@ -328,3 +328,51 @@ if(MSVC)
 else()
   target_compile_options(lvk-tracking-backend-terminal-failure-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Bounded helper result-timeout recovery smoke (v0.13.0, #589). Standalone
+# behavioral executable that drives the REAL production owner path
+# (MediaPipeFaceLandmarkerHelperTrackingBackend -> FrameHelperTrackingBackend ->
+# HelperProcessSession::trackWithFrame()) with a small in-memory synthetic
+# cv::Mat, proving the single, bounded, MediaPipe-route-only recovery after a
+# terminal result-timeout. Unlike the OpenCV-independent #587 smoke, this target
+# compiles the exact production tracking_backend.cpp with OpenCV ENABLED
+# (LVK_HAS_OPENCV_CAMERA=1 / LVK_HAS_OPENCV_IMAGE=1) so the FrameHelperTracking
+# Backend owner path is present; it therefore only exists when the required
+# OpenCV core/camera components are available. It re-execs itself (via the
+# existing ExactArguments caller-owned-argv path) as a frame-transport session
+# child -- it never opens a camera, loads MediaPipe/Python/a model, or uses the
+# network, sockets, temp files, or persisted frames. The existing test-target-
+# only lifecycle seam is enabled here (never on lvk-tracker-core) so generation
+# cleanup can be asserted through existing observability. Not wired into the
+# lvk-tracker-core runtime.
+if(LVK_HAS_OPENCV_CAMERA)
+  add_executable(lvk-tracking-backend-result-timeout-recovery-smoke
+    src/face_tracking_pipeline.cpp
+    src/helper_frame_packet.cpp
+    src/helper_message.cpp
+    src/helper_process_cleanup_registry.cpp
+    src/helper_process_session.cpp
+    src/helper_tracking_result.cpp
+    src/tracking_backend.cpp
+    src/tracking_backend_result_timeout_recovery_smoke.cpp
+    src/tracking_sample_factory.cpp
+  )
+
+  target_compile_features(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE cxx_std_17)
+  target_link_libraries(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE Threads::Threads ${LVK_OPENCV_CAMERA_LIBS})
+  target_include_directories(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE ${LVK_OPENCV_CAMERA_INCLUDE_DIRS})
+  # OpenCV enabled: compile the real FrameHelperTrackingBackend owner path and
+  # the matching image capability. Both are set target-wide so every
+  # translation unit agrees on the PreprocessedFrame/CameraFrame layout.
+  target_compile_definitions(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE
+    LVK_HAS_OPENCV_CAMERA=1
+    LVK_HAS_OPENCV_IMAGE=1
+    LVK_HELPER_LIFECYCLE_TEST_SEAM=1
+  )
+
+  if(MSVC)
+    target_compile_options(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE /W4)
+  else()
+    target_compile_options(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+endif()
