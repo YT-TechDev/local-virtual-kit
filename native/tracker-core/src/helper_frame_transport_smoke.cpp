@@ -1400,6 +1400,88 @@ void testReadySourceInvalidExpectedFailsBeforeLaunch(
   session.stop();
 }
 
+// v0.13.0 (#582): MediaPipe-route ready-timeout boundary coverage. These
+// cases prove the GENERIC bounded ready-wait mechanism (a caller-supplied
+// HelperSessionConfig::readyTimeoutMs, consumed unmodified by
+// HelperProcessSession::start()) deterministically succeeds within budget
+// and fails closed beyond it, using small, explicitly configured synthetic
+// values -- never the route's real multi-second production timeout, which
+// is instead proven as a pure numeric assertion (no live process, no
+// wall-clock wait) by lvk-mediapipe-helper-route-config-smoke. Reusing
+// ExactArguments mode against the existing, already-merged
+// lvk-synthetic-helper "--delay-ready-ms" batch fixture requires no
+// synthetic_helper_main.cpp changes: with no "--session" flag, that fixture
+// sleeps, then emits one ready line carrying the default synthetic ready
+// source, which matches HelperSessionConfig::expectedReadySource's default.
+
+constexpr int kReadyTimeoutBoundaryTimeoutMs = 300;
+constexpr int kReadyTimeoutBoundaryWithinBudgetDelayMs = 50;
+constexpr int kReadyTimeoutBoundaryBeyondBudgetDelayMs = 2000;
+
+void testReadyTimeoutWithinBudgetSucceeds(const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.invocationMode = HelperInvocationMode::ExactArguments;
+  config.exactArguments = {
+      "--delay-ready-ms",
+      std::to_string(kReadyTimeoutBoundaryWithinBudgetDelayMs)};
+  config.readyTimeoutMs = kReadyTimeoutBoundaryTimeoutMs;
+  HelperProcessSession session(config);
+  expect(
+      session.start(),
+      "ready-timeout within-budget: a delayed-but-bounded ready succeeds");
+  expect(
+      session.state() == HelperSessionState::Ready,
+      "ready-timeout within-budget: state becomes Ready");
+  session.stop();
+}
+
+void testReadyTimeoutBeyondBudgetFailsClosed(const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "ready-timeout beyond-budget: registry drained before test");
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.invocationMode = HelperInvocationMode::ExactArguments;
+  config.exactArguments = {
+      "--delay-ready-ms",
+      std::to_string(kReadyTimeoutBoundaryBeyondBudgetDelayMs)};
+  config.readyTimeoutMs = kReadyTimeoutBoundaryTimeoutMs;
+  HelperProcessSession session(config);
+  expect(
+      !session.start(),
+      "ready-timeout beyond-budget: start() fails closed at the bounded "
+      "deadline");
+  expect(
+      session.state() == HelperSessionState::Failed,
+      "ready-timeout beyond-budget: state becomes Failed");
+  expect(
+      session.lastDiagnostic() == HelperDiagnosticCategory::ReadyTimeout,
+      "ready-timeout beyond-budget: diagnostic is exactly ReadyTimeout, "
+      "never LaunchFailure or another category");
+  session.stop();  // force-terminates the still-sleeping child
+  expect(pumpUntilEmptyOrDeadline(5000) == 0,
+         "ready-timeout beyond-budget: no orphan child remains after "
+         "timeout + stop()");
+}
+
+void testFreshSessionSucceedsAfterReadyTimeoutFailure(
+    const std::string& helperPath) {
+  // Proves the route-specific timeout failure above leaves no session-local
+  // or process-global state that could affect an unrelated, freshly
+  // constructed default (generic-timeout) session.
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  HelperProcessSession session(config);
+  expect(
+      session.start(),
+      "ready-timeout: a fresh default-config session still starts cleanly "
+      "after a prior route-specific timeout failure");
+  expect(
+      session.state() == HelperSessionState::Ready,
+      "ready-timeout: fresh session reaches Ready");
+  session.stop();
+}
+
 // v0.13.0 (#568): exact helper invocation mode. These cases exercise the
 // platform-independent argument-selection boundary in
 // HelperProcessSession::start() -- never platformLaunch() itself -- using the
@@ -1954,6 +2036,11 @@ int main(int argc, char** argv) {
   testReadySourceDefaultExpectedMediaPipeEmittingHelper(helperPath);
   testReadySourceMediaPipeExpectedDefaultSyntheticHelper(helperPath);
   testReadySourceInvalidExpectedFailsBeforeLaunch(helperPath);
+
+  // v0.13.0 (#582): MediaPipe-route ready-timeout boundary coverage.
+  testReadyTimeoutWithinBudgetSucceeds(helperPath);
+  testReadyTimeoutBeyondBudgetFailsClosed(helperPath);
+  testFreshSessionSucceedsAfterReadyTimeoutFailure(helperPath);
 
   testExactInvocationDefaultSyntheticArgumentOrder(helperPath);
   testExactInvocationSyntheticFrameArgumentOrder(helperPath);
