@@ -15,6 +15,17 @@
 // result, and never for the separate start()/ready or stop()/shutdown
 // diagnostics.
 //
+// Category origin is a first-class part of that contract, because
+// MalformedMessage and ChildExit are each reachable from BOTH
+// HelperProcessSession::start() (config validation, ready handshake) and the
+// track() path. state() plus lastDiagnostic() therefore cannot distinguish
+// them, so cases 5c/5d (each overlapping category suppressed when it
+// originates at start()) and case 9 (the same MalformedMessage still reported
+// once when it originates on the track() path) are paired: together they prove
+// the exclusion keys on origin rather than on category, and that it hides no
+// genuine track-path failure. All four use existing deterministic
+// lvk-synthetic-helper fixtures; no production helper flag is added.
+//
 // Case 2 (legitimate no-face) needs a helper that returns a successful
 // ok == true session result with status "lost". lvk-synthetic-helper's
 // session mode always reports status "tracking" and has no such fault mode,
@@ -41,10 +52,15 @@ namespace {
 
 int gFailures = 0;
 
+// Reports through std::clog, never std::cout/std::cerr: most assertions here
+// are evaluated while a StreamCapture has this process's cout/cerr redirected,
+// so reporting on either would be swallowed into the buffer under test (making
+// a CI failure print only a count) and could corrupt the exact-match
+// assertions. std::clog reaches the real stderr and is never captured.
 void expect(bool condition, const std::string& what) {
   if (!condition) {
     ++gFailures;
-    std::cerr << "[tracking-backend-terminal-failure-smoke] FAILED: " << what
+    std::clog << "[tracking-backend-terminal-failure-smoke] FAILED: " << what
               << "\n";
   }
 }
@@ -69,6 +85,39 @@ constexpr const char* kLostSessionChildArg =
 
 constexpr const char* kTerminalFailureLine =
     "[helper-session] session failed (category=result-timeout)\n";
+
+constexpr const char* kMalformedMessageFailureLine =
+    "[helper-session] session failed (category=malformed-message)\n";
+
+constexpr const char* kTerminalFailurePrefix = "[helper-session] session failed";
+
+// Smoke-only failure-injection budgets. Deliberately separate from, and far
+// below, the production defaults this change never touches (resultTimeoutMs
+// 2000 / readyTimeoutMs 2000 / stopTimeoutMs 1000). Each is the smallest value
+// that still keeps a wide, deterministic margin on a slow CI runner:
+//
+//  - kSmokeResultTimeoutMs vs kSmokeResultDelayMs: the child sleeps a fixed
+//    500ms before writing any result, so the parent's 60ms result wait can
+//    never observe one -- an 8x margin. The injected delay only has to outlast
+//    the wait; no assertion measures it, and the delay costs no smoke latency
+//    (the child is force-terminated mid-sleep), so it stays generous while the
+//    wait itself stays small. There is no wall-clock race in either direction.
+//  - kSmokeReadyTimeoutMs: burned in full only by the --session-skip-ready
+//    fixture, whose child never writes a ready line at all, so any bound
+//    yields ReadyTimeout and a small one only reaches that verdict sooner.
+//  - kSmokeFailedStopTimeoutMs: a session that already latched Failed does not
+//    send the graceful stop line, so stop() always waits this bound out in
+//    full for the still-live child before force termination. That wait is pure
+//    smoke latency and cannot affect any assertion here, because a stop() on a
+//    Failed session never entered Stopping and so reports no shutdown
+//    diagnostic regardless of the bound. Healthy sessions deliberately keep
+//    the production stopTimeoutMs default instead: their graceful stop returns
+//    as soon as the "stopped" line arrives, so shrinking it would buy nothing
+//    and only risk a false shutdown-incomplete.
+constexpr int kSmokeResultTimeoutMs = 60;
+constexpr const char* kSmokeResultDelayMs = "500";
+constexpr int kSmokeReadyTimeoutMs = 60;
+constexpr int kSmokeFailedStopTimeoutMs = 25;
 
 PreprocessedFrame makeFrame(long long timestampMs) {
   PreprocessedFrame frame;
@@ -115,16 +164,54 @@ HelperSessionConfig baseSyntheticConfig(const std::string& helperPath) {
   return config;
 }
 
-// Config for the deterministic result-timeout path: a small test-only
-// resultTimeoutMs (well under the production default) paired with the
-// existing --session-result-delay-ms fixture flag (#584) at its maximum
-// (1500ms), which deterministically exceeds it. Never changes the production
-// default (HelperSessionConfig::resultTimeoutMs stays 2000 everywhere else).
+// Config for the deterministic track-path result-timeout: a small test-only
+// resultTimeoutMs paired with the existing --session-result-delay-ms fixture
+// flag (#584), which deterministically outlasts it. Never changes the
+// production default (HelperSessionConfig::resultTimeoutMs stays 2000
+// everywhere else).
 HelperSessionConfig resultTimeoutConfig(const std::string& helperPath) {
   HelperSessionConfig config = baseSyntheticConfig(helperPath);
-  config.resultTimeoutMs = 200;
-  config.stopTimeoutMs = 2000;
-  config.extraArgs = {"--session-result-delay-ms", "1500"};
+  config.resultTimeoutMs = kSmokeResultTimeoutMs;
+  config.stopTimeoutMs = kSmokeFailedStopTimeoutMs;
+  config.extraArgs = {"--session-result-delay-ms", kSmokeResultDelayMs};
+  return config;
+}
+
+// Track-path MalformedMessage: the existing --session-malformed-result fixture
+// answers each request immediately with an unparseable result line, so the
+// session latches Failed from trackInternal() -- after a fully successful
+// start() -- with the same category start() itself can also produce.
+HelperSessionConfig trackMalformedResultConfig(const std::string& helperPath) {
+  HelperSessionConfig config = baseSyntheticConfig(helperPath);
+  config.stopTimeoutMs = kSmokeFailedStopTimeoutMs;
+  config.extraArgs = {"--session-malformed-result"};
+  return config;
+}
+
+// Start-path MalformedMessage: the existing --session-ready-source-mediapipe
+// fixture makes the child's ready line report the MediaPipe source while the
+// session still expects the default synthetic-helper source, so start()'s
+// ready-line parse fails. No production helper behavior is modified.
+HelperSessionConfig startReadySourceMismatchConfig(
+    const std::string& helperPath) {
+  HelperSessionConfig config = baseSyntheticConfig(helperPath);
+  config.stopTimeoutMs = kSmokeFailedStopTimeoutMs;
+  config.extraArgs = {"--session-ready-source-mediapipe"};
+  return config;
+}
+
+// Start-path ChildExit: the existing --session-exit-before-ready fixture exits
+// the child before any ready line, so start()'s ready read hits stdout EOF and
+// nextStdoutLine() classifies it as ChildExit -- the second authorized
+// track-path category that can also originate during start(). readyTimeoutMs
+// stays at the production default here on purpose: the EOF arrives at once, so
+// the wait is never burned, and a small bound could only race the EOF into a
+// ready-timeout and silently weaken the ChildExit origin this case exists to
+// prove.
+HelperSessionConfig startExitBeforeReadyConfig(const std::string& helperPath) {
+  HelperSessionConfig config = baseSyntheticConfig(helperPath);
+  config.stopTimeoutMs = kSmokeFailedStopTimeoutMs;
+  config.extraArgs = {"--session-exit-before-ready"};
   return config;
 }
 
@@ -206,8 +293,11 @@ int runLostSessionTestChild() {
 }
 
 // ---------------------------------------------------------------------------
-// Behavioral test cases (see docs Issue #587 for the authoritative 9-case
-// regression plan this file implements 1:1).
+// Behavioral test cases. Implements Issue #587's authoritative regression plan
+// (cases 1-9), extended with the category-origin proofs the plan's category
+// list did not anticipate: 5c/5d (start-origin malformed-message/child-exit
+// suppressed), 7b (a fresh backend inherits no suppressed disposition), and 9
+// (track-origin malformed-message still reported once).
 // ---------------------------------------------------------------------------
 
 // Case 1: a healthy session emits no terminal-failure diagnostic.
@@ -329,44 +419,93 @@ void testCase3And4DeterministicResultTimeoutAndPostLatch(
   backend.stop();
 }
 
-// Case 5: start()/ready failures (launch-failure, ready-timeout) are outside
-// this contract -- main.cpp already reports a generic startup error -- and
-// must never emit the terminal-failure diagnostic, including if track() is
-// defensively called afterward.
+// Shared driver for case 5. Proves one start()/ready failure fixture is fully
+// excluded from this track()-path-only contract, in two steps:
+//
+//  1. A direct HelperProcessSession with the same config establishes the
+//     fixture's actual category origin -- that start() really does fail and
+//     really does leave the session Failed with expectedCategory. Without this,
+//     a suppression assertion could pass vacuously (e.g. if a fixture silently
+//     produced a different, unauthorized category, or stopped failing at all).
+//  2. The production backend path then proves that a defensive track() after
+//     that failed start() emits nothing and still returns safe LOST.
+void expectStartFailureSuppressed(
+    const std::string& label,
+    const HelperSessionConfig& config,
+    HelperDiagnosticCategory expectedCategory,
+    long long frameTimestampMs) {
+  {
+    HelperProcessSession session(config);
+    expect(!session.start(), label + ": start() fails closed");
+    expect(
+        session.state() == HelperSessionState::Failed,
+        label + ": a failed start() leaves the session Failed");
+    expect(
+        session.lastDiagnostic() == expectedCategory,
+        label + ": a failed start() reports the expected category origin");
+    session.stop();
+  }
+
+  SyntheticHelperTrackingBackend backend(config);
+  expect(!backend.start(), label + ": backend start() fails closed");
+
+  StreamCapture stdoutCapture(std::cout);
+  StreamCapture stderrCapture(std::cerr);
+  const TrackingSample sample = backend.track(makeFrame(frameTimestampMs));
+  expect(
+      sample.status == TrackingStatus::Lost,
+      label + ": a defensive track() after a failed start() returns safe LOST");
+  expect(
+      stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
+      label +
+          ": a start/ready failure never emits the terminal-failure "
+          "diagnostic, even if track() is called afterward");
+  expect(
+      stdoutCapture.str().empty(),
+      label + " (stream boundary): stdout stays empty");
+
+  backend.stop();
+}
+
+// Case 5: every start()/ready failure is outside this contract -- main.cpp
+// already reports a generic startup error for it -- and must never emit the
+// terminal-failure diagnostic, including if track() is defensively called
+// afterward.
+//
+// The malformed-message and child-exit fixtures are the category-origin
+// regression: both categories are authorized track-path categories, so a
+// reporter keyed only on state() == Failed plus lastDiagnostic() emits here
+// and breaks the contract. They fail against a category-only guard and pass
+// only when origin is enforced by arming solely after a successful start().
 void testCase5StartAndReadyFailuresExcluded(const std::string& helperPath) {
-  {
-    HelperSessionConfig config = baseSyntheticConfig(helperPath);
-    config.executablePath = helperPath + ".does-not-exist-lvk587";
-    SyntheticHelperTrackingBackend backend(config);
-    expect(!backend.start(), "case5: launch-failure fails start() closed");
+  HelperSessionConfig launchFailure = baseSyntheticConfig(helperPath);
+  launchFailure.executablePath = helperPath + ".does-not-exist-lvk587";
+  launchFailure.stopTimeoutMs = kSmokeFailedStopTimeoutMs;
+  expectStartFailureSuppressed(
+      "case5a (launch-failure)", launchFailure,
+      HelperDiagnosticCategory::LaunchFailure, 5000);
 
-    StreamCapture stderrCapture(std::cerr);
-    const TrackingSample sample = backend.track(makeFrame(5000));
-    (void)sample;
-    expect(
-        stderrCapture.str().find("[helper-session] session failed") ==
-            std::string::npos,
-        "case5: launch-failure never emits the terminal-failure diagnostic, "
-        "even if track() is called afterward");
-    backend.stop();
-  }
-  {
-    HelperSessionConfig config = baseSyntheticConfig(helperPath);
-    config.readyTimeoutMs = 300;
-    config.extraArgs = {"--session-skip-ready"};
-    SyntheticHelperTrackingBackend backend(config);
-    expect(!backend.start(), "case5: ready-timeout fails start() closed");
+  HelperSessionConfig readyTimeout = baseSyntheticConfig(helperPath);
+  readyTimeout.readyTimeoutMs = kSmokeReadyTimeoutMs;
+  readyTimeout.stopTimeoutMs = kSmokeFailedStopTimeoutMs;
+  readyTimeout.extraArgs = {"--session-skip-ready"};
+  expectStartFailureSuppressed(
+      "case5b (ready-timeout)", readyTimeout,
+      HelperDiagnosticCategory::ReadyTimeout, 5100);
 
-    StreamCapture stderrCapture(std::cerr);
-    const TrackingSample sample = backend.track(makeFrame(5100));
-    (void)sample;
-    expect(
-        stderrCapture.str().find("[helper-session] session failed") ==
-            std::string::npos,
-        "case5: ready-timeout never emits the terminal-failure diagnostic, "
-        "even if track() is called afterward");
-    backend.stop();
-  }
+  // Overlapping category #1: MalformedMessage raised by start()'s ready-line
+  // parse, not by the track() path.
+  expectStartFailureSuppressed(
+      "case5c (start-path malformed-message)",
+      startReadySourceMismatchConfig(helperPath),
+      HelperDiagnosticCategory::MalformedMessage, 5200);
+
+  // Overlapping category #2: ChildExit raised by start()'s ready read hitting
+  // stdout EOF, not by the track() path. Uses an existing deterministic
+  // fixture, so no self-exec child and no production helper flag are needed.
+  expectStartFailureSuppressed(
+      "case5d (start-path child-exit)", startExitBeforeReadyConfig(helperPath),
+      HelperDiagnosticCategory::ChildExit, 5300);
 }
 
 // Case 6: opaque child stderr bytes (#580 BoundedOpaqueDiscard) on the same
@@ -376,8 +515,8 @@ void testCase6OpaqueChildStderrIsolated(const std::string& helperPath) {
   HelperSessionConfig config = resultTimeoutConfig(helperPath);
   config.stderrPolicy = lvk::tracker::HelperStderrPolicy::BoundedOpaqueDiscard;
   config.extraArgs = {
-      "--session-result-delay-ms", "1500", "--session-opaque-stderr-bytes",
-      "4096"};
+      "--session-result-delay-ms", kSmokeResultDelayMs,
+      "--session-opaque-stderr-bytes", "4096"};
   SyntheticHelperTrackingBackend backend(config);
   expect(backend.start(), "case6: backend starts under BoundedOpaqueDiscard");
 
@@ -397,6 +536,43 @@ void testCase6OpaqueChildStderrIsolated(const std::string& helperPath) {
       "track() call");
 
   backend.stop();
+}
+
+// Case 7b: a fresh backend must not inherit a *suppressed* disposition either.
+// After a start-failure backend that was correctly suppressed, a new backend
+// that starts successfully and then genuinely fails on the track() path must
+// still report. Guards the arming logic against being sticky across backends
+// in the silent direction, which no "no output" assertion alone would catch.
+void testCase7bFreshSessionAfterSuppressedStartFailureStillReports(
+    const std::string& helperPath) {
+  {
+    SyntheticHelperTrackingBackend suppressedBackend(
+        startReadySourceMismatchConfig(helperPath));
+    StreamCapture suppressStdout(std::cout);
+    StreamCapture suppressStderr(std::cerr);
+    expect(
+        !suppressedBackend.start(),
+        "case7b: the start-failure backend fails start() closed");
+    suppressedBackend.track(makeFrame(7200));
+    suppressedBackend.stop();
+    (void)suppressStdout;
+    (void)suppressStderr;
+  }
+
+  SyntheticHelperTrackingBackend freshBackend(resultTimeoutConfig(helperPath));
+  expect(freshBackend.start(), "case7b: fresh backend starts successfully");
+
+  StreamCapture stderrCapture(std::cerr);
+  const TrackingSample sample = freshBackend.track(makeFrame(7300));
+  expect(
+      sample.status == TrackingStatus::Lost,
+      "case7b: the timed-out exchange returns the safe Lost fallback");
+  expect(
+      stderrCapture.str() == kTerminalFailureLine,
+      "case7b: a fresh backend never inherits a prior backend's suppressed "
+      "disposition -- a genuine track-path failure still reports exactly once");
+
+  freshBackend.stop();
 }
 
 // Case 7: after a failed session, a fresh backend/session starts clean and
@@ -451,6 +627,47 @@ void testCase8HealthyShutdownNoTerminalDiagnostic(
       "case8 (stream boundary): stdout stays empty during shutdown");
 }
 
+// Case 9: the other half of the category-origin proof. The very same
+// MalformedMessage category that case 5c suppresses at start() must still
+// report exactly once when it originates from a real track()-path terminal
+// failure after a successful start(). This is what keeps the suppression
+// honest: it must key on origin, never on category, so authorizing
+// MalformedMessage stays meaningful rather than being quietly hidden.
+void testCase9TrackPathMalformedMessageStillReports(
+    const std::string& helperPath) {
+  SyntheticHelperTrackingBackend backend(trackMalformedResultConfig(helperPath));
+  expect(backend.start(), "case9: backend start() succeeds (arming the report)");
+
+  StreamCapture stdoutCapture(std::cout);
+  StreamCapture stderrCapture(std::cerr);
+  const TrackingSample sample = backend.track(makeFrame(9000));
+  expect(
+      sample.status == TrackingStatus::Lost,
+      "case9: a malformed result returns the safe Lost fallback");
+  expect(
+      stderrCapture.str() == kMalformedMessageFailureLine,
+      "case9: a track-path malformed-message failure emits exactly the one "
+      "approved fixed line, with no child-controlled bytes");
+
+  // Still once-only for this category, exactly as for result-timeout.
+  for (int i = 0; i < 3; ++i) {
+    const TrackingSample postLatch = backend.track(makeFrame(9100 + i));
+    expect(
+        postLatch.status == TrackingStatus::Lost,
+        "case9: post-latch call " + std::to_string(i) +
+            " keeps returning the safe Lost fallback");
+  }
+  expect(
+      countOccurrences(stderrCapture.str(), kTerminalFailurePrefix) == 1,
+      "case9: still exactly one terminal-failure diagnostic after repeated "
+      "track() calls");
+  expect(
+      stdoutCapture.str().empty(),
+      "case9 (stream boundary): stdout stays empty during backend operation");
+
+  backend.stop();
+}
+
 int runTests(const std::string& helperPath, const std::string& selfPath) {
   testCase1HealthySessionNoTerminalDiagnostic(helperPath);
   testCase2LegitimateNoFaceNoTerminalDiagnostic(selfPath);
@@ -458,7 +675,9 @@ int runTests(const std::string& helperPath, const std::string& selfPath) {
   testCase5StartAndReadyFailuresExcluded(helperPath);
   testCase6OpaqueChildStderrIsolated(helperPath);
   testCase7FreshSessionStartsCleanAfterFailure(helperPath);
+  testCase7bFreshSessionAfterSuppressedStartFailureStillReports(helperPath);
   testCase8HealthyShutdownNoTerminalDiagnostic(helperPath);
+  testCase9TrackPathMalformedMessageStillReports(helperPath);
 
   if (gFailures != 0) {
     std::cerr << "[tracking-backend-terminal-failure-smoke] " << gFailures

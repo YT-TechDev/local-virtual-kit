@@ -19,8 +19,14 @@ namespace lvk::tracker {
 // may report. LaunchFailure/ReadyTimeout are start()-only and already
 // surfaced by main.cpp's generic startup error; ShutdownTimeout is stop()-only
 // and already surfaced by the existing shutdown-incomplete diagnostic below.
-// None means no failure. This closed whitelist is the explicit start/ready
-// exclusion guard even if track() is ever called after a failed start().
+// None means no failure.
+//
+// This whitelist is necessary but NOT sufficient for the start/ready
+// exclusion: MalformedMessage and ChildExit stay authorized here because a
+// genuine track()-path failure legitimately reports them, yet start() can also
+// end Failed with either one. Origin is enforced separately, by arming only
+// after a successful start() -- see armHelperSessionTerminalDiagnostic below.
+//
 // File-static (rather than an anonymous namespace, which the existing
 // FrameHelperTrackingBackend label-validation block below already owns) so
 // this internal-linkage helper doesn't disturb that block's identity.
@@ -41,30 +47,68 @@ static bool isTerminalFailureTrackCategory(HelperDiagnosticCategory category) {
   return false;
 }
 
+// v0.13.0 (#587): arms the terminal-failure diagnostic for this session, and
+// only ever on a successful start(). Both helper backends call this from their
+// own start(), passing their own per-session disposition; no other transition
+// into ArmedAfterSuccessfulStart exists.
+//
+// This is the start/ready exclusion that the category whitelist above cannot
+// provide on its own: MalformedMessage and ChildExit are reachable from
+// start() (config validation, ready handshake) as well as from track(), so a
+// failed start() leaves the session Failed with a category the whitelist
+// authorizes. Staying disarmed in that case suppresses it by origin, which is
+// the fact the backend already knows, rather than by category.
+//
+// It cannot hide a genuine track()-path failure: while disarmed, start() has
+// never succeeded, so the session never reached Ready, and trackInternal()
+// returns immediately on a non-Running state without ever touching the child.
+// There is no track()-path failure to observe in that state.
+//
+// Guarding on SuppressedUntilStarted makes repeated start() calls safe in both
+// directions: after a failed start() the session stays Failed and start()
+// keeps returning false, so the backend stays disarmed; after a successful
+// start() a redundant start() returns true from the Ready/Running early exit,
+// which must not re-arm an already Reported session and re-open the one-line
+// bound.
+static void armHelperSessionTerminalDiagnostic(
+    bool startSucceeded, HelperTerminalDiagnosticDisposition& disposition) {
+  if (startSucceeded &&
+      disposition ==
+          HelperTerminalDiagnosticDisposition::SuppressedUntilStarted) {
+    disposition =
+        HelperTerminalDiagnosticDisposition::ArmedAfterSuccessfulStart;
+  }
+}
+
 // v0.13.0 (#587): shared internal reporter at the existing helper-session
 // public-diagnostic ownership boundary (the same boundary that already emits
 // the shutdown-incomplete line below). Both SyntheticHelperTrackingBackend and
 // FrameHelperTrackingBackend call this from their track() path, after the
 // session exchange for this frame has completed. Emits at most one
 // "[helper-session] session failed (category=<label>)" stderr line per
-// backend/session: `reported` is the caller's own per-session latch, so a
-// fresh backend/session always starts clean. Only fires the first time
-// session.state() == Failed is observed with an authorized track-path
-// category; never triggers on HelperTrackOutcome::ok == false alone (a
-// legitimate no-face result keeps the session Running and never reaches
-// here). Reads only the existing lastDiagnostic() accessor and prints only
-// its fixed helperDiagnosticCategoryLabel() -- never raw child/exception
-// text -- and never mutates session state, return values, or control flow.
+// backend/session: `disposition` is the caller's own per-session state, so a
+// fresh backend/session always starts clean and never inherits a prior
+// session's reported-or-suppressed disposition. Fires only when the session
+// was armed by a successful start() (see above) and state() == Failed is
+// first observed with an authorized track-path category; never triggers on
+// HelperTrackOutcome::ok == false alone (a legitimate no-face result keeps the
+// session Running and never reaches here). Reads only the existing
+// lastDiagnostic() accessor and prints only its fixed
+// helperDiagnosticCategoryLabel() -- never raw child/exception text -- and
+// never mutates session state, return values, or control flow.
 static void reportHelperSessionTerminalFailure(
-    const HelperProcessSession& session, bool& reported) {
-  if (reported || session.state() != HelperSessionState::Failed) {
+    const HelperProcessSession& session,
+    HelperTerminalDiagnosticDisposition& disposition) {
+  if (disposition !=
+          HelperTerminalDiagnosticDisposition::ArmedAfterSuccessfulStart ||
+      session.state() != HelperSessionState::Failed) {
     return;
   }
   const HelperDiagnosticCategory category = session.lastDiagnostic();
   if (!isTerminalFailureTrackCategory(category)) {
     return;
   }
-  reported = true;
+  disposition = HelperTerminalDiagnosticDisposition::Reported;
   std::cerr << "[helper-session] session failed (category="
             << helperDiagnosticCategoryLabel(category) << ")\n";
 }
@@ -99,7 +143,9 @@ SyntheticHelperTrackingBackend::SyntheticHelperTrackingBackend(
       }) {}
 
 bool SyntheticHelperTrackingBackend::start() {
-  return session_.start();
+  const bool started = session_.start();
+  armHelperSessionTerminalDiagnostic(started, terminalDiagnostic_);
+  return started;
 }
 
 void SyntheticHelperTrackingBackend::stop() {
@@ -118,7 +164,7 @@ TrackingSample SyntheticHelperTrackingBackend::track(
     const PreprocessedFrame& frame) {
   const long long frameTimestampMs = frame.cameraFrame.timestampMs;
   const HelperTrackOutcome outcome = session_.track(frameTimestampMs);
-  reportHelperSessionTerminalFailure(session_, terminalFailureReported_);
+  reportHelperSessionTerminalFailure(session_, terminalDiagnostic_);
   if (!outcome.ok) {
     // Safe fallback: a neutral lost sample for this frame. No stale helper
     // tracking is ever reused after a failure.
@@ -180,7 +226,9 @@ FrameHelperTrackingBackend::FrameHelperTrackingBackend(
       }) {}
 
 bool FrameHelperTrackingBackend::start() {
-  return session_.start();
+  const bool started = session_.start();
+  armHelperSessionTerminalDiagnostic(started, terminalDiagnostic_);
+  return started;
 }
 
 void FrameHelperTrackingBackend::stop() {
@@ -225,7 +273,7 @@ TrackingSample FrameHelperTrackingBackend::track(
     }
   }
 
-  reportHelperSessionTerminalFailure(session_, terminalFailureReported_);
+  reportHelperSessionTerminalFailure(session_, terminalDiagnostic_);
   if (!outcome.ok) {
     // Safe fallback: a neutral lost sample for this frame. No stale helper
     // tracking is ever reused after a failure.
