@@ -179,6 +179,14 @@ const requiredInSmoke = [
   "createMediaPipeHelperRouteConfig",
   "mediapipe-helper-route-config smoke OK",
   "mediapipe-helper-route-config smoke failed.",
+  // v0.13.0 (#582 review correction): the generic HelperSessionConfig
+  // ready-timeout default (2000ms) must be locked by an independent,
+  // executable assertion -- not merely a comment -- distinct from the
+  // deliberate MediaPipe-route override proof. smokeStripped below is
+  // already comment-stripped, so these markers can only be satisfied by
+  // real source, not a comment.
+  "checkGenericReadyTimeoutDefault",
+  "defaults.readyTimeoutMs == 2000",
 ];
 for (const marker of requiredInSmoke) {
   if (!smokeStripped.includes(marker)) {

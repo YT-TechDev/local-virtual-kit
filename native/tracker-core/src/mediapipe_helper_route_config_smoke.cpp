@@ -126,6 +126,18 @@ bool checkDefaultPreservation() {
   return ok;
 }
 
+// v0.13.0 (#582 review correction): locks the exact generic
+// HelperSessionConfig::readyTimeoutMs default (2000ms) independently from
+// the deliberate MediaPipe-route override proven by
+// checkReadyTimeoutOverride() below. checkDefaultPreservation() above
+// intentionally excludes readyTimeoutMs from its equality checks -- this is
+// the dedicated proof that the excluded default itself has not silently
+// drifted.
+bool checkGenericReadyTimeoutDefault() {
+  HelperSessionConfig defaults;
+  return defaults.readyTimeoutMs == 2000;
+}
+
 // v0.13.0 (#582): the route factory is the sole selector of the fixed,
 // bounded MediaPipe-route ready timeout; the generic HelperSessionConfig
 // default (asserted separately above/elsewhere) must stay unchanged for
@@ -293,6 +305,7 @@ int main() {
   ok = checkValidConfiguration() && ok;
   ok = checkDefaultStderrPolicyStrict() && ok;
   ok = checkDefaultPreservation() && ok;
+  ok = checkGenericReadyTimeoutDefault() && ok;
   ok = checkReadyTimeoutOverride() && ok;
   ok = checkMissingValues() && ok;
   ok = checkRelativeValues() && ok;
