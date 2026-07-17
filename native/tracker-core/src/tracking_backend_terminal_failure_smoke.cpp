@@ -1,10 +1,13 @@
 // Helper-session terminal-failure diagnostic smoke (#587).
 //
-// Deterministic, behavioral, sub-second native smoke that exercises the real
-// production SyntheticHelperTrackingBackend::track() path -- and therefore the
-// shared internal reporter it shares with FrameHelperTrackingBackend -- against
+// Deterministic, behavioral native smoke that exercises the real production
+// SyntheticHelperTrackingBackend::track() path -- and therefore the shared
+// internal reporter it shares with FrameHelperTrackingBackend -- against
 // lvk-synthetic-helper. No OpenCV, no camera, no real MediaPipe, no network, no
-// soak. Proves the exact public contract:
+// soak. Sub-second on the Linux Native CI gate; deterministic and bounded
+// (measured ~1.3s locally on Windows, where process creation is costlier) on
+// every supported platform. No wall-clock assertion is made. Proves the exact
+// public contract:
 //
 //   [helper-session] session failed (category=<label>)
 //
