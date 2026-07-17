@@ -70,6 +70,12 @@ class SyntheticHelperTrackingBackend final : public TrackingBackend {
  private:
   HelperProcessSession session_;
   FaceDetectionDiagnostics diagnostics_;
+  // Per-session latch for the #587 terminal-failure diagnostic: set true the
+  // first time track() observes session_.state() == Failed, so at most one
+  // "[helper-session] session failed (category=<label>)" line is ever
+  // emitted for this backend/session. A fresh backend starts with a fresh
+  // latch and never inherits a prior session's value.
+  bool terminalFailureReported_ = false;
 };
 
 #if LVK_HAS_OPENCV_CAMERA
@@ -122,6 +128,12 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
 
   HelperProcessSession session_;
   FaceDetectionDiagnostics diagnostics_;
+  // Per-session latch for the #587 terminal-failure diagnostic: set true the
+  // first time track() observes session_.state() == Failed, so at most one
+  // "[helper-session] session failed (category=<label>)" line is ever
+  // emitted for this backend/session. A fresh backend starts with a fresh
+  // latch and never inherits a prior session's value.
+  bool terminalFailureReported_ = false;
 };
 
 // v0.13.0 (#569) thin compatibility wrapper preserving the existing

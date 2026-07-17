@@ -15,6 +15,60 @@
 
 namespace lvk::tracker {
 
+// v0.13.0 (#587): the sole categories a helper-track()-path terminal failure
+// may report. LaunchFailure/ReadyTimeout are start()-only and already
+// surfaced by main.cpp's generic startup error; ShutdownTimeout is stop()-only
+// and already surfaced by the existing shutdown-incomplete diagnostic below.
+// None means no failure. This closed whitelist is the explicit start/ready
+// exclusion guard even if track() is ever called after a failed start().
+// File-static (rather than an anonymous namespace, which the existing
+// FrameHelperTrackingBackend label-validation block below already owns) so
+// this internal-linkage helper doesn't disturb that block's identity.
+static bool isTerminalFailureTrackCategory(HelperDiagnosticCategory category) {
+  switch (category) {
+  case HelperDiagnosticCategory::ResultTimeout:
+  case HelperDiagnosticCategory::MalformedMessage:
+  case HelperDiagnosticCategory::ChildExit:
+  case HelperDiagnosticCategory::FrameWriteTimeout:
+  case HelperDiagnosticCategory::FrameAckMismatch:
+    return true;
+  case HelperDiagnosticCategory::None:
+  case HelperDiagnosticCategory::LaunchFailure:
+  case HelperDiagnosticCategory::ReadyTimeout:
+  case HelperDiagnosticCategory::ShutdownTimeout:
+    return false;
+  }
+  return false;
+}
+
+// v0.13.0 (#587): shared internal reporter at the existing helper-session
+// public-diagnostic ownership boundary (the same boundary that already emits
+// the shutdown-incomplete line below). Both SyntheticHelperTrackingBackend and
+// FrameHelperTrackingBackend call this from their track() path, after the
+// session exchange for this frame has completed. Emits at most one
+// "[helper-session] session failed (category=<label>)" stderr line per
+// backend/session: `reported` is the caller's own per-session latch, so a
+// fresh backend/session always starts clean. Only fires the first time
+// session.state() == Failed is observed with an authorized track-path
+// category; never triggers on HelperTrackOutcome::ok == false alone (a
+// legitimate no-face result keeps the session Running and never reaches
+// here). Reads only the existing lastDiagnostic() accessor and prints only
+// its fixed helperDiagnosticCategoryLabel() -- never raw child/exception
+// text -- and never mutates session state, return values, or control flow.
+static void reportHelperSessionTerminalFailure(
+    const HelperProcessSession& session, bool& reported) {
+  if (reported || session.state() != HelperSessionState::Failed) {
+    return;
+  }
+  const HelperDiagnosticCategory category = session.lastDiagnostic();
+  if (!isTerminalFailureTrackCategory(category)) {
+    return;
+  }
+  reported = true;
+  std::cerr << "[helper-session] session failed (category="
+            << helperDiagnosticCategoryLabel(category) << ")\n";
+}
+
 FaceTrackingPipelineBackend::FaceTrackingPipelineBackend(
     FaceDetector& faceDetector,
     MotionTracker& fallbackTracker,
@@ -64,6 +118,7 @@ TrackingSample SyntheticHelperTrackingBackend::track(
     const PreprocessedFrame& frame) {
   const long long frameTimestampMs = frame.cameraFrame.timestampMs;
   const HelperTrackOutcome outcome = session_.track(frameTimestampMs);
+  reportHelperSessionTerminalFailure(session_, terminalFailureReported_);
   if (!outcome.ok) {
     // Safe fallback: a neutral lost sample for this frame. No stale helper
     // tracking is ever reused after a failure.
@@ -170,6 +225,7 @@ TrackingSample FrameHelperTrackingBackend::track(
     }
   }
 
+  reportHelperSessionTerminalFailure(session_, terminalFailureReported_);
   if (!outcome.ok) {
     // Safe fallback: a neutral lost sample for this frame. No stale helper
     // tracking is ever reused after a failure.

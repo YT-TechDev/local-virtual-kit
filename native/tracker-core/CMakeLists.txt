@@ -295,3 +295,36 @@ if(MSVC)
 else()
   target_compile_options(lvk-mediapipe-helper-frame-bridge-smoke PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Helper-session terminal-failure diagnostic smoke (#587). Standalone
+# executable that drives the real production SyntheticHelperTrackingBackend
+# (tracking_backend.cpp is otherwise only compiled into lvk-tracker-core, so
+# this target exists to exercise it -- and the shared reporter it uses with
+# FrameHelperTrackingBackend -- deterministically) against
+# lvk-synthetic-helper, proving the exact
+# "[helper-session] session failed (category=<label>)" contract: fixed
+# category, once per session, triggered only by
+# HelperProcessSession::state() == Failed on the track() path. No OpenCV, no
+# camera, no real MediaPipe, no network; not wired into the lvk-tracker-core
+# runtime.
+add_executable(lvk-tracking-backend-terminal-failure-smoke
+  src/face_tracking_pipeline.cpp
+  src/helper_frame_packet.cpp
+  src/helper_message.cpp
+  src/helper_process_cleanup_registry.cpp
+  src/helper_process_session.cpp
+  src/helper_tracking_result.cpp
+  src/tracking_backend.cpp
+  src/tracking_backend_terminal_failure_smoke.cpp
+  src/tracking_sample_factory.cpp
+)
+
+target_compile_features(lvk-tracking-backend-terminal-failure-smoke PRIVATE cxx_std_17)
+target_link_libraries(lvk-tracking-backend-terminal-failure-smoke PRIVATE Threads::Threads)
+target_compile_definitions(lvk-tracking-backend-terminal-failure-smoke PRIVATE LVK_HAS_OPENCV_CAMERA=0)
+
+if(MSVC)
+  target_compile_options(lvk-tracking-backend-terminal-failure-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-tracking-backend-terminal-failure-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()
