@@ -19,6 +19,7 @@ jobs:
       - run: node tools/check-helper-runtime-fallback.mjs native/tracker-core/build/lvk-tracker-core native/tracker-core/build/lvk-synthetic-helper
       - run: node tools/check-native-landmark-helper-session.mjs native/tracker-core/build/lvk-tracker-core native/tracker-core/build/lvk-synthetic-helper
       - run: node tools/check-native-frame-helper-backend-boundary.mjs
+      - run: native/tracker-core/build/lvk-tracking-backend-terminal-failure-smoke native/tracker-core/build/lvk-synthetic-helper
       - run: node tools/check-native-landmark-frame-transport.mjs native/tracker-core/build/lvk-tracker-core native/tracker-core/build/lvk-synthetic-helper native/tracker-core/build/lvk-helper-frame-transport-smoke
       - run: node tools/check-native-mediapipe-helper-route-config.mjs native/tracker-core/build/lvk-mediapipe-helper-route-config-smoke
       - run: node tools/check-native-mediapipe-helper-frame-bridge.mjs native/tracker-core/build/lvk-mediapipe-helper-frame-bridge-smoke python3

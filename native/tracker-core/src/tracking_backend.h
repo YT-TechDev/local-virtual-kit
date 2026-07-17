@@ -36,6 +36,37 @@ class TrackingBackend {
   virtual const FaceDetectionDiagnostics& lastDetectionDiagnostics() const = 0;
 };
 
+// v0.13.0 (#587): per-session disposition of the helper-session
+// terminal-failure diagnostic, owned by each helper backend at the existing
+// tracking_backend.cpp diagnostic boundary.
+//
+// Category alone cannot establish origin: HelperProcessSession::start() sets
+// MalformedMessage for an unsupported ready source, an unsupported stderr
+// policy, an invalid invocation configuration, or a malformed ready line, and
+// its ready handshake can also fail with ChildExit. Both categories are
+// equally reachable from the track() path, so state() == Failed plus
+// lastDiagnostic() cannot tell a start/ready failure apart from a track()
+// failure. The backend, however, already knows the one fact that does
+// distinguish them: whether start() ever succeeded. Recording that here
+// excludes every start/ready failure by construction instead of by category,
+// without touching HelperProcessSession or adding a second lifecycle
+// mechanism.
+enum class HelperTerminalDiagnosticDisposition {
+  // start() has not succeeded for this session (a fresh backend's initial
+  // state, and the permanent state of a backend whose start() failed).
+  // Reporting is disarmed: any Failed state observable here originated at or
+  // before the ready handshake, which is outside this track()-path-only
+  // contract -- main.cpp already reports a generic startup error for it -- so
+  // it stays intentionally suppressed, including when a caller defensively
+  // calls track() after a failed start().
+  SuppressedUntilStarted,
+  // start() succeeded, so any later terminal failure can only have come from
+  // the track() path. The first one reports.
+  ArmedAfterSuccessfulStart,
+  // The single allowed line has been emitted for this session; never again.
+  Reported,
+};
+
 // Current default backend: wraps the existing FaceTrackingPipeline (which in
 // turn wraps the selected FaceDetector and the DummyMotionTracker fallback).
 class FaceTrackingPipelineBackend final : public TrackingBackend {
@@ -70,6 +101,14 @@ class SyntheticHelperTrackingBackend final : public TrackingBackend {
  private:
   HelperProcessSession session_;
   FaceDetectionDiagnostics diagnostics_;
+  // Per-session disposition of the #587 terminal-failure diagnostic: armed
+  // only by a successful start(), then latched to Reported by the first
+  // terminal track()-path failure, so at most one
+  // "[helper-session] session failed (category=<label>)" line is ever emitted
+  // for this backend/session. A fresh backend starts disarmed and never
+  // inherits a prior session's disposition.
+  HelperTerminalDiagnosticDisposition terminalDiagnostic_ =
+      HelperTerminalDiagnosticDisposition::SuppressedUntilStarted;
 };
 
 #if LVK_HAS_OPENCV_CAMERA
@@ -122,6 +161,14 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
 
   HelperProcessSession session_;
   FaceDetectionDiagnostics diagnostics_;
+  // Per-session disposition of the #587 terminal-failure diagnostic: armed
+  // only by a successful start(), then latched to Reported by the first
+  // terminal track()-path failure, so at most one
+  // "[helper-session] session failed (category=<label>)" line is ever emitted
+  // for this backend/session. A fresh backend starts disarmed and never
+  // inherits a prior session's disposition.
+  HelperTerminalDiagnosticDisposition terminalDiagnostic_ =
+      HelperTerminalDiagnosticDisposition::SuppressedUntilStarted;
 };
 
 // v0.13.0 (#569) thin compatibility wrapper preserving the existing
