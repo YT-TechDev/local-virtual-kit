@@ -42,6 +42,11 @@ constexpr int kDefaultIntervalMs = 0;
 constexpr int kMaxIntervalMs = 600000;
 constexpr int kDefaultDelayReadyMs = 0;
 constexpr int kMaxDelayReadyMs = 600000;
+constexpr int kDefaultSessionResultDelayMs = 0;
+// Bounded well under readyTimeoutMs/resultTimeoutMs (2000ms default in
+// HelperSessionConfig) so this stays a deterministic per-result pacing knob
+// for tests, not a mechanism that can itself trip the parent's bounded wait.
+constexpr int kMaxSessionResultDelayMs = 1500;
 constexpr int kFailAfterDisabled = -1;
 constexpr int kHelperSchemaVersion = 1;
 constexpr long long kSyntheticTimestampStepMs = 33; // ~30 synthetic fps
@@ -140,6 +145,12 @@ struct HelperOptions {
   // writing directly to the stderr fd); -1 disables it.
   long long sessionOpaqueStderrBytes = -1;
   bool sessionOversizedStderr = false;
+  // (#584): deterministic, session-mode-only per-result processing delay used
+  // to give Native Core's stdout-flush regression test a real, bounded,
+  // non-realtime inter-frame gap it can observe without relying on process
+  // exit or the pipe's block-buffer filling. 0 (default) preserves existing
+  // near-instant session result behavior.
+  int sessionResultDelayMs = kDefaultSessionResultDelayMs;
 };
 
 // v0.13.0 (#580): upper bound for the deterministic opaque-stderr fault mode.
@@ -407,6 +418,16 @@ void printUsage(std::ostream &output) {
             "prefixed-diagnostics policy's bounded-line guard can be proven to "
             "still reject it. It stays synthetic only and is not a "
             "MotionFrame.\n";
+  output << "--session-result-delay-ms N (#584) is a deterministic "
+            "test-only session-mode flag that sleeps N ms after reading each "
+            "request and before writing that request's result line, "
+            "modeling per-frame processing time so a bounded regression "
+            "test can observe genuinely incremental result delivery "
+            "independent of the parent's --realtime flag. N must be between "
+            "0 and "
+         << kMaxSessionResultDelayMs << " (default "
+         << kDefaultSessionResultDelayMs
+         << "). It stays synthetic only and is not a MotionFrame.\n";
   output << "--session-ready-source-mediapipe (v0.13.0, #556) is a "
             "deterministic test-only session-mode flag that changes only the "
             "\"source\" value emitted on the session's \"ready\" line from "
@@ -657,6 +678,26 @@ bool parseHelperOptions(int argc, char *argv[], HelperOptions &options) {
     }
     if (argument == "--session-oversized-stderr") {
       options.sessionOversizedStderr = true;
+      continue;
+    }
+
+    if (argument == "--session-result-delay-ms") {
+      if (argIndex + 1 >= argc) {
+        std::cerr << "Missing value for --session-result-delay-ms.\n";
+        printUsage(std::cerr);
+        return false;
+      }
+      int sessionResultDelayMs = 0;
+      if (!parseIntInRange(
+              argv[argIndex + 1], 0, kMaxSessionResultDelayMs,
+              sessionResultDelayMs)) {
+        std::cerr << "Invalid value for --session-result-delay-ms: "
+                  << argv[argIndex + 1] << "\n";
+        printUsage(std::cerr);
+        return false;
+      }
+      options.sessionResultDelayMs = sessionResultDelayMs;
+      ++argIndex;
       continue;
     }
 
@@ -1246,6 +1287,11 @@ int runSyntheticHelperSession(const HelperOptions &options) {
           ackStorage.checksum ^= 1u;
         }
         ackPtr = &ackStorage;
+      }
+
+      if (options.sessionResultDelayMs > 0) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(options.sessionResultDelayMs));
       }
 
       writeSessionResult(
