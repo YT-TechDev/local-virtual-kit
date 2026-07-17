@@ -22,6 +22,7 @@ using lvk::tracker::HelperSessionConfig;
 using lvk::tracker::HelperStderrPolicy;
 using lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
 using lvk::tracker::kMediaPipeHelperRoutePathMaxBytes;
+using lvk::tracker::kMediaPipeHelperRouteReadyTimeoutMs;
 using lvk::tracker::MediaPipeHelperRouteConfigInput;
 
 #ifdef _WIN32
@@ -111,15 +112,49 @@ bool checkDefaultPreservation() {
     return false;
   }
 
+  // v0.13.0 (#582): readyTimeoutMs is the one deliberate exception -- proven
+  // separately by checkReadyTimeoutOverride() below -- every other bounded
+  // wait stays byte-for-byte at the generic HelperSessionConfig default.
   const HelperSessionConfig& config = *result;
   HelperSessionConfig defaults;
   bool ok = true;
-  ok = ok && (config.readyTimeoutMs == defaults.readyTimeoutMs);
   ok = ok && (config.resultTimeoutMs == defaults.resultTimeoutMs);
   ok = ok && (config.stopTimeoutMs == defaults.stopTimeoutMs);
   ok = ok && (config.frameTimeoutMs == defaults.frameTimeoutMs);
   ok = ok && (config.frameCancelTimeoutMs == defaults.frameCancelTimeoutMs);
   ok = ok && (config.launchTimeoutMs == defaults.launchTimeoutMs);
+  return ok;
+}
+
+// v0.13.0 (#582 review correction): locks the exact generic
+// HelperSessionConfig::readyTimeoutMs default (2000ms) independently from
+// the deliberate MediaPipe-route override proven by
+// checkReadyTimeoutOverride() below. checkDefaultPreservation() above
+// intentionally excludes readyTimeoutMs from its equality checks -- this is
+// the dedicated proof that the excluded default itself has not silently
+// drifted.
+bool checkGenericReadyTimeoutDefault() {
+  HelperSessionConfig defaults;
+  return defaults.readyTimeoutMs == 2000;
+}
+
+// v0.13.0 (#582): the route factory is the sole selector of the fixed,
+// bounded MediaPipe-route ready timeout; the generic HelperSessionConfig
+// default (asserted separately above/elsewhere) must stay unchanged for
+// every other caller.
+bool checkReadyTimeoutOverride() {
+  MediaPipeHelperRouteConfigInput input{
+      kValidInterpreter, kValidScript, kValidModel};
+  auto result = createMediaPipeHelperRouteConfig(input);
+  if (!result.has_value()) {
+    return false;
+  }
+
+  const HelperSessionConfig& config = *result;
+  HelperSessionConfig defaults;
+  bool ok = true;
+  ok = ok && (config.readyTimeoutMs == kMediaPipeHelperRouteReadyTimeoutMs);
+  ok = ok && (config.readyTimeoutMs != defaults.readyTimeoutMs);
   return ok;
 }
 
@@ -270,6 +305,8 @@ int main() {
   ok = checkValidConfiguration() && ok;
   ok = checkDefaultStderrPolicyStrict() && ok;
   ok = checkDefaultPreservation() && ok;
+  ok = checkGenericReadyTimeoutDefault() && ok;
+  ok = checkReadyTimeoutOverride() && ok;
   ok = checkMissingValues() && ok;
   ok = checkRelativeValues() && ok;
   ok = checkControlBytes() && ok;

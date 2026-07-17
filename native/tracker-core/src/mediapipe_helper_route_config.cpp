@@ -69,6 +69,13 @@ std::optional<HelperSessionConfig> createMediaPipeHelperRouteConfig(
   };
   config.expectedReadySource = kMediaPipeFaceLandmarkerReadySource;
   config.enableFrameTransport = true;
+  // v0.13.0 (#582): the MediaPipe Face Landmarker child imports MediaPipe and
+  // constructs the Face Landmarker runtime/model before emitting ready; the
+  // generic 2000ms default is not sized for that cold-start cost. This is the
+  // sole route factory allowed to override readyTimeoutMs -- every generic
+  // helper session keeps the 2000ms default. See kMediaPipeHelperRouteReadyTimeoutMs
+  // for the evidence-based rationale.
+  config.readyTimeoutMs = kMediaPipeHelperRouteReadyTimeoutMs;
   // v0.13.0 (#580): the MediaPipe Face Landmarker child inherits a compiled
   // third-party native library that writes its own unprefixed diagnostic lines
   // directly to the stderr file descriptor. Select the bounded opaque discard

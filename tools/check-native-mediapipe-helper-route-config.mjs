@@ -102,6 +102,9 @@ const requiredInHeader = [
   "MediaPipeHelperRouteConfigInput",
   "createMediaPipeHelperRouteConfig",
   "HelperSessionConfig",
+  // v0.13.0 (#582): the route-owned fixed, bounded startup ready-timeout.
+  "kMediaPipeHelperRouteReadyTimeoutMs",
+  "10000",
 ];
 for (const marker of requiredInHeader) {
   if (!headerStripped.includes(marker)) {
@@ -119,6 +122,9 @@ const requiredInSource = [
   // v0.13.0 (#580): the MediaPipe route is the sole selector of the bounded
   // opaque discard stderr policy.
   "stderrPolicy = HelperStderrPolicy::BoundedOpaqueDiscard",
+  // v0.13.0 (#582): the MediaPipe route is the sole selector of the fixed,
+  // bounded ready timeout.
+  "readyTimeoutMs = kMediaPipeHelperRouteReadyTimeoutMs",
 ];
 for (const marker of requiredInSource) {
   if (!sourceStripped.includes(marker)) {
@@ -156,10 +162,31 @@ for (const boundaryPath of [mainPath, trackingBackendPath]) {
   }
 }
 
+// v0.13.0 (#582): the fixed, bounded MediaPipe-route ready timeout must never
+// be selected by the generic production entry points either -- only by the
+// route factory validated above.
+for (const boundaryPath of [mainPath, trackingBackendPath]) {
+  if (
+    stripCppComments(readRequired(boundaryPath)).includes(
+      "kMediaPipeHelperRouteReadyTimeoutMs",
+    )
+  ) {
+    fail("mediapipe route ready timeout selected outside the route factory");
+  }
+}
+
 const requiredInSmoke = [
   "createMediaPipeHelperRouteConfig",
   "mediapipe-helper-route-config smoke OK",
   "mediapipe-helper-route-config smoke failed.",
+  // v0.13.0 (#582 review correction): the generic HelperSessionConfig
+  // ready-timeout default (2000ms) must be locked by an independent,
+  // executable assertion -- not merely a comment -- distinct from the
+  // deliberate MediaPipe-route override proof. smokeStripped below is
+  // already comment-stripped, so these markers can only be satisfied by
+  // real source, not a comment.
+  "checkGenericReadyTimeoutDefault",
+  "defaults.readyTimeoutMs == 2000",
 ];
 for (const marker of requiredInSmoke) {
   if (!smokeStripped.includes(marker)) {
