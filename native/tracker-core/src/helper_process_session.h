@@ -38,6 +38,49 @@ namespace lvk::tracker {
 // socket, shared-memory, temp-file, or network behavior; the frame pipe is a
 // second private anonymous pipe, not a named pipe, socket, or file.
 
+// v0.13.0 (#580): closed, Native Core-internal helper stderr handling policy.
+//
+// StrictPrefixedDiagnostics is the existing default and is behaviorally
+// unchanged: every non-empty child stderr line must be bounded
+// (kHelperMaxLineBytes) and begin with the safe "[helper] " prefix; any
+// unsafe, malformed, oversized, or unterminated unprefixed content fails the
+// session closed, and only a count -- never raw content -- is ever retained.
+//
+// BoundedOpaqueDiscard is selected ONLY by createMediaPipeHelperRouteConfig()
+// for the explicit MediaPipe Face Landmarker development route, whose child
+// inherits a compiled third-party native library that writes its own
+// unprefixed diagnostic lines directly to the stderr file descriptor, outside
+// any Python-level logging. Under it, child stderr bytes are treated as
+// untrusted and opaque: never parsed, classified, echoed, forwarded,
+// reserialized, logged, or persisted. Only a numeric running total of bytes is
+// maintained, bounded to exactly kHelperOpaqueStderrMaxBytes per session, with
+// buffered bytes discarded immediately after being safely added to the total.
+// Exceeding the bound fails the session closed. This is Native Core-internal
+// only: never serialized into MotionFrame and never exposed through a public
+// CLI flag.
+enum class HelperStderrPolicy {
+  StrictPrefixedDiagnostics,
+  BoundedOpaqueDiscard,
+};
+
+// v0.13.0 (#580): the exact fixed per-session maximum number of opaque child
+// stderr bytes tolerated under HelperStderrPolicy::BoundedOpaqueDiscard
+// (64 KiB). Not user-configurable and never exposed publicly or in
+// MotionFrame. Shared so the deterministic session smoke can prove the exact
+// boundary and overflow-safe accounting without a real child.
+inline constexpr unsigned long long kHelperOpaqueStderrMaxBytes =
+    64ull * 1024ull;
+
+// v0.13.0 (#580): overflow-safe opaque-stderr byte accounting shared by the
+// session's BoundedOpaqueDiscard branch and its deterministic smoke. Returns
+// true and adds `incoming` to `total` iff the result stays within
+// kHelperOpaqueStderrMaxBytes; returns false and leaves `total` unchanged if it
+// would exceed the fixed bound. The remaining allowance is computed before the
+// addition (total is invariantly <= the bound), so a huge `incoming` can never
+// wrap the total. Pure, allocation-free, and noexcept.
+bool accumulateOpaqueStderrBytes(
+    unsigned long long& total, unsigned long long incoming) noexcept;
+
 // Native Core-internal session lifecycle. Never serialized into MotionFrame.
 enum class HelperSessionState {
   NotStarted,
@@ -124,6 +167,13 @@ struct HelperSessionConfig {
   // helper_message.h; start() validates this before launching the child and
   // fails closed (Failed / MalformedMessage, no launch) if it is not.
   std::string expectedReadySource = kSyntheticHelperReadySource;
+  // v0.13.0 (#580): the closed stderr handling policy for this session.
+  // Defaults to StrictPrefixedDiagnostics so every existing caller is source-
+  // and behavior-compatible. Only createMediaPipeHelperRouteConfig() sets
+  // BoundedOpaqueDiscard; start() validates this before launching the child and
+  // fails closed (Failed / MalformedMessage, no launch) on an out-of-range
+  // value, without ever printing the invalid numeric value.
+  HelperStderrPolicy stderrPolicy = HelperStderrPolicy::StrictPrefixedDiagnostics;
   // Bounded waits. Kept small so failures surface quickly and deterministically
   // without ever blocking Native Core's frame loop indefinitely.
   int readyTimeoutMs = 2000;
@@ -256,6 +306,12 @@ class HelperProcessSession {
       int timeoutMs,
       HelperDiagnosticCategory timeoutCategory);
   bool drainStderr();
+  // v0.13.0 (#580): the BoundedOpaqueDiscard branch of drainStderr(). Consumes
+  // and discards all currently buffered child stderr bytes after adding their
+  // count to opaqueStderrByteTotal_ via the overflow-safe accounting; returns
+  // false (fail closed) once the fixed 64 KiB total would be exceeded. Never
+  // parses, echoes, forwards, or retains the raw bytes.
+  bool drainStderrOpaque();
   ShutdownOutcome drainUntilStopped(int timeoutMs);
   bool writeControlLine(const std::string& line);
   // v0.13.0 (#534): shared request/(frame)/result exchange. `frame` is null
@@ -304,6 +360,12 @@ class HelperProcessSession {
   // failure corner left at shutdown/destruction time requiring a retry flag.
   std::uint64_t nextRequestId_ = 0;
   unsigned long long stderrDiagnosticCount_ = 0;  // count only; no raw history
+  // v0.13.0 (#580): running total of opaque child stderr bytes under
+  // HelperStderrPolicy::BoundedOpaqueDiscard. Count only; the raw bytes are
+  // discarded immediately after being added and are never retained, parsed, or
+  // forwarded. Invariantly <= kHelperOpaqueStderrMaxBytes. Never exposed
+  // publicly or in MotionFrame.
+  unsigned long long opaqueStderrByteTotal_ = 0;
 };
 
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM

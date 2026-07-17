@@ -2549,7 +2549,61 @@ void HelperProcessSession::emergencyResolveChildOwnership() noexcept {
   }
 }
 
+// v0.13.0 (#580): overflow-safe opaque-stderr byte accounting (see header).
+// Kept as a single source of truth so both the session's BoundedOpaqueDiscard
+// branch and its deterministic smoke exercise the exact boundary and the
+// no-overflow guarantee.
+bool accumulateOpaqueStderrBytes(
+    unsigned long long& total, unsigned long long incoming) noexcept {
+  // total is invariantly <= the bound, so this subtraction never underflows and
+  // the comparison never wraps -- a huge `incoming` is simply rejected.
+  const unsigned long long remaining = kHelperOpaqueStderrMaxBytes - total;
+  if (incoming > remaining) {
+    return false;  // would exceed the fixed 64 KiB total -> fail closed
+  }
+  total += incoming;
+  return true;
+}
+
+namespace {
+
+// v0.13.0 (#580): closed stderr-policy validity check. Any value outside the
+// two approved policies fails closed before child launch; the invalid numeric
+// value is never printed.
+bool isSupportedHelperStderrPolicy(HelperStderrPolicy policy) {
+  return policy == HelperStderrPolicy::StrictPrefixedDiagnostics ||
+         policy == HelperStderrPolicy::BoundedOpaqueDiscard;
+}
+
+}  // namespace
+
+bool HelperProcessSession::drainStderrOpaque() {
+  // Treat all buffered child stderr bytes as untrusted and opaque: never
+  // parsed, classified, echoed, forwarded, reserialized, logged, or persisted.
+  // Maintain only a numeric running total, bounded to exactly
+  // kHelperOpaqueStderrMaxBytes, and discard the buffered bytes immediately
+  // after safely adding them. platformPump reads stderr in bounded chunks, so
+  // the buffer never grows without bound between calls; clearing it here means
+  // no raw history is retained either.
+  const unsigned long long incoming =
+      static_cast<unsigned long long>(stderrBuffer_.size());
+  if (incoming == 0) {
+    return true;
+  }
+  if (!accumulateOpaqueStderrBytes(opaqueStderrByteTotal_, incoming)) {
+    return false;  // over the fixed bound -> fail closed
+  }
+  stderrBuffer_.clear();
+  return true;
+}
+
 bool HelperProcessSession::drainStderr() {
+  // v0.13.0 (#580): the explicit MediaPipe route selects a bounded opaque
+  // discard policy for genuine third-party native-library diagnostics; every
+  // other session keeps the strict prefixed-diagnostics policy below unchanged.
+  if (config_.stderrPolicy == HelperStderrPolicy::BoundedOpaqueDiscard) {
+    return drainStderrOpaque();
+  }
   // Continuously validate captured child stderr: bounded line size and the safe
   // "[helper] " diagnostic prefix. No raw diagnostic content is retained (only a
   // count), and nothing is ever forwarded. Unsafe/oversized stderr fails closed.
@@ -2737,6 +2791,17 @@ bool HelperProcessSession::start() {
   // launching a child. An unsupported value fails closed with no launch
   // attempt at all (MalformedMessage, not LaunchFailure).
   if (!isSupportedHelperReadySource(config_.expectedReadySource)) {
+    lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
+    state_ = HelperSessionState::Failed;
+    return false;
+  }
+
+  // v0.13.0 (#580): validate the configured stderr policy BEFORE launching a
+  // child. An out-of-range enum value fails closed with no launch attempt at
+  // all (MalformedMessage, not LaunchFailure) -- identical in shape to the
+  // expectedReadySource check above -- and the invalid numeric value is never
+  // printed.
+  if (!isSupportedHelperStderrPolicy(config_.stderrPolicy)) {
     lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
     state_ = HelperSessionState::Failed;
     return false;

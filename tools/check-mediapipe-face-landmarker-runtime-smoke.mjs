@@ -35,7 +35,16 @@ const CHECK_NAME = "mediapipe-face-landmarker-runtime-smoke";
 const SCHEMA_VERSION = 1;
 const MAX_REPORT_BYTES = 2048;
 const SPAWN_TIMEOUT_MS = 30_000;
-const SPAWN_MAX_BUFFER_BYTES = 64 * 1024;
+// v0.13.0 (#580): the real, explicitly opted-in worker inherits a compiled
+// MediaPipe native library that writes bounded, unprefixed diagnostic lines
+// directly to stderr. Those bytes are treated as opaque private stderr: never
+// printed, parsed, interpolated, normalized, reserialized, or included in any
+// report, and bounded to exactly 64 KiB by UTF-8 byte length. The spawn buffer
+// is a small fixed bound kept comfortably above the policy bound so a
+// slightly-over-bound stderr is still captured and rejected by the explicit
+// policy check below (rather than aborting the spawn with an ambiguous error).
+const MAX_WORKER_STDERR_BYTES = 64 * 1024;
+const SPAWN_MAX_BUFFER_BYTES = 128 * 1024;
 
 const ALLOWED_FIELDS = [
   "schemaVersion",
@@ -154,6 +163,18 @@ function isBoundedInt(value, min, max) {
 
 function isFiniteNonNegativeNumber(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+// v0.13.0 (#580): the worker's raw stderr is bounded opaque private data.
+// Accepts empty or bounded (<= 64 KiB by UTF-8 byte length) stderr; rejects
+// anything larger. Measures byte length, not JavaScript character count, so
+// multibyte diagnostics are bounded correctly. The value is only ever measured
+// here and is never printed, parsed, or included in any report.
+function isWorkerStderrWithinBound(stderr) {
+  if (typeof stderr !== "string") {
+    return false;
+  }
+  return Buffer.byteLength(stderr, "utf8") <= MAX_WORKER_STDERR_BYTES;
 }
 
 // Strictly validates a candidate report object against the closed schema.
@@ -304,18 +325,28 @@ function validateReportShape(candidate) {
 
 // Parses raw child stdout as exactly one bounded JSON report line, without
 // ever echoing the untrusted raw text on failure.
+//
+// v0.13.0 (#580): the worker's own stdout report line uses the platform
+// newline, which is CRLF on Windows (Python text-mode stdout). Exactly one
+// trailing line terminator (LF or CRLF) is stripped; the report must still be a
+// single line -- any remaining CR or LF in the content is rejected -- so
+// single-line strictness and multi-line/injection rejection are preserved.
 function parseAndValidateStdout(stdout) {
   if (typeof stdout !== "string") {
-    return { ok: false };
-  }
-  if (stdout.includes("\r")) {
     return { ok: false };
   }
   if (!stdout.endsWith("\n")) {
     return { ok: false };
   }
-  const content = stdout.slice(0, -1);
-  if (content.length === 0 || content.includes("\n")) {
+  let content = stdout.slice(0, -1);
+  if (content.endsWith("\r")) {
+    content = content.slice(0, -1);
+  }
+  if (
+    content.length === 0 ||
+    content.includes("\n") ||
+    content.includes("\r")
+  ) {
     return { ok: false };
   }
   if (Buffer.byteLength(content, "utf8") > MAX_REPORT_BYTES) {
@@ -526,13 +557,30 @@ function runSelfTest() {
     parseAndValidateStdout("not json at all\n").ok === false,
   );
 
-  console.log("\n[test 20] carriage return in stdout rejected");
+  console.log(
+    "\n[test 20] single trailing CRLF (Windows platform newline) accepted",
+  );
   check(
-    "carriage return rejected",
-    parseAndValidateStdout(`${JSON.stringify(validPassed)}\r\n`).ok === false,
+    "single trailing CRLF accepted",
+    parseAndValidateStdout(`${JSON.stringify(validPassed)}\r\n`).ok === true,
   );
 
-  console.log("\n[test 21] valid single-line stdout accepted");
+  console.log("\n[test 20b] embedded carriage return still rejected");
+  check(
+    "embedded carriage return rejected",
+    parseAndValidateStdout(`${JSON.stringify(validPassed)}\rextra\n`).ok ===
+      false,
+  );
+
+  console.log("\n[test 20c] CRLF-separated multiple lines rejected");
+  check(
+    "CRLF multi-line rejected",
+    parseAndValidateStdout(
+      `${JSON.stringify(validPassed)}\r\n${JSON.stringify(validPassed)}\r\n`,
+    ).ok === false,
+  );
+
+  console.log("\n[test 21] valid single-line (LF) stdout accepted");
   check(
     "valid single-line stdout accepted",
     parseAndValidateStdout(`${JSON.stringify(validPassed)}\n`).ok === true,
@@ -545,6 +593,76 @@ function runSelfTest() {
     "self-test uses only synthetic in-memory objects",
     typeof validateReportShape === "function" &&
       typeof parseAndValidateStdout === "function",
+  );
+
+  console.log("\n[test 23] empty worker stderr accepted");
+  check("empty stderr accepted", isWorkerStderrWithinBound("") === true);
+
+  console.log("\n[test 24] small generic opaque diagnostic accepted");
+  check(
+    "small opaque stderr accepted",
+    isWorkerStderrWithinBound("native-diagnostic: bounded synthetic line\n") ===
+      true,
+  );
+
+  console.log("\n[test 25] exactly 64 KiB stderr accepted");
+  check(
+    "exactly 64 KiB accepted",
+    isWorkerStderrWithinBound("x".repeat(MAX_WORKER_STDERR_BYTES)) === true,
+  );
+
+  console.log("\n[test 26] 64 KiB + 1 stderr rejected");
+  check(
+    "64 KiB plus one rejected",
+    isWorkerStderrWithinBound("x".repeat(MAX_WORKER_STDERR_BYTES + 1)) ===
+      false,
+  );
+
+  console.log("\n[test 27] UTF-8 multibyte stderr measured by byte length");
+  // "€" is 3 UTF-8 bytes. 21845 * 3 = 65535 bytes (<= 64 KiB) accepted;
+  // 21846 * 3 = 65538 bytes (> 64 KiB) rejected, even though the character
+  // count (21846) is far below 64 Ki characters.
+  check(
+    "multibyte just within bound accepted",
+    isWorkerStderrWithinBound("€".repeat(21845)) === true,
+  );
+  check(
+    "multibyte just over bound rejected by byte length",
+    isWorkerStderrWithinBound("€".repeat(21846)) === false,
+  );
+
+  console.log(
+    "\n[test 28] bounded path-like / exception-shaped raw stderr is never included in the reject report",
+  );
+  // A synthetic private path and an exception-shaped line: the checker never
+  // parses or echoes worker stderr, so the report emitted on the reject path
+  // must be the generic path-free failure report.
+  const syntheticRawStderr =
+    "Traceback (most recent call last)\nC:/synthetic-private/model.task\n";
+  const rejectReport = buildFailedReport("worker_protocol_invalid");
+  const rejectReportText = JSON.stringify(rejectReport);
+  check(
+    "reject report excludes raw path fragment",
+    !rejectReportText.includes("synthetic-private") &&
+      !rejectReportText.includes("model.task"),
+  );
+  check(
+    "reject report excludes exception-shaped fragment",
+    !rejectReportText.includes("Traceback"),
+  );
+  check(
+    "over-bound synthetic raw stderr would be rejected by the byte bound",
+    isWorkerStderrWithinBound(
+      syntheticRawStderr + "x".repeat(MAX_WORKER_STDERR_BYTES),
+    ) === false,
+  );
+
+  console.log(
+    "\n[test 29] non-string stderr treated as out-of-contract (rejected)",
+  );
+  check(
+    "non-string stderr rejected",
+    isWorkerStderrWithinBound(undefined) === false,
   );
 
   console.log(
@@ -611,7 +729,11 @@ function main() {
     process.exit(1);
   }
 
-  if ((result.stderr ?? "") !== "") {
+  // v0.13.0 (#580): tolerate bounded opaque private worker stderr (genuine
+  // MediaPipe native-library diagnostics) without ever printing or inspecting
+  // it. Only its UTF-8 byte length is measured; over the fixed 64 KiB bound
+  // fails closed with the existing generic reason.
+  if (!isWorkerStderrWithinBound(result.stderr ?? "")) {
     printReport(buildFailedReport("worker_protocol_invalid"));
     process.exit(1);
   }

@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <thread>
 #include <vector>
@@ -54,6 +55,7 @@ using lvk::tracker::HelperProcessCleanupRegistry;
 using lvk::tracker::HelperProcessSession;
 using lvk::tracker::HelperSessionConfig;
 using lvk::tracker::HelperSessionState;
+using lvk::tracker::HelperStderrPolicy;
 using lvk::tracker::HelperTrackOutcome;
 namespace test_seam = lvk::tracker::test_seam;
 
@@ -1647,6 +1649,258 @@ void testExactInvocationEmptyExactArgumentsReachesLaunch(
   session.stop();  // idempotent no-op on a never-launched session
 }
 
+// v0.13.0 (#580): stderr-policy boundary coverage. -------------------------
+//
+// These cases prove (1) the default StrictPrefixedDiagnostics policy is
+// behaviorally unchanged, and (2) the opt-in BoundedOpaqueDiscard policy
+// accepts bounded opaque native-library stderr, fails closed above the fixed
+// 64 KiB bound without deadlock or orphan, and uses overflow-safe accounting.
+// No raw diagnostic text, path, model, pixel, or secret ever enters the smoke:
+// fixtures are fixed ASCII filler and generic markers only.
+
+HelperSessionConfig strictBaseConfig(const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;  // default stderrPolicy is strict
+  return config;
+}
+
+HelperSessionConfig opaqueBaseConfig(const std::string& helperPath) {
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.stderrPolicy = HelperStderrPolicy::BoundedOpaqueDiscard;
+  return config;
+}
+
+// Pure, no-child overflow-safe accounting proof shared with the session's
+// BoundedOpaqueDiscard branch: exact boundary, max+1 rejection, and a huge
+// add that must be rejected without wrapping the running total.
+void testOpaqueStderrAccounting() {
+  const unsigned long long max = lvk::tracker::kHelperOpaqueStderrMaxBytes;
+
+  {
+    unsigned long long total = 0;
+    expect(lvk::tracker::accumulateOpaqueStderrBytes(total, max),
+           "opaque-accounting: exactly the maximum is accepted");
+    expect(total == max,
+           "opaque-accounting: total equals the maximum after acceptance");
+  }
+  {
+    unsigned long long total = 0;
+    expect(!lvk::tracker::accumulateOpaqueStderrBytes(total, max + 1),
+           "opaque-accounting: maximum plus one byte is rejected");
+    expect(total == 0,
+           "opaque-accounting: total is unchanged after a rejected add");
+  }
+  {
+    unsigned long long total = 0;
+    expect(lvk::tracker::accumulateOpaqueStderrBytes(total, max - 1),
+           "opaque-accounting: max-1 accepted incrementally");
+    expect(lvk::tracker::accumulateOpaqueStderrBytes(total, 1),
+           "opaque-accounting: the final byte to exactly max accepted");
+    expect(total == max, "opaque-accounting: total reaches exactly max");
+    expect(!lvk::tracker::accumulateOpaqueStderrBytes(total, 1),
+           "opaque-accounting: one byte past max rejected");
+    expect(total == max,
+           "opaque-accounting: total stays at max after rejection");
+  }
+  {
+    unsigned long long total = max;
+    expect(lvk::tracker::accumulateOpaqueStderrBytes(total, 0),
+           "opaque-accounting: a zero-byte add at the bound is accepted");
+    expect(total == max, "opaque-accounting: total unchanged by a zero add");
+  }
+  {
+    unsigned long long total = 1;
+    const unsigned long long huge =
+        (std::numeric_limits<unsigned long long>::max)();
+    expect(!lvk::tracker::accumulateOpaqueStderrBytes(total, huge),
+           "opaque-accounting: an enormous add cannot overflow the total");
+    expect(total == 1,
+           "opaque-accounting: total unchanged after an overflow-avoiding "
+           "rejection");
+  }
+}
+
+// Strict default: a small unprefixed stderr line on the request path still
+// fails the exchange closed (prefix guard), exactly as before this change.
+void testStrictSmallUnprefixedStderrFailsClosed(const std::string& helperPath) {
+  HelperSessionConfig config = strictBaseConfig(helperPath);
+  config.extraArgs = {"--session-unsafe-stderr"};
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "strict-unsafe-stderr: session reaches ready (the unsafe line is "
+         "emitted only on the request path)");
+  if (session.state() != HelperSessionState::Ready) {
+    session.stop();
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(6000);
+  expect(!outcome.ok,
+         "strict-unsafe-stderr: a small unprefixed stderr line still fails the "
+         "exchange closed under the default strict policy");
+  expect(session.state() == HelperSessionState::Failed,
+         "strict-unsafe-stderr: session transitions to Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "strict-unsafe-stderr: fail-closed uses the generic MalformedMessage "
+         "category");
+  session.stop();
+}
+
+// Strict default: an unterminated unprefixed residual (no trailing newline,
+// child then exits) still fails closed via the EOF residual validation.
+void testStrictUnterminatedUnprefixedStderrFailsClosed(
+    const std::string& helperPath) {
+  HelperSessionConfig config = strictBaseConfig(helperPath);
+  config.extraArgs = {"--session-unterminated-unsafe-stderr"};
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "strict-unterminated-stderr: session reaches ready");
+  if (session.state() != HelperSessionState::Ready) {
+    session.stop();
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(6100);
+  expect(!outcome.ok,
+         "strict-unterminated-stderr: an unterminated unprefixed residual "
+         "still fails closed at EOF");
+  expect(session.state() == HelperSessionState::Failed,
+         "strict-unterminated-stderr: session transitions to Failed");
+  session.stop();
+}
+
+// Strict default: an oversized "[helper] "-prefixed stderr line is still
+// rejected by the bounded-line guard, independent of the safe prefix.
+void testStrictOversizedStderrLineFailsClosed(const std::string& helperPath) {
+  HelperSessionConfig config = strictBaseConfig(helperPath);
+  config.extraArgs = {"--session-oversized-stderr"};
+  HelperProcessSession session(config);
+  expect(session.start(), "strict-oversized-stderr: session reaches ready");
+  if (session.state() != HelperSessionState::Ready) {
+    session.stop();
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(6200);
+  expect(!outcome.ok,
+         "strict-oversized-stderr: an oversized prefixed stderr line still "
+         "fails the exchange closed");
+  expect(session.state() == HelperSessionState::Failed,
+         "strict-oversized-stderr: session transitions to Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "strict-oversized-stderr: fail-closed uses MalformedMessage");
+  session.stop();
+}
+
+// Opaque policy: a small unprefixed opaque diagnostic is tolerated; the
+// session reaches ready, exchanges a frame/result, and stops cleanly. The raw
+// filler never surfaces because HelperTrackOutcome structurally carries only
+// mapped tracking fields.
+void testOpaqueSmallStderrFullLifecycle(const std::string& helperPath) {
+  HelperSessionConfig config = opaqueBaseConfig(helperPath);
+  config.enableFrameTransport = true;
+  config.extraArgs = {"--session-opaque-stderr-bytes", "48"};
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "opaque-small: session reaches ready despite a small unprefixed "
+         "opaque diagnostic");
+  if (session.state() != HelperSessionState::Ready) {
+    session.stop();
+    return;
+  }
+  const std::vector<std::uint8_t> frame = makeDeterministicBgr24(2, 2);
+  const FramePixelView view{frame.data(), 2, 2};
+  const HelperTrackOutcome outcome = session.trackWithFrame(4200, view);
+  expect(outcome.ok,
+         "opaque-small: a frame/result exchange succeeds under the bounded "
+         "opaque policy");
+  expect(session.state() == HelperSessionState::Running,
+         "opaque-small: session stays Running after the exchange");
+  session.stop();
+}
+
+// Opaque policy: opaque stderr well over the 64 KiB bound (with the result
+// withheld) fails the exchange closed via the byte-bound guard, without
+// deadlock even though the child writes far more than one stderr pipe buffer,
+// and without leaving an orphan child or a durable-owner leak.
+void testOpaqueStderrOverBoundFailsClosed(const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "opaque-over-bound: registry drained before test");
+  HelperSessionConfig config = opaqueBaseConfig(helperPath);
+  const long long floodBytes =
+      static_cast<long long>(lvk::tracker::kHelperOpaqueStderrMaxBytes) +
+      32LL * 1024LL;
+  config.extraArgs = {
+      "--session-opaque-stderr-bytes", std::to_string(floodBytes),
+      "--session-hang-result"};
+  // Generous result deadline so the stderr byte-bound guard -- not a result
+  // timeout -- is what ends the exchange.
+  config.resultTimeoutMs = 8000;
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "opaque-over-bound: session reaches ready before the flood");
+  if (session.state() != HelperSessionState::Ready) {
+    session.stop();
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(5100);
+  expect(!outcome.ok,
+         "opaque-over-bound: the exchange fails closed once opaque stderr "
+         "exceeds the fixed 64 KiB bound");
+  expect(session.state() == HelperSessionState::Failed,
+         "opaque-over-bound: session transitions to Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "opaque-over-bound: fail-closed uses the generic MalformedMessage "
+         "category (no raw diagnostic content)");
+  session.stop();
+  expect(!session.testOnlyDirectlyOwnsChild(),
+         "opaque-over-bound: no child remains directly owned after cleanup");
+  expect(pumpUntilEmptyOrDeadline(5000) == 0,
+         "opaque-over-bound: durable registry returns to baseline (no orphan "
+         "owner leak)");
+}
+
+// Opaque policy: after an opaque-policy failure, a fresh strict-policy session
+// still works normally (isolation across sessions; no shared static state).
+void testStrictSessionWorksAfterOpaqueFailure(const std::string& helperPath) {
+  HelperSessionConfig config = strictBaseConfig(helperPath);
+  HelperProcessSession session(config);
+  expect(session.start(),
+         "post-opaque strict: a fresh strict session starts normally");
+  if (session.state() != HelperSessionState::Ready) {
+    session.stop();
+    return;
+  }
+  const HelperTrackOutcome outcome = session.track(7000);
+  expect(outcome.ok,
+         "post-opaque strict: a normal exchange succeeds after a prior "
+         "opaque-policy failure");
+  session.stop();
+}
+
+// Opaque policy: an out-of-range stderr policy value fails closed BEFORE any
+// child launch, with the same generic MalformedMessage category and no child.
+void testOpaqueInvalidPolicyFailsBeforeLaunch(const std::string& helperPath) {
+  expect(pumpUntilEmptyOrDeadline(2000) == 0,
+         "opaque-invalid-policy: registry drained before test");
+  HelperSessionConfig config;
+  config.executablePath = helperPath;
+  config.stderrPolicy = static_cast<HelperStderrPolicy>(
+      static_cast<int>(HelperStderrPolicy::BoundedOpaqueDiscard) + 1);
+  HelperProcessSession session(config);
+  expect(!session.start(),
+         "opaque-invalid-policy: start() fails closed before launch");
+  expect(session.state() == HelperSessionState::Failed,
+         "opaque-invalid-policy: state is Failed");
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::MalformedMessage,
+         "opaque-invalid-policy: diagnostic is MalformedMessage");
+  expect(!session.testOnlyDirectlyOwnsChild(),
+         "opaque-invalid-policy: no child was ever created");
+  expect(!session.testOnlyHasPreparedChildFallback(),
+         "opaque-invalid-policy: no prepared child fallback remains");
+  expect(registryCount() == 0,
+         "opaque-invalid-policy: durable registry stays at baseline");
+  session.stop();  // idempotent no-op on a never-launched session
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1709,6 +1963,16 @@ int main(int argc, char** argv) {
   testExactInvocationRejectsMixedModeExactArguments(helperPath);
   testExactInvocationRejectsUnsupportedMode(helperPath);
   testExactInvocationEmptyExactArgumentsReachesLaunch(helperPath);
+
+  // v0.13.0 (#580): stderr-policy boundary coverage.
+  testOpaqueStderrAccounting();
+  testStrictSmallUnprefixedStderrFailsClosed(helperPath);
+  testStrictUnterminatedUnprefixedStderrFailsClosed(helperPath);
+  testStrictOversizedStderrLineFailsClosed(helperPath);
+  testOpaqueSmallStderrFullLifecycle(helperPath);
+  testOpaqueStderrOverBoundFailsClosed(helperPath);
+  testStrictSessionWorksAfterOpaqueFailure(helperPath);
+  testOpaqueInvalidPolicyFailsBeforeLaunch(helperPath);
 
   // No lifecycle test may leak a durable cleanup entry.
   expect(pumpUntilEmptyOrDeadline(5000) == 0,
