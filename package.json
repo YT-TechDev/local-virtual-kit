@@ -19,6 +19,7 @@
     "diagnostics:summarize": "node tools/summarize-native-diagnostics.mjs",
     "test:motion-ws-bridge": "node tools/check-motion-ws-bridge.mjs",
     "test:native-tracker-options": "node tools/check-native-tracker-options.mjs",
+    "test:native-tracker-stdout-flush": "node tools/check-native-tracker-stdout-flush.mjs",
     "test:synthetic-helper": "node tools/check-synthetic-helper-output.mjs",
     "test:helper-result-mapping": "node tools/check-helper-result-mapping.mjs",
     "test:helper-message-parse": "node tools/check-helper-message-parse.mjs",

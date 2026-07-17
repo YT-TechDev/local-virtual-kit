@@ -1178,9 +1178,13 @@ int main(int argc, char *argv[]) {
 
     const auto writeStartedAt = std::chrono::steady_clock::now();
     lvk::tracker::writeMotionFrameJson(std::cout, trackingSample);
-    if (options.realtime) {
-      std::cout.flush();
-    }
+    // Every complete MotionFrame line must reach a pipe consumer promptly on
+    // its own, independent of --realtime: --realtime only governs frame
+    // pacing (paceNextFrame below), not stdout visibility. Without an
+    // unconditional flush here, stdout is left to ordinary block buffering
+    // when redirected to a pipe, so a full MotionFrame line can sit unseen
+    // for many frames until the buffer fills or the process exits (#584).
+    std::cout.flush();
     const auto writeStoppedAt = std::chrono::steady_clock::now();
 
     const auto frameStoppedAt = writeStoppedAt;

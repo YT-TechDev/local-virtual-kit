@@ -9,6 +9,7 @@ jobs:
       - run: cmake --build native/tracker-core/build
       - run: node tools/check-native-runtime-capabilities.mjs native/tracker-core/build/lvk-tracker-core
       - run: node tools/check-native-tracker-output.mjs native/tracker-core/build/lvk-tracker-core
+      - run: node tools/check-native-tracker-stdout-flush.mjs native/tracker-core/build/lvk-tracker-core native/tracker-core/build/lvk-synthetic-helper
       - run: node tools/check-native-backend-parity-motionframe.mjs native/tracker-core/build/lvk-tracker-core
       - run: node tools/check-helper-message-parse.mjs native/tracker-core/build/lvk-helper-message-parse-smoke
       - run: node tools/check-helper-frame-packet.mjs native/tracker-core/build/lvk-helper-frame-packet-smoke
