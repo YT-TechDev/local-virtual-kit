@@ -305,12 +305,34 @@ void FrameHelperTrackingBackend::maybeRecoverAfterResultTimeout() {
   // budget stays consumed even if allocation/start below fails.
   --recoveryBudget_;
 
+  // v0.13.0 (#592): resolve how the failed generation's directly owned child
+  // was released or transferred, through the single shared cleanup entry
+  // point, before gen1 is destroyed below. NotApplicable (the pre-resolution
+  // enum default) is normalized to Unknown here at the reporting boundary --
+  // it must never be emitted for a valid recovery attempt.
+  HelperChildCleanupDisposition gen1CleanupDisposition =
+      session_->resolveChildCleanup();
+  if (gen1CleanupDisposition == HelperChildCleanupDisposition::NotApplicable) {
+    gen1CleanupDisposition = HelperChildCleanupDisposition::Unknown;
+  }
+
   // Destroy the failed generation through the existing ~HelperProcessSession()
   // -- bounded stop() plus the allocation-free, noexcept emergency
   // child-ownership resolution it already runs if stop() throws. Old-generation
   // destruction completes here, before any replacement becomes authoritative or
   // exchanges a frame; no stale pipe/request/result id can cross generations.
+  // resolveChildCleanup() was already called above, so this destruction is
+  // inert through the existing cleaned_ guard -- stop() is never retried.
   session_.reset();
+
+  // v0.13.0 (#592): exactly one fixed gen1-cleanup disposition line for this
+  // actual recovery attempt, emitted before gen2 construction/start and
+  // therefore before the existing #591 recovery-outcome line below. Contains
+  // only this fixed literal text and one fixed enum label -- never raw
+  // exception text, paths, pids, timing, or frame/session data.
+  std::cerr << "[helper-session] recovery gen1-cleanup (disposition="
+            << helperChildCleanupDispositionLabel(gen1CleanupDisposition)
+            << ")\n";
 
   // Reset the #587 disposition for the new generation. The failed generation
   // latched Reported, which armHelperSessionTerminalDiagnostic() intentionally
