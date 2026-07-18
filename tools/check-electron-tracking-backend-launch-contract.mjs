@@ -117,7 +117,8 @@ requireMatch(
 );
 
 // ---------------------------------------------------------------------------
-// 13. No tracking backend on DesktopRuntimeSettings, LvkRuntimeStatus, or renderer
+// 13. DesktopRuntimeSettings and the renderer carry trackingBackend (#596);
+//     LvkRuntimeStatus still must not (belongs to #597)
 // ---------------------------------------------------------------------------
 
 const desktopRuntimeSettingsBlockMatch = apiSource.match(
@@ -126,11 +127,11 @@ const desktopRuntimeSettingsBlockMatch = apiSource.match(
 if (!desktopRuntimeSettingsBlockMatch) {
   fail("api.ts must declare export interface DesktopRuntimeSettings");
 }
-if (/trackingBackend/u.test(desktopRuntimeSettingsBlockMatch[1])) {
-  fail(
-    "DesktopRuntimeSettings must not add trackingBackend in this Issue (belongs to #596)",
-  );
-}
+requireMatch(
+  desktopRuntimeSettingsBlockMatch[1],
+  /trackingBackend:\s*NativePipelineTrackingBackend/u,
+  "DesktopRuntimeSettings must declare trackingBackend: NativePipelineTrackingBackend (#596)",
+);
 
 const lvkRuntimeStatusBlockMatch = apiSource.match(
   /export interface LvkRuntimeStatus \{([\s\S]*?)\n\}/u,
@@ -144,11 +145,11 @@ if (/trackingBackend/u.test(lvkRuntimeStatusBlockMatch[1])) {
   );
 }
 
-if (/trackingBackend/u.test(rendererSource)) {
-  fail(
-    "renderer App.tsx must not reference trackingBackend in this Issue (renderer selector belongs to #596)",
-  );
-}
+requireMatch(
+  rendererSource,
+  /selectedTrackingBackend/u,
+  "renderer App.tsx must reference selectedTrackingBackend (#596 renderer selector)",
+);
 
 // ---------------------------------------------------------------------------
 // 3 & 4. IPC parser accepts both approved values, rejects others, defaults
@@ -443,7 +444,7 @@ console.log(
   "Electron tracking-backend launch contract OK: " +
     "NativePipelineTrackingBackend is a closed union of exactly face-pipeline and mediapipe-face-landmarker; " +
     "NativePipelineStartOptions declares the optional typed trackingBackend field with no helper-script path input; " +
-    "DesktopRuntimeSettings, LvkRuntimeStatus, and the renderer stay free of trackingBackend in this Issue; " +
+    "DesktopRuntimeSettings and the renderer carry the persisted trackingBackend token (#596); LvkRuntimeStatus stays free of it (#597); " +
     "the IPC parser rejects any explicit value other than the two approved tokens and only assigns after validation; " +
     "NativePipelineManager.start() defaults trackingBackend to face-pipeline; " +
     "createTrackerArgs() never unconditionally adds MediaPipe flags, keeping the default face-pipeline argv unchanged; " +

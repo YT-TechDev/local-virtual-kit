@@ -34,6 +34,7 @@ const runtimeSettingsConfigPath = join(
   "main",
   "runtimeSettingsConfig.ts",
 );
+const apiPath = join(repoRoot, "apps", "desktop", "src", "preload", "api.ts");
 
 const fail = (message) => {
   console.error(
@@ -45,6 +46,7 @@ const fail = (message) => {
 const rendererSource = readFileSync(appRendererPath, "utf8");
 const mainSource = readFileSync(mainIndexPath, "utf8");
 const configSource = readFileSync(runtimeSettingsConfigPath, "utf8");
+const apiSource = readFileSync(apiPath, "utf8");
 
 const requireMatch = (text, pattern, message) => {
   if (!pattern.test(text)) {
@@ -59,7 +61,7 @@ requireMatch(
   "renderer loadRuntimeSettings must call desktopApi.getRuntimeSettings() and normalize the result",
 );
 
-// Renderer: all 6 fields are set from the normalized loaded settings
+// Renderer: all 7 fields are set from the normalized loaded settings
 requireMatch(
   rendererSource,
   /setSelectedCameraSource\(settings\.cameraSource\)/u,
@@ -90,6 +92,11 @@ requireMatch(
   /setSelectedCameraHeight\(settings\.cameraHeight\)/u,
   "renderer loadRuntimeSettings must set selectedCameraHeight from loaded settings",
 );
+requireMatch(
+  rendererSource,
+  /setSelectedTrackingBackend\(settings\.trackingBackend\)/u,
+  "renderer loadRuntimeSettings must set selectedTrackingBackend from loaded settings (#596)",
+);
 
 // Renderer: settings load is triggered once on mount in useEffect
 requireMatch(
@@ -105,7 +112,7 @@ requireMatch(
   "renderer saveRuntimeSettings must call desktopApi.saveRuntimeSettings(settings) and normalize the result",
 );
 
-// Renderer: all 6 fields are updated from the normalized saved settings
+// Renderer: all 7 fields are updated from the normalized saved settings
 requireMatch(
   rendererSource,
   /setSelectedCameraSource\(savedSettings\.cameraSource\)/u,
@@ -135,6 +142,11 @@ requireMatch(
   rendererSource,
   /setSelectedCameraHeight\(savedSettings\.cameraHeight\)/u,
   "renderer saveRuntimeSettings must update selectedCameraHeight from savedSettings",
+);
+requireMatch(
+  rendererSource,
+  /setSelectedTrackingBackend\(savedSettings\.trackingBackend\)/u,
+  "renderer saveRuntimeSettings must update selectedTrackingBackend from savedSettings (#596)",
 );
 
 // Main process: IPC handlers wire getRuntimeSettings and saveRuntimeSettings to config functions
@@ -170,11 +182,21 @@ requireMatch(
   "saveRuntimeSettings must normalize settings before writing to disk",
 );
 
-// Config: DEFAULT_DESKTOP_RUNTIME_SETTINGS defines all 6 fields
+// Config: DEFAULT_DESKTOP_RUNTIME_SETTINGS defines all 7 fields, including the
+// #596 trackingBackend default of 'face-pipeline'
 requireMatch(
   configSource,
-  /export\s+const\s+DEFAULT_DESKTOP_RUNTIME_SETTINGS:\s*DesktopRuntimeSettings\s*=\s*\{[\s\S]*?cameraSource[\s\S]*?faceDetector[\s\S]*?cameraIndex[\s\S]*?cameraFps[\s\S]*?cameraWidth[\s\S]*?cameraHeight[\s\S]*?\}/u,
-  "DEFAULT_DESKTOP_RUNTIME_SETTINGS must define all 6 runtime settings fields",
+  /export\s+const\s+DEFAULT_DESKTOP_RUNTIME_SETTINGS:\s*DesktopRuntimeSettings\s*=\s*\{[\s\S]*?cameraSource[\s\S]*?faceDetector[\s\S]*?cameraIndex[\s\S]*?cameraFps[\s\S]*?cameraWidth[\s\S]*?cameraHeight[\s\S]*?trackingBackend:\s*'face-pipeline'[\s\S]*?\}/u,
+  "DEFAULT_DESKTOP_RUNTIME_SETTINGS must define all 7 runtime settings fields with trackingBackend defaulting to 'face-pipeline'",
+);
+
+// Config: normalizeDesktopRuntimeSettings accepts both approved trackingBackend
+// tokens and round-trips them; any other value (legacy/missing/malformed)
+// normalizes to the default 'face-pipeline'
+requireMatch(
+  configSource,
+  /trackingBackend\s*===\s*'face-pipeline'\s*\|\|\s*trackingBackend\s*===\s*'mediapipe-face-landmarker'\s*\n\s*\?\s*trackingBackend\s*\n\s*:\s*DEFAULT_DESKTOP_RUNTIME_SETTINGS\.trackingBackend/u,
+  "normalizeDesktopRuntimeSettings must accept only 'face-pipeline' or 'mediapipe-face-landmarker' for trackingBackend and otherwise default to DEFAULT_DESKTOP_RUNTIME_SETTINGS.trackingBackend (#596)",
 );
 
 // Config: settings are written to the Electron userData directory
@@ -184,13 +206,38 @@ requireMatch(
   "runtime settings must be stored in the Electron app userData directory",
 );
 
+// Preload: DesktopRuntimeSettings declares the persisted trackingBackend field (#596)
+requireMatch(
+  apiSource,
+  /export interface DesktopRuntimeSettings \{[\s\S]*?trackingBackend:\s*NativePipelineTrackingBackend[\s\S]*?\n\}/u,
+  "DesktopRuntimeSettings must declare trackingBackend: NativePipelineTrackingBackend (#596)",
+);
+
+// Renderer: normalizeRuntimeSettings and settings identity include trackingBackend
+// so save-feedback staleness keys on the persisted backend selection too
+requireMatch(
+  rendererSource,
+  /const\s+normalizeRuntimeSettings\s*=[\s\S]*?trackingBackend:\s*settings\.trackingBackend/u,
+  "renderer normalizeRuntimeSettings must pass through trackingBackend (#596), feeding getRuntimeSettingsKey settings identity",
+);
+
+// Renderer: getSelectedRuntimeSettings includes the current selectedTrackingBackend
+requireMatch(
+  rendererSource,
+  /const\s+getSelectedRuntimeSettings\s*=[\s\S]*?trackingBackend:\s*selectedTrackingBackend/u,
+  "getSelectedRuntimeSettings must include trackingBackend: selectedTrackingBackend (#596)",
+);
+
 console.log(
   "Electron runtime settings persistence smoke OK: " +
-    "renderer loads all 6 settings fields from disk on mount via desktopApi.getRuntimeSettings(); " +
-    "renderer updates all 6 settings fields from normalized save response via desktopApi.saveRuntimeSettings(); " +
+    "renderer loads all 7 settings fields (including trackingBackend, #596) from disk on mount via desktopApi.getRuntimeSettings(); " +
+    "renderer updates all 7 settings fields from normalized save response via desktopApi.saveRuntimeSettings(); " +
     "main process IPC handlers wire getRuntimeSettings and saveRuntimeSettings to config functions; " +
     "normalizeDesktopRuntimeSettings returns defaults for invalid input; " +
+    "normalizeDesktopRuntimeSettings accepts only the two approved trackingBackend tokens and otherwise defaults to face-pipeline; " +
     "loadRuntimeSettings returns defaults on error; " +
     "saveRuntimeSettings normalizes before writing; " +
-    "settings are persisted to Electron userData directory.",
+    "settings are persisted to Electron userData directory; " +
+    "DesktopRuntimeSettings declares trackingBackend; " +
+    "renderer settings identity (getRuntimeSettingsKey) and getSelectedRuntimeSettings include trackingBackend.",
 );
