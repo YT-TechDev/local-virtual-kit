@@ -212,6 +212,13 @@ std::atomic<bool> g_forceNextPidClaimPrepFailure{false};
 // bounded, noexcept emergency ownership-resolution path can be exercised
 // deterministically. Consumed by the next stop(). Shared across platforms.
 std::atomic<bool> g_forceNextGracefulStopThrow{false};
+// v0.13.0 (#592): one-shot. Forces the NEXT stop() to throw immediately after
+// the existing cleaned_ guard and before any ownership-resolution work, so it
+// is reachable even when the session state is already Failed (unlike
+// g_forceNextGracefulStopThrow above, which only fires from the graceful
+// Ready/Running branch). Consumed by the next stop(). Shared across
+// platforms; compiled out of production builds.
+std::atomic<bool> g_forceNextCleanupResolveThrow{false};
 }  // namespace
 }  // namespace lvk::tracker
 #endif
@@ -851,10 +858,14 @@ void platformReleaseChildProcess(HelperSessionHandles& handles) {
 // no-op only if there is genuinely nothing to transfer (handles.process is
 // null) or the fallback was somehow never prepared (unreachable for any
 // session that reached Launched).
-void transferChildProcessToRegistry(
+// v0.13.0 (#592): returns true only when this call actually commits child
+// ownership to HelperProcessCleanupRegistry. Observability only -- the
+// return value changes no transfer behavior, control flow, ownership
+// semantics, or allocation guarantee.
+bool transferChildProcessToRegistry(
     HelperSessionHandles& handles, bool terminationDelivered) {
   if (handles.process == nullptr || handles.childFallback == nullptr) {
-    return;  // nothing to transfer
+    return false;  // nothing to transfer
   }
   handles.childFallback->adopt(
       handles.process, handles.thread, terminationDelivered);
@@ -862,6 +873,7 @@ void transferChildProcessToRegistry(
       std::move(handles.childFallback));
   handles.process = nullptr;
   handles.thread = nullptr;
+  return true;
 }
 
 // v0.13.0 (#534 hardening): exception-safe rollback guard for the process-
@@ -1795,10 +1807,15 @@ class PidCleanup : public PendingCleanup {
 // activateClaim() now reports WHY it failed (see PidClaimResult), so a live
 // direct pid is dropped ONLY when the drop is provably safe. Clears `pid` and
 // handles.childFallback on a successful transfer.
-void transferPidToRegistry(
+// v0.13.0 (#592): returns true only when this call actually commits child
+// ownership to HelperProcessCleanupRegistry (the Claimed case that reaches
+// adopt() + commitChildFallback() below). Observability only -- the return
+// value changes no transfer behavior, control flow, ownership semantics, or
+// allocation guarantee.
+bool transferPidToRegistry(
     HelperSessionHandles& handles, pid_t& pid, bool terminationDelivered) {
   if (pid < 0 || handles.childFallback == nullptr) {
-    return;  // nothing to transfer
+    return false;  // nothing to transfer
   }
   auto& registry = HelperProcessCleanupRegistry::instance();
   switch (handles.childFallback->activateClaim(pid)) {
@@ -1818,7 +1835,7 @@ void transferPidToRegistry(
       pid = -1;
       handles.childFallback.reset();
       registry.releaseChildFallbackReservation();
-      return;
+      return false;
     case PidClaimResult::NoPreparedNode:
       // Contradiction: a launched session always prepared its claim node
       // pre-fork, so this is unreachable. Do NOT drop the pid on this non-
@@ -1826,18 +1843,20 @@ void transferPidToRegistry(
       // fallback with the caller) rather than misattribute or silently discard
       // the child. The caller's platformReleaseChildProcess path releases the
       // still-held reservation.
-      return;
+      return false;
   }
   handles.childFallback->adopt(pid, terminationDelivered);
   registry.commitChildFallback(std::move(handles.childFallback));
   pid = -1;  // ownership moved to the registry entry
+  return true;
 }
 
 // Uniform (platform-parallel) transfer entry used by stop(): moves an
-// unresolved child (POSIX pid) to the durable registry.
-void transferChildProcessToRegistry(
+// unresolved child (POSIX pid) to the durable registry. Returns true only
+// when a commit actually occurred (see transferPidToRegistry above).
+bool transferChildProcessToRegistry(
     HelperSessionHandles& handles, bool terminationDelivered) {
-  transferPidToRegistry(handles, handles.pid, terminationDelivered);
+  return transferPidToRegistry(handles, handles.pid, terminationDelivered);
 }
 
 LaunchResult platformLaunch(
@@ -2411,6 +2430,24 @@ const char* helperDiagnosticCategoryLabel(HelperDiagnosticCategory category) {
   return "none";
 }
 
+// v0.13.0 (#592): fixed label mapper for HelperChildCleanupDisposition. Fails
+// closed to the fixed "unknown" label for any invalid/unexpected enum value;
+// never emits a numeric value.
+const char* helperChildCleanupDispositionLabel(
+    HelperChildCleanupDisposition disposition) {
+  switch (disposition) {
+    case HelperChildCleanupDisposition::NotApplicable:
+      return "not-applicable";
+    case HelperChildCleanupDisposition::ConfirmedRelease:
+      return "confirmed-release";
+    case HelperChildCleanupDisposition::DeferredRegistryTransfer:
+      return "deferred-registry-transfer";
+    case HelperChildCleanupDisposition::Unknown:
+      return "unknown";
+  }
+  return "unknown";
+}
+
 namespace {
 
 // v0.13.0 (#568): the ONLY place that selects the child's final argv from
@@ -2490,6 +2527,9 @@ namespace test_seam {
 void setForceNextGracefulStopThrow(bool enabled) {
   g_forceNextGracefulStopThrow.store(enabled, std::memory_order_release);
 }
+void setForceNextCleanupResolveThrow(bool enabled) {
+  g_forceNextCleanupResolveThrow.store(enabled, std::memory_order_release);
+}
 }  // namespace test_seam
 #endif
 
@@ -2498,8 +2538,20 @@ HelperProcessSession::HelperProcessSession(HelperSessionConfig config)
       handles_(std::make_unique<HelperSessionHandles>()) {}
 
 HelperProcessSession::~HelperProcessSession() {
-  // No-throw, bounded cleanup backstop for early returns / signals. stop() is
-  // idempotent; the normal path fully resolves child ownership.
+  // No-throw, bounded cleanup backstop for early returns / signals.
+  // resolveChildCleanup() is the single shared cleanup entry point: if a
+  // caller already invoked it (e.g. #592's recovery owner boundary), stop()
+  // was already called exactly once and this call is inert through the
+  // existing cleaned_ guard -- stop() is never retried from here.
+  resolveChildCleanup();
+}
+
+// v0.13.0 (#592): the single shared cleanup entry point. See the header for
+// the full contract.
+HelperChildCleanupDisposition HelperProcessSession::resolveChildCleanup() noexcept {
+  if (cleaned_) {
+    return childCleanupDisposition_;  // already fully resolved; no more work
+  }
   try {
     stop();
   } catch (...) {
@@ -2507,10 +2559,15 @@ HelperProcessSession::~HelperProcessSession() {
     // it could resolve child ownership. A blanket catch must NOT silently
     // discard a directly-owned pid/HANDLE pair: run the separate, bounded,
     // noexcept, allocation-free emergency path so every directly-owned child
-    // ends in either confirmed OS release or a durable-registry commit. It is
-    // idempotent and safe after whatever partial progress stop() made.
+    // ends in either confirmed OS release or a durable-registry commit.
+    // Discard all exception information; the owner-visible disposition for
+    // this exceptional path is always the fixed Unknown, regardless of what
+    // the emergency path itself resolves internally.
     emergencyResolveChildOwnership();
+    childCleanupDisposition_ = HelperChildCleanupDisposition::Unknown;
+    return childCleanupDisposition_;
   }
+  return childCleanupDisposition_;
 }
 
 // See the header for the full contract. Every operation below is bounded,
@@ -2532,10 +2589,18 @@ void HelperProcessSession::emergencyResolveChildOwnership() noexcept {
         *handles_, kDefaultChildCleanupDeadlineMs);
     // 4/5. Resolve to exactly one durable outcome: confirmed release, or a
     // commit of the already-prepared fallback (no allocation, cannot fail;
-    // a no-op if the child was already released or already committed).
-    if (!childOwnershipReleased(outcome)) {
-      transferChildProcessToRegistry(
+    // a no-op if the child was already released or already committed). Also
+    // records the already-resolved category (#592); the outer catch path in
+    // resolveChildCleanup() still overrides this to the fixed Unknown when
+    // this function was reached because stop() threw.
+    if (childOwnershipReleased(outcome)) {
+      childCleanupDisposition_ = HelperChildCleanupDisposition::ConfirmedRelease;
+    } else {
+      const bool committed = transferChildProcessToRegistry(
           *handles_, terminationConfirmedDelivered(outcome));
+      childCleanupDisposition_ = committed
+          ? HelperChildCleanupDisposition::DeferredRegistryTransfer
+          : HelperChildCleanupDisposition::Unknown;
     }
     // Release the still-unused fallback reservation and close any still-held
     // HANDLEs (each a no-op if the transfer above already consumed them).
@@ -2961,6 +3026,17 @@ void HelperProcessSession::stop() {
     return;
   }
 
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  // v0.13.0 (#592): test-only, one-shot. Fires immediately after the cleaned_
+  // guard and before any ownership-resolution work, so it is reachable even
+  // when the session state is already Failed (a #589 recovery attempt's gen1
+  // cleanup) -- unlike g_forceNextGracefulStopThrow above, which only fires
+  // from the graceful Ready/Running branch.
+  if (g_forceNextCleanupResolveThrow.exchange(false)) {
+    throw std::bad_alloc();
+  }
+#endif
+
   HelperDiagnosticCategory shutdownCategory = HelperDiagnosticCategory::None;
   bool enteredStopping = false;
 
@@ -3006,16 +3082,27 @@ void HelperProcessSession::stop() {
     // durable registry (infallible: the fallback and its registry capacity
     // were both reserved/allocated before this child ever existed -- see
     // platformLaunch). There is no third, session-retained outcome.
-    if (!exited) {
+    //
+    // v0.13.0 (#592): records only already-computed ownership outcomes below;
+    // this changes no cleanup control flow, timing, retries, waits, or state
+    // transitions.
+    if (exited) {
+      childCleanupDisposition_ = HelperChildCleanupDisposition::ConfirmedRelease;
+    } else {
       const ChildCleanupOutcome outcome = platformForceTerminate(
           *handles_, kDefaultChildCleanupDeadlineMs);
       shutdownCategory = HelperDiagnosticCategory::ShutdownTimeout;
-      if (!childOwnershipReleased(outcome)) {
+      if (childOwnershipReleased(outcome)) {
+        childCleanupDisposition_ = HelperChildCleanupDisposition::ConfirmedRelease;
+      } else {
         // Unresolved within the bound: commit the already-prepared durable
         // fallback so the child is never lost, even across this session's
         // destruction. No allocation, cannot fail.
-        transferChildProcessToRegistry(
+        const bool committed = transferChildProcessToRegistry(
             *handles_, terminationConfirmedDelivered(outcome));
+        childCleanupDisposition_ = committed
+            ? HelperChildCleanupDisposition::DeferredRegistryTransfer
+            : HelperChildCleanupDisposition::Unknown;
       }
     }
 

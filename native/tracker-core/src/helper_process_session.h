@@ -111,6 +111,23 @@ enum class HelperDiagnosticCategory {
 
 const char* helperDiagnosticCategoryLabel(HelperDiagnosticCategory category);
 
+// v0.13.0 (#592): closed, Native Core-internal disposition describing how a
+// failed generation's directly owned child was resolved by
+// resolveChildCleanup() immediately before the existing #589 single-attempt
+// ResultTimeout recovery constructs its replacement. NotApplicable is only
+// the pre-resolution default; it is never reported to any owner -- the
+// tracking backend normalizes it to Unknown at the reporting boundary before
+// emitting the fixed diagnostic line. Never serialized into MotionFrame.
+enum class HelperChildCleanupDisposition {
+  NotApplicable,
+  ConfirmedRelease,
+  DeferredRegistryTransfer,
+  Unknown,
+};
+
+const char* helperChildCleanupDispositionLabel(
+    HelperChildCleanupDisposition disposition);
+
 // Opaque per-platform process/pipe handles, defined in helper_process_session.cpp.
 struct HelperSessionHandles;
 
@@ -252,6 +269,20 @@ class HelperProcessSession {
   // child has not exited. Idempotent and safe to call in any state.
   void stop();
 
+  // v0.13.0 (#592): the single shared cleanup entry point, returning the
+  // final disposition describing how this generation's directly owned child
+  // was resolved. If cleanup already completed (cleaned_), returns the
+  // already-recorded disposition without doing any further work. Otherwise
+  // calls the existing stop(); if stop() throws, catches it with catch(...),
+  // runs the existing bounded, noexcept, allocation-free
+  // emergencyResolveChildOwnership(), discards all exception information,
+  // records and returns Unknown. On a normal return, returns the disposition
+  // recorded by stop(). The destructor calls this same method and ignores
+  // the return value, so a later destructor call stays inert through the
+  // existing cleaned_ guard -- stop() is never called twice. Never
+  // serialized into MotionFrame.
+  HelperChildCleanupDisposition resolveChildCleanup() noexcept;
+
   HelperSessionState state() const { return state_; }
   HelperDiagnosticCategory lastDiagnostic() const { return lastDiagnostic_; }
 
@@ -345,6 +376,13 @@ class HelperProcessSession {
   HelperSessionState state_ = HelperSessionState::NotStarted;
   HelperDiagnosticCategory lastDiagnostic_ = HelperDiagnosticCategory::None;
   HelperDiagnosticCategory shutdownDiagnostic_ = HelperDiagnosticCategory::None;
+  // v0.13.0 (#592): the disposition recorded by resolveChildCleanup() (see
+  // above), initialized to the closed enum's NotApplicable default until
+  // cleanup actually resolves ownership. Never exposed publicly except
+  // through resolveChildCleanup()'s return value; never serialized into
+  // MotionFrame.
+  HelperChildCleanupDisposition childCleanupDisposition_ =
+      HelperChildCleanupDisposition::NotApplicable;
   std::string stdoutBuffer_;
   std::string stderrBuffer_;
   bool stdoutEof_ = false;
@@ -421,6 +459,21 @@ void setForceNextPidClaimPreparationFailure(bool enabled);
 // noexcept emergency ownership-resolution path can be exercised
 // deterministically. One-shot; consumed by the next stop(). Cross-platform.
 void setForceNextGracefulStopThrow(bool enabled);
+
+// v0.13.0 (#592): a separate, dedicated one-shot LVK_HELPER_LIFECYCLE_TEST_SEAM
+// -only throw seam, distinct from setForceNextGracefulStopThrow above (which
+// is intentionally reachable ONLY from the graceful Ready/Running stop()
+// branch and is left unchanged). Forces the NEXT stop() call to throw
+// immediately after the existing cleaned_ guard and before any
+// ownership-resolution work, so it is reachable even when the session state
+// is already Failed -- the exact shape of a #589 recovery attempt's gen1
+// cleanup. Proves resolveChildCleanup() catches an unexpected cleanup
+// exception, runs the existing bounded, noexcept, allocation-free
+// emergencyResolveChildOwnership(), reports the fixed Unknown disposition,
+// and leaves a later destructor call inert. One-shot: consumed by the next
+// stop(). Never exposed through a CLI, environment variable, runtime
+// configuration, or production binary.
+void setForceNextCleanupResolveThrow(bool enabled);
 
 // v0.13.0 (#534 pid-reuse serialization): exercises the POSIX claim-aware reap
 // transition entirely on stack-local durable-owner entries over a fake pid

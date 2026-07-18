@@ -41,6 +41,7 @@
 
 #include "helper_frame_packet.h"
 #include "helper_message.h"
+#include "helper_process_cleanup_registry.h"
 #include "helper_process_session.h"
 
 #include <chrono>
@@ -80,6 +81,7 @@ void expect(bool condition, const std::string& what) {
 
 using lvk::tracker::CameraFrame;
 using lvk::tracker::HelperInvocationMode;
+using lvk::tracker::HelperProcessCleanupRegistry;
 using lvk::tracker::HelperSessionConfig;
 using lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
 using lvk::tracker::kSyntheticHelperReadySource;
@@ -88,6 +90,9 @@ using lvk::tracker::PreprocessedFrame;
 using lvk::tracker::SyntheticFrameHelperTrackingBackend;
 using lvk::tracker::TrackingSample;
 using lvk::tracker::TrackingStatus;
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+namespace test_seam = lvk::tracker::test_seam;
+#endif
 
 // Marker argument identifying the self-exec test-child mode. Smoke-local only:
 // never a production helper flag, never parsed by lvk-synthetic-helper or
@@ -118,6 +123,19 @@ constexpr const char* kRecoveryFailedMalformedMessageLine =
 constexpr const char* kRecoveryFailedNoneLine =
     "[helper-session] recovery failed (category=none)\n";
 constexpr const char* kRecoveryOutcomePrefix = "[helper-session] recovery";
+
+// The exact, fixed #592 gen1-cleanup disposition lines (owner-approved
+// contract). Each always precedes -- and is asserted immediately adjacent
+// to -- the unchanged #591 recovery-outcome line above, since both share the
+// "[helper-session] recovery" prefix and are emitted within the same
+// recovery attempt.
+constexpr const char* kRecoveryGen1CleanupConfirmedReleaseLine =
+    "[helper-session] recovery gen1-cleanup (disposition=confirmed-release)\n";
+constexpr const char* kRecoveryGen1CleanupUnknownLine =
+    "[helper-session] recovery gen1-cleanup (disposition=unknown)\n";
+constexpr const char* kRecoveryGen1CleanupDeferredRegistryTransferLine =
+    "[helper-session] recovery gen1-cleanup "
+    "(disposition=deferred-registry-transfer)\n";
 
 // Caller-controlled frame-timestamp sentinels selecting the child's per-frame
 // behavior. Any timestamp not listed here is an ordinary tracking frame.
@@ -517,9 +535,12 @@ void testExactOneTimeRecovery(const std::string& selfPath) {
         stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
         "recovery: the successful replacement exchange emits no diagnostic");
     expect(
-        stderrCapture.str() == kRecoverySucceededLine,
-        "recovery: the successful replacement emits exactly the recovery "
-        "succeeded line");
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupConfirmedReleaseLine) +
+                kRecoverySucceededLine,
+        "recovery: the successful replacement emits exactly the "
+        "confirmed-release gen1-cleanup line immediately followed by the "
+        "unchanged recovery-succeeded line");
     expect(
         stdoutCapture.str().empty(),
         "recovery (stream boundary): stdout stays empty through the "
@@ -600,9 +621,16 @@ void testExhaustedBudgetPerGeneration(const std::string& selfPath) {
       "exhausted: exactly one recovery-succeeded line (the single "
       "reconstruction)");
   expect(
-      countOccurrences(diagnostics, kRecoveryOutcomePrefix) == 1,
-      "exhausted: no second recovery-outcome line once the budget is spent "
-      "(gen2's own terminal timeout is a #587 line, not a new attempt)");
+      countOccurrences(
+          diagnostics, kRecoveryGen1CleanupConfirmedReleaseLine) == 1,
+      "exhausted: exactly one gen1-cleanup line (the single reconstruction's "
+      "gen1 cleanup)");
+  expect(
+      countOccurrences(diagnostics, kRecoveryOutcomePrefix) == 2,
+      "exhausted: exactly the two lines of the single reconstruction "
+      "(gen1-cleanup + recovery-succeeded) -- no third line once the budget "
+      "is spent (gen2's own terminal timeout is a #587 line, not a new "
+      "attempt)");
 
   backend.stop();
 }
@@ -845,9 +873,12 @@ void testReplacementLaunchFailure(const std::string& selfPath) {
         afterAttempt.status == TrackingStatus::Lost,
         "replacement-launch-failure: the failed replacement returns LOST");
     expect(
-        stderrCapture.str() == kRecoveryFailedLaunchFailureLine,
-        "replacement-launch-failure: exactly one recovery-failed "
-        "launch-failure line");
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupConfirmedReleaseLine) +
+                kRecoveryFailedLaunchFailureLine,
+        "replacement-launch-failure: exactly the confirmed-release "
+        "gen1-cleanup line immediately followed by the unchanged "
+        "recovery-failed launch-failure line");
     expect(
         stdoutCapture.str().empty(),
         "replacement-launch-failure (stream boundary): stdout stays empty");
@@ -904,9 +935,12 @@ void testReplacementReadyTimeout(const std::string& selfPath) {
         afterAttempt.status == TrackingStatus::Lost,
         "replacement-ready-timeout: the failed replacement returns LOST");
     expect(
-        stderrCapture.str() == kRecoveryFailedReadyTimeoutLine,
-        "replacement-ready-timeout: exactly one recovery-failed "
-        "ready-timeout line");
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupConfirmedReleaseLine) +
+                kRecoveryFailedReadyTimeoutLine,
+        "replacement-ready-timeout: exactly the confirmed-release "
+        "gen1-cleanup line immediately followed by the unchanged "
+        "recovery-failed ready-timeout line");
     expect(
         stdoutCapture.str().empty(),
         "replacement-ready-timeout (stream boundary): stdout stays empty");
@@ -963,9 +997,12 @@ void testReplacementMalformedReady(const std::string& selfPath) {
         afterAttempt.status == TrackingStatus::Lost,
         "replacement-malformed-ready: the failed replacement returns LOST");
     expect(
-        stderrCapture.str() == kRecoveryFailedMalformedMessageLine,
-        "replacement-malformed-ready: exactly one recovery-failed "
-        "malformed-message line");
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupConfirmedReleaseLine) +
+                kRecoveryFailedMalformedMessageLine,
+        "replacement-malformed-ready: exactly the confirmed-release "
+        "gen1-cleanup line immediately followed by the unchanged "
+        "recovery-failed malformed-message line");
     expect(
         stdoutCapture.str().empty(),
         "replacement-malformed-ready (stream boundary): stdout stays empty");
@@ -1023,9 +1060,12 @@ void testReplacementConstructThrow(const std::string& selfPath) {
         afterAttempt.status == TrackingStatus::Lost,
         "replacement-none: the forced construction failure returns LOST");
     expect(
-        stderrCapture.str() == kRecoveryFailedNoneLine,
-        "replacement-none: exactly one recovery-failed none line, never raw "
-        "exception text");
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupConfirmedReleaseLine) +
+                kRecoveryFailedNoneLine,
+        "replacement-none: exactly the confirmed-release gen1-cleanup line "
+        "immediately followed by the unchanged recovery-failed none line, "
+        "never raw exception text");
     expect(
         stdoutCapture.str().empty(),
         "replacement-none (stream boundary): stdout stays empty");
@@ -1054,6 +1094,184 @@ void testReplacementConstructThrow(const std::string& selfPath) {
   backend.stop();
 }
 
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+// Pumps the durable cleanup registry until it drains or the bounded deadline
+// elapses, returning the final pending count. Mirrors the equivalent helper
+// in the frame-transport smoke: the transferred real child is reaped only
+// once its already-issued terminate request is actually confirmed by a
+// later poll(), so a short bounded poll loop is used rather than assuming
+// instantaneous resolution.
+std::size_t pumpRegistryUntilEmptyOrDeadline(int deadlineMs) {
+  auto& registry = HelperProcessCleanupRegistry::instance();
+  const auto start = std::chrono::steady_clock::now();
+  std::size_t remaining = registry.pump();
+  while (remaining > 0) {
+    const auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start)
+            .count();
+    if (elapsed >= deadlineMs) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    remaining = registry.pump();
+  }
+  return remaining;
+}
+
+// Case 13 (#592): the dedicated Failed-state-reachable one-shot cleanup-
+// resolve throw seam forces resolveChildCleanup()'s catch path during gen1's
+// recovery cleanup, proving it reports the fixed "unknown" disposition, runs
+// the existing bounded noexcept emergencyResolveChildOwnership(), and leaves
+// no directly owned child, prepared fallback, or durable registry entry
+// behind -- and that the later destructor call performs no second cleanup
+// attempt and emits nothing extra.
+void testGen1CleanupUnknownDisposition(const std::string& selfPath) {
+  MediaPipeFaceLandmarkerHelperTrackingBackend backend(
+      baseChildConfig(selfPath));
+  expect(backend.start(), "gen1-cleanup-unknown: backend starts");
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample timedOut = backend.track(makeValidFrame(kSlowFrameTs));
+    expect(
+        timedOut.status == TrackingStatus::Lost,
+        "gen1-cleanup-unknown: gen1 timeout returns LOST");
+    expect(
+        stderrCapture.str() == kResultTimeoutLine,
+        "gen1-cleanup-unknown: gen1 emits exactly the result-timeout line");
+  }
+
+  // Arm the Failed-state-reachable one-shot throw seam AFTER the terminal
+  // ResultTimeout frame and BEFORE the recovery track() call, so it fires
+  // inside the recovery attempt's resolveChildCleanup() -> stop() while gen1
+  // is already Failed -- never reachable through the existing graceful-
+  // stop-only setForceNextGracefulStopThrow seam.
+  test_seam::setForceNextCleanupResolveThrow(true);
+
+  {
+    StreamCapture stdoutCapture(std::cout);
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample recovered = backend.track(makeValidFrame(8400));
+    expect(
+        recovered.status == TrackingStatus::Tracking,
+        "gen1-cleanup-unknown: a valid frame returns Tracking through the "
+        "replacement");
+    expect(
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupUnknownLine) +
+                kRecoverySucceededLine,
+        "gen1-cleanup-unknown: exactly the unknown gen1-cleanup line "
+        "immediately followed by the unchanged recovery-succeeded line");
+    expect(
+        stdoutCapture.str().empty(),
+        "gen1-cleanup-unknown (stream boundary): stdout stays empty");
+  }
+
+  expect(
+      HelperProcessCleanupRegistry::instance().pendingCount() == 0,
+      "gen1-cleanup-unknown: the emergency ownership path leaves no durable "
+      "registry entry (no directly owned child or prepared fallback "
+      "survives)");
+
+  // The replacement generation (gen2) is healthy and still running at this
+  // point, so it legitimately holds its own outstanding child-fallback
+  // reservation for its whole lifetime -- the reservation baseline is only
+  // meaningful once gen2 itself is stopped below.
+  backend.stop();
+
+  expect(
+      HelperProcessCleanupRegistry::instance()
+              .childFallbackReservationCountForTest() == 0,
+      "gen1-cleanup-unknown: the child-fallback reservation returns to "
+      "baseline once the replacement generation is stopped");
+}
+
+// Case 14 (#592): the existing fixed one-shot child-cleanup-timeout seam
+// forces gen1's directly owned real child to be committed to the durable
+// cleanup registry instead of confirmed-released, proving the
+// "deferred-registry-transfer" disposition. Run LAST: disableAutoWorkerForTest()
+// is process-global, so every earlier test in this binary must keep relying
+// on the registry's normal (worker-driven or immediately-confirmed) behavior
+// undisturbed.
+void testGen1CleanupDeferredRegistryTransfer(const std::string& selfPath) {
+  auto& registry = HelperProcessCleanupRegistry::instance();
+  expect(
+      registry.pendingCount() == 0,
+      "gen1-cleanup-deferred: the initial registry baseline is zero");
+  registry.disableAutoWorkerForTest();
+
+  MediaPipeFaceLandmarkerHelperTrackingBackend backend(
+      baseChildConfig(selfPath));
+  expect(backend.start(), "gen1-cleanup-deferred: backend starts");
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample timedOut = backend.track(makeValidFrame(kSlowFrameTs));
+    expect(
+        timedOut.status == TrackingStatus::Lost,
+        "gen1-cleanup-deferred: gen1 timeout returns LOST");
+    expect(
+        stderrCapture.str() == kResultTimeoutLine,
+        "gen1-cleanup-deferred: gen1 emits exactly the result-timeout line");
+  }
+
+  // Force the next bounded termination to report unresolved (the request is
+  // still actually issued -- see setForceNextChildCleanupTimeout), so gen1's
+  // recovery cleanup commits the already-prepared fallback to the durable
+  // registry instead of confirming release.
+  test_seam::setForceNextChildCleanupTimeout(true);
+
+  {
+    StreamCapture stdoutCapture(std::cout);
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample recovered = backend.track(makeValidFrame(8500));
+    expect(
+        recovered.status == TrackingStatus::Tracking,
+        "gen1-cleanup-deferred: a valid frame returns Tracking through the "
+        "replacement");
+    expect(
+        stderrCapture.str() ==
+            std::string(kRecoveryGen1CleanupDeferredRegistryTransferLine) +
+                kRecoverySucceededLine,
+        "gen1-cleanup-deferred: exactly the deferred-registry-transfer "
+        "gen1-cleanup line immediately followed by the unchanged "
+        "recovery-succeeded line");
+    expect(
+        stdoutCapture.str().empty(),
+        "gen1-cleanup-deferred (stream boundary): stdout stays empty");
+  }
+
+  // The transferred entry may already be opportunistically resolved by this
+  // point: the SAME recovery track() call above also exchanges a frame
+  // through the healthy replacement (gen2), and gen2's own frame-transport
+  // write reserves the registry's independent writer slot via tryReserve(),
+  // which pumps (and can therefore reap) any already-resolvable entry as a
+  // side effect -- including gen1's real, already-terminated child. Either
+  // way there is never more than the one transferred entry, and the bounded
+  // drain below is the authoritative proof that it returns to baseline.
+  expect(
+      registry.pendingCount() <= 1,
+      "gen1-cleanup-deferred: at most the single transferred entry is ever "
+      "pending immediately after the recovery attempt");
+  expect(
+      pumpRegistryUntilEmptyOrDeadline(5000) == 0,
+      "gen1-cleanup-deferred: bounded pump() calls drain the transferred "
+      "entry back to the captured zero baseline");
+
+  // gen2 is healthy and still running at this point, so it legitimately
+  // holds its own outstanding child-fallback reservation for its whole
+  // lifetime -- the reservation baseline is only meaningful once gen2 itself
+  // is stopped below.
+  backend.stop();
+
+  expect(
+      registry.childFallbackReservationCountForTest() == 0,
+      "gen1-cleanup-deferred: the child-fallback reservation returns to "
+      "baseline once the replacement generation is stopped");
+}
+#endif
+
 int runTests(const std::string& selfPath) {
   testHealthyBaseline(selfPath);
   testExactOneTimeRecovery(selfPath);
@@ -1067,6 +1285,11 @@ int runTests(const std::string& selfPath) {
   testReplacementReadyTimeout(selfPath);
   testReplacementMalformedReady(selfPath);
   testReplacementConstructThrow(selfPath);
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  testGen1CleanupUnknownDisposition(selfPath);
+  // Must run last: disableAutoWorkerForTest() is process-global.
+  testGen1CleanupDeferredRegistryTransfer(selfPath);
+#endif
 
   if (gFailures != 0) {
     std::cerr << "[recovery-smoke] " << gFailures << " assertion(s) failed.\n";
