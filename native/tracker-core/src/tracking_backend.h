@@ -221,6 +221,29 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
   // replenished by success, elapsed time, frame count, session duration, or any
   // other event.
   int recoveryBudget_;
+
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  // v0.13.0 (#589 recovery-outcome observability smoke): fixed, closed enum
+  // selecting deterministic REPLACEMENT-generation-only behavior for the
+  // bounded-recovery-outcome smoke's four replacement-failure cases. Applied
+  // (temporarily, then restored) only to the copy of retainedConfig_ used for
+  // the single approved replacement construction inside
+  // maybeRecoverAfterResultTimeout() -- it never affects the initial
+  // generation, is never derived from a runtime/config/CLI value, and is
+  // compiled out of lvk-tracker-core.
+  enum class RecoveryTestOverride {
+    None,
+    ForceLaunchFailure,
+    ForceReadyTimeout,
+    ForceMalformedReady,
+    ForceConstructThrow,
+  };
+  void setRecoveryTestOverride(RecoveryTestOverride override) {
+    recoveryTestOverride_ = override;
+  }
+  RecoveryTestOverride recoveryTestOverride_ = RecoveryTestOverride::None;
+#endif
+
   // Per-session disposition of the #587 terminal-failure diagnostic: armed
   // only by a successful start(), then latched to Reported by the first
   // terminal track()-path failure, so at most one
@@ -280,6 +303,23 @@ class MediaPipeFaceLandmarkerHelperTrackingBackend final : public TrackingBacken
   }
   int testOnlyRemainingRecoveryBudget() const {
     return backend_.testOnlyRemainingRecoveryBudget();
+  }
+
+  // Test-target-only fixed enum + forwarder selecting deterministic
+  // REPLACEMENT-generation-only behavior for the #589 recovery-outcome smoke.
+  // decltype(backend_) names the owned type without spelling it, so this
+  // stays a plain forward of one of five fixed cases -- never a runtime,
+  // config, or CLI-derived value. Compiled out of production lvk-tracker-core.
+  enum class RecoveryTestOverride {
+    None,
+    ForceLaunchFailure,
+    ForceReadyTimeout,
+    ForceMalformedReady,
+    ForceConstructThrow,
+  };
+  void testOnlySetRecoveryOverride(RecoveryTestOverride override) {
+    backend_.setRecoveryTestOverride(
+        static_cast<decltype(backend_)::RecoveryTestOverride>(override));
   }
 #endif
 

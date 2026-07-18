@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <opencv2/core.hpp>
+#include <stdexcept>
 #include <vector>
 #endif
 
@@ -324,10 +325,49 @@ void FrameHelperTrackingBackend::maybeRecoverAfterResultTimeout() {
   // exposes no raw exception text or private path and leaves child ownership
   // resolved (a partially-started replacement is destroyed through its own
   // destructor by reset()).
+  //
+  // v0.13.0 (#589 recovery-outcome observability): replacementDiagnostic is
+  // captured here, before any catch cleanup could ever run, and defaults to
+  // None so both the exception path and a null replacement map to the fixed
+  // "none" label below -- never raw exception text.
   bool replacementStarted = false;
+  HelperDiagnosticCategory replacementDiagnostic = HelperDiagnosticCategory::None;
   try {
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    // Deterministic test-only exception path for the recovery-outcome smoke's
+    // "none" case. Never reachable outside a test-seam build; recoveryTestOverride_
+    // defaults to None, which never throws here.
+    if (recoveryTestOverride_ == RecoveryTestOverride::ForceConstructThrow) {
+      throw std::runtime_error(
+          "lvk-589-recovery-test: forced replacement construction failure");
+    }
+    // Temporarily apply a fixed, closed replacement-only override to the
+    // retained config for the smoke's three replacement-start-failure cases,
+    // then restore it immediately after construction -- the construction call
+    // below stays the exact approved `retainedConfig_` form in every build.
+    const HelperSessionConfig savedRetainedConfigForTest = retainedConfig_;
+    if (recoveryTestOverride_ == RecoveryTestOverride::ForceLaunchFailure) {
+      retainedConfig_.executablePath += "-lvk-589-recovery-test-missing";
+    } else if (
+        recoveryTestOverride_ == RecoveryTestOverride::ForceReadyTimeout) {
+      // A zero-budget ready wait times out on its very first check, before
+      // ever polling the child, regardless of how quickly it would have
+      // responded -- deterministic, not a race.
+      retainedConfig_.readyTimeoutMs = 0;
+    } else if (
+        recoveryTestOverride_ == RecoveryTestOverride::ForceMalformedReady) {
+      retainedConfig_.expectedReadySource =
+          "lvk-589-recovery-test-invalid-ready-source";
+    }
+#endif
     session_ = std::make_unique<HelperProcessSession>(retainedConfig_);
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    retainedConfig_ = savedRetainedConfigForTest;
+#endif
     replacementStarted = session_->start();
+    if (!replacementStarted) {
+      replacementDiagnostic = session_->lastDiagnostic();
+    }
   } catch (...) {
     session_.reset();
     replacementStarted = false;
@@ -336,6 +376,19 @@ void FrameHelperTrackingBackend::maybeRecoverAfterResultTimeout() {
   // Arm the replacement generation only on a successful start; a failed
   // start/ready stays suppressed and emits no #587 track-path line for it.
   armHelperSessionTerminalDiagnostic(replacementStarted, terminalDiagnostic_);
+
+  // v0.13.0 (#589 recovery-outcome observability): exactly one fixed
+  // recovery-outcome stderr line for this actual recovery attempt (this
+  // point is only reached after the exact trigger matched and the single
+  // lifetime budget was spent above). Contains only this fixed literal text
+  // and, on failure, an existing helperDiagnosticCategoryLabel() result --
+  // never raw exception text, paths, pids, or frame/session data.
+  if (replacementStarted) {
+    std::cerr << "[helper-session] recovery succeeded\n";
+  } else {
+    std::cerr << "[helper-session] recovery failed (category="
+              << helperDiagnosticCategoryLabel(replacementDiagnostic) << ")\n";
+  }
 }
 
 TrackingSample FrameHelperTrackingBackend::track(

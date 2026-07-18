@@ -103,6 +103,22 @@ constexpr const char* kMalformedMessageLine =
 constexpr const char* kTerminalFailurePrefix =
     "[helper-session] session failed";
 
+// The exact, fixed #589 recovery-outcome lines (owner-approved contract).
+// kRecoveryOutcomePrefix distinguishes these from the #587 terminal-failure
+// line above (kTerminalFailurePrefix) so absence/presence checks never
+// conflate the two independent one-line contracts.
+constexpr const char* kRecoverySucceededLine =
+    "[helper-session] recovery succeeded\n";
+constexpr const char* kRecoveryFailedLaunchFailureLine =
+    "[helper-session] recovery failed (category=launch-failure)\n";
+constexpr const char* kRecoveryFailedReadyTimeoutLine =
+    "[helper-session] recovery failed (category=ready-timeout)\n";
+constexpr const char* kRecoveryFailedMalformedMessageLine =
+    "[helper-session] recovery failed (category=malformed-message)\n";
+constexpr const char* kRecoveryFailedNoneLine =
+    "[helper-session] recovery failed (category=none)\n";
+constexpr const char* kRecoveryOutcomePrefix = "[helper-session] recovery";
+
 // Caller-controlled frame-timestamp sentinels selecting the child's per-frame
 // behavior. Any timestamp not listed here is an ordinary tracking frame.
 constexpr long long kSlowFrameTs = 900001;       // delayed result -> ResultTimeout
@@ -429,6 +445,9 @@ void testHealthyBaseline(const std::string& selfPath) {
       stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
       "healthy: no terminal-failure diagnostic on a healthy session");
   expect(
+      stderrCapture.str().find(kRecoveryOutcomePrefix) == std::string::npos,
+      "healthy: no recovery-outcome line without a recovery attempt");
+  expect(
       stdoutCapture.str().empty(),
       "healthy (stream boundary): stdout stays empty during backend operation");
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
@@ -497,6 +516,10 @@ void testExactOneTimeRecovery(const std::string& selfPath) {
     expect(
         stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
         "recovery: the successful replacement exchange emits no diagnostic");
+    expect(
+        stderrCapture.str() == kRecoverySucceededLine,
+        "recovery: the successful replacement emits exactly the recovery "
+        "succeeded line");
     expect(
         stdoutCapture.str().empty(),
         "recovery (stream boundary): stdout stays empty through the "
@@ -572,6 +595,14 @@ void testExhaustedBudgetPerGeneration(const std::string& selfPath) {
   expect(
       countOccurrences(diagnostics, kResultTimeoutLine) == 2,
       "exhausted: both lines are the fixed result-timeout category");
+  expect(
+      countOccurrences(diagnostics, kRecoverySucceededLine) == 1,
+      "exhausted: exactly one recovery-succeeded line (the single "
+      "reconstruction)");
+  expect(
+      countOccurrences(diagnostics, kRecoveryOutcomePrefix) == 1,
+      "exhausted: no second recovery-outcome line once the budget is spent "
+      "(gen2's own terminal timeout is a #587 line, not a new attempt)");
 
   backend.stop();
 }
@@ -598,6 +629,9 @@ void testLegitimateNoFace(const std::string& selfPath) {
   expect(
       stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
       "no-face: no terminal line for a legitimate no-face result");
+  expect(
+      stderrCapture.str().find(kRecoveryOutcomePrefix) == std::string::npos,
+      "no-face: no recovery-outcome line without a recovery attempt");
   expect(
       stdoutCapture.str().empty(),
       "no-face (stream boundary): stdout stays empty");
@@ -632,6 +666,9 @@ void testInvalidImageNonTerminal(const std::string& selfPath) {
   expect(
       stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
       "invalid-image: no terminal line for a non-terminal invalid image");
+  expect(
+      stderrCapture.str().find(kRecoveryOutcomePrefix) == std::string::npos,
+      "invalid-image: no recovery-outcome line without a recovery attempt");
   expect(
       stdoutCapture.str().empty(),
       "invalid-image (stream boundary): stdout stays empty");
@@ -675,6 +712,10 @@ void testOtherTerminalCategoryNoRecovery(const std::string& selfPath) {
   expect(
       countOccurrences(stderrCapture.str(), kTerminalFailurePrefix) == 1,
       "other-terminal: still exactly one terminal line (no reconstruction)");
+  expect(
+      stderrCapture.str().find(kRecoveryOutcomePrefix) == std::string::npos,
+      "other-terminal: no recovery-outcome line for a non-ResultTimeout "
+      "category");
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
   expect(
       backend.testOnlyRemainingRecoveryBudget() == 1,
@@ -709,6 +750,10 @@ void testStartFailureExcluded(const std::string& selfPath) {
       stderrCapture.str().find(kTerminalFailurePrefix) == std::string::npos,
       "start-failure: a start/ready failure never emits a track-path terminal "
       "line");
+  expect(
+      stderrCapture.str().find(kRecoveryOutcomePrefix) == std::string::npos,
+      "start-failure: no recovery-outcome line without a Reported track-path "
+      "failure");
   expect(
       stdoutCapture.str().empty(),
       "start-failure (stream boundary): stdout stays empty");
@@ -753,6 +798,258 @@ void testSyntheticRouteDoesNotRecover(const std::string& selfPath) {
   expect(
       countOccurrences(stderrCapture.str(), kResultTimeoutLine) == 1,
       "synthetic-route: the line is the fixed result-timeout category");
+  expect(
+      stderrCapture.str().find(kRecoveryOutcomePrefix) == std::string::npos,
+      "synthetic-route: the Disabled policy never attempts recovery, so no "
+      "recovery-outcome line is ever emitted");
+
+  backend.stop();
+}
+
+// Cases 9-12: the four deterministic replacement-failure outcomes (#589
+// recovery-outcome observability). Each drives gen1 into the SAME natural
+// ResultTimeout as testExactOneTimeRecovery, then uses the fixed, test-seam-
+// only RecoveryTestOverride to force one specific outcome for the single
+// approved REPLACEMENT construction/start only -- gen1 is always the same
+// real, healthy, unmodified child. Never modifies HelperProcessSession,
+// production defaults, or the trigger/budget/state-machine.
+
+// Case 9: forced replacement launch failure -> exactly one
+// "recovery failed (category=launch-failure)" line, then permanent LOST.
+void testReplacementLaunchFailure(const std::string& selfPath) {
+  MediaPipeFaceLandmarkerHelperTrackingBackend backend(baseChildConfig(selfPath));
+  expect(backend.start(), "replacement-launch-failure: backend starts");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  backend.testOnlySetRecoveryOverride(
+      MediaPipeFaceLandmarkerHelperTrackingBackend::RecoveryTestOverride::
+          ForceLaunchFailure);
+#endif
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample timedOut = backend.track(makeValidFrame(kSlowFrameTs));
+    expect(
+        timedOut.status == TrackingStatus::Lost,
+        "replacement-launch-failure: gen1 timeout returns LOST");
+    expect(
+        stderrCapture.str() == kResultTimeoutLine,
+        "replacement-launch-failure: gen1 emits exactly the result-timeout "
+        "line");
+  }
+
+  {
+    StreamCapture stdoutCapture(std::cout);
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterAttempt = backend.track(makeValidFrame(8000));
+    expect(
+        afterAttempt.status == TrackingStatus::Lost,
+        "replacement-launch-failure: the failed replacement returns LOST");
+    expect(
+        stderrCapture.str() == kRecoveryFailedLaunchFailureLine,
+        "replacement-launch-failure: exactly one recovery-failed "
+        "launch-failure line");
+    expect(
+        stdoutCapture.str().empty(),
+        "replacement-launch-failure (stream boundary): stdout stays empty");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    expect(
+        backend.testOnlyRemainingRecoveryBudget() == 0,
+        "replacement-launch-failure: the single lifetime attempt is spent");
+#endif
+  }
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterBudget = backend.track(makeValidFrame(8001));
+    expect(
+        afterBudget.status == TrackingStatus::Lost,
+        "replacement-launch-failure: stays LOST after the budget is spent");
+    expect(
+        stderrCapture.str().empty(),
+        "replacement-launch-failure: no further diagnostic once the budget "
+        "is spent");
+  }
+
+  backend.stop();
+}
+
+// Case 10: forced replacement ready timeout -> exactly one
+// "recovery failed (category=ready-timeout)" line, then permanent LOST.
+void testReplacementReadyTimeout(const std::string& selfPath) {
+  MediaPipeFaceLandmarkerHelperTrackingBackend backend(baseChildConfig(selfPath));
+  expect(backend.start(), "replacement-ready-timeout: backend starts");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  backend.testOnlySetRecoveryOverride(
+      MediaPipeFaceLandmarkerHelperTrackingBackend::RecoveryTestOverride::
+          ForceReadyTimeout);
+#endif
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample timedOut = backend.track(makeValidFrame(kSlowFrameTs));
+    expect(
+        timedOut.status == TrackingStatus::Lost,
+        "replacement-ready-timeout: gen1 timeout returns LOST");
+    expect(
+        stderrCapture.str() == kResultTimeoutLine,
+        "replacement-ready-timeout: gen1 emits exactly the result-timeout "
+        "line");
+  }
+
+  {
+    StreamCapture stdoutCapture(std::cout);
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterAttempt = backend.track(makeValidFrame(8100));
+    expect(
+        afterAttempt.status == TrackingStatus::Lost,
+        "replacement-ready-timeout: the failed replacement returns LOST");
+    expect(
+        stderrCapture.str() == kRecoveryFailedReadyTimeoutLine,
+        "replacement-ready-timeout: exactly one recovery-failed "
+        "ready-timeout line");
+    expect(
+        stdoutCapture.str().empty(),
+        "replacement-ready-timeout (stream boundary): stdout stays empty");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    expect(
+        backend.testOnlyRemainingRecoveryBudget() == 0,
+        "replacement-ready-timeout: the single lifetime attempt is spent");
+#endif
+  }
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterBudget = backend.track(makeValidFrame(8101));
+    expect(
+        afterBudget.status == TrackingStatus::Lost,
+        "replacement-ready-timeout: stays LOST after the budget is spent");
+    expect(
+        stderrCapture.str().empty(),
+        "replacement-ready-timeout: no further diagnostic once the budget "
+        "is spent");
+  }
+
+  backend.stop();
+}
+
+// Case 11: forced replacement malformed ready -> exactly one
+// "recovery failed (category=malformed-message)" line, then permanent LOST.
+void testReplacementMalformedReady(const std::string& selfPath) {
+  MediaPipeFaceLandmarkerHelperTrackingBackend backend(baseChildConfig(selfPath));
+  expect(backend.start(), "replacement-malformed-ready: backend starts");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  backend.testOnlySetRecoveryOverride(
+      MediaPipeFaceLandmarkerHelperTrackingBackend::RecoveryTestOverride::
+          ForceMalformedReady);
+#endif
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample timedOut = backend.track(makeValidFrame(kSlowFrameTs));
+    expect(
+        timedOut.status == TrackingStatus::Lost,
+        "replacement-malformed-ready: gen1 timeout returns LOST");
+    expect(
+        stderrCapture.str() == kResultTimeoutLine,
+        "replacement-malformed-ready: gen1 emits exactly the result-timeout "
+        "line");
+  }
+
+  {
+    StreamCapture stdoutCapture(std::cout);
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterAttempt = backend.track(makeValidFrame(8200));
+    expect(
+        afterAttempt.status == TrackingStatus::Lost,
+        "replacement-malformed-ready: the failed replacement returns LOST");
+    expect(
+        stderrCapture.str() == kRecoveryFailedMalformedMessageLine,
+        "replacement-malformed-ready: exactly one recovery-failed "
+        "malformed-message line");
+    expect(
+        stdoutCapture.str().empty(),
+        "replacement-malformed-ready (stream boundary): stdout stays empty");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    expect(
+        backend.testOnlyRemainingRecoveryBudget() == 0,
+        "replacement-malformed-ready: the single lifetime attempt is spent");
+#endif
+  }
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterBudget = backend.track(makeValidFrame(8201));
+    expect(
+        afterBudget.status == TrackingStatus::Lost,
+        "replacement-malformed-ready: stays LOST after the budget is spent");
+    expect(
+        stderrCapture.str().empty(),
+        "replacement-malformed-ready: no further diagnostic once the budget "
+        "is spent");
+  }
+
+  backend.stop();
+}
+
+// Case 12: deterministic test-only replacement construction exception ->
+// session_ left null, exactly one "recovery failed (category=none)" line,
+// then permanent LOST. Proves the exception/null path never leaks raw
+// exception text and always maps to the fixed "none" label.
+void testReplacementConstructThrow(const std::string& selfPath) {
+  MediaPipeFaceLandmarkerHelperTrackingBackend backend(baseChildConfig(selfPath));
+  expect(backend.start(), "replacement-none: backend starts");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  backend.testOnlySetRecoveryOverride(
+      MediaPipeFaceLandmarkerHelperTrackingBackend::RecoveryTestOverride::
+          ForceConstructThrow);
+#endif
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample timedOut = backend.track(makeValidFrame(kSlowFrameTs));
+    expect(
+        timedOut.status == TrackingStatus::Lost,
+        "replacement-none: gen1 timeout returns LOST");
+    expect(
+        stderrCapture.str() == kResultTimeoutLine,
+        "replacement-none: gen1 emits exactly the result-timeout line");
+  }
+
+  {
+    StreamCapture stdoutCapture(std::cout);
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterAttempt = backend.track(makeValidFrame(8300));
+    expect(
+        afterAttempt.status == TrackingStatus::Lost,
+        "replacement-none: the forced construction failure returns LOST");
+    expect(
+        stderrCapture.str() == kRecoveryFailedNoneLine,
+        "replacement-none: exactly one recovery-failed none line, never raw "
+        "exception text");
+    expect(
+        stdoutCapture.str().empty(),
+        "replacement-none (stream boundary): stdout stays empty");
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    expect(
+        backend.testOnlyRemainingRecoveryBudget() == 0,
+        "replacement-none: the single lifetime attempt is spent");
+    expect(
+        !backend.testOnlyDirectlyOwnsChild(),
+        "replacement-none: no child owned after a forced construction "
+        "failure (session_ left null)");
+#endif
+  }
+
+  {
+    StreamCapture stderrCapture(std::cerr);
+    const TrackingSample afterBudget = backend.track(makeValidFrame(8301));
+    expect(
+        afterBudget.status == TrackingStatus::Lost,
+        "replacement-none: stays LOST after the budget is spent");
+    expect(
+        stderrCapture.str().empty(),
+        "replacement-none: no further diagnostic once the budget is spent");
+  }
 
   backend.stop();
 }
@@ -766,6 +1063,10 @@ int runTests(const std::string& selfPath) {
   testOtherTerminalCategoryNoRecovery(selfPath);
   testStartFailureExcluded(selfPath);
   testSyntheticRouteDoesNotRecover(selfPath);
+  testReplacementLaunchFailure(selfPath);
+  testReplacementReadyTimeout(selfPath);
+  testReplacementMalformedReady(selfPath);
+  testReplacementConstructThrow(selfPath);
 
   if (gFailures != 0) {
     std::cerr << "[recovery-smoke] " << gFailures << " assertion(s) failed.\n";
