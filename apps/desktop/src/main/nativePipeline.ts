@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import nodeProcess from 'node:process'
 import { createInterface, type Interface as RlInterface } from 'node:readline'
@@ -9,6 +9,7 @@ import type {
   NativeRuntimeCapabilities,
   NativePipelineCameraSource,
   NativePipelineFaceDetector,
+  NativePipelineTrackingBackend,
   NativeTrackerStatus
 } from '../preload/api'
 import {
@@ -31,9 +32,61 @@ const DEFAULT_CAMERA_FPS = 60
 const DEFAULT_CAMERA_WIDTH = 640
 const DEFAULT_CAMERA_HEIGHT = 480
 
+// #595: the only two approved private environment-variable keys for the
+// opt-in mediapipe-face-landmarker development route. Their values are read
+// here in Electron main only and must never be persisted, rendered, copied
+// into diagnostics, or interpolated into a status/error message.
+const MEDIAPIPE_PYTHON_ENV_VAR = 'LVK_MEDIAPIPE_SMOKE_PYTHON'
+const MEDIAPIPE_MODEL_ASSET_ENV_VAR = 'LVK_MEDIAPIPE_MODEL_ASSET_PATH'
+
+// Fixed, repository-owned relative path: the helper script location is never
+// accepted from IPC, renderer state, persisted settings, or an environment
+// variable.
+const MEDIAPIPE_HELPER_SCRIPT_RELATIVE_PATH = join(
+  'native',
+  'tracker-core',
+  'helpers',
+  'mediapipe_face_landmarker',
+  'face_landmarker_helper_session.py'
+)
+
+const MEDIAPIPE_INCOMPATIBLE_CAMERA_SOURCE_ERROR =
+  "The mediapipe-face-landmarker tracking backend requires cameraSource 'opencv'."
+const MEDIAPIPE_PYTHON_CONFIG_ERROR = `The mediapipe-face-landmarker tracking backend requires ${MEDIAPIPE_PYTHON_ENV_VAR} to point to an existing local Python executable file.`
+const MEDIAPIPE_MODEL_CONFIG_ERROR = `The mediapipe-face-landmarker tracking backend requires ${MEDIAPIPE_MODEL_ASSET_ENV_VAR} to point to an existing local model asset file.`
+const MEDIAPIPE_HELPER_SCRIPT_ERROR =
+  'The mediapipe-face-landmarker tracking backend requires the repository-owned MediaPipe helper script at native/tracker-core/helpers/mediapipe_face_landmarker/face_landmarker_helper_session.py to exist.'
+
 function getConfiguredFaceCascadePath(): string | null {
   const cascadePath = nodeProcess.env.LVK_FACE_CASCADE_PATH?.trim()
   return cascadePath ? cascadePath : null
+}
+
+function getConfiguredMediapipePythonPath(): string | null {
+  const pythonPath = nodeProcess.env[MEDIAPIPE_PYTHON_ENV_VAR]?.trim()
+  return pythonPath ? pythonPath : null
+}
+
+function getConfiguredMediapipeModelAssetPath(): string | null {
+  const modelAssetPath = nodeProcess.env[MEDIAPIPE_MODEL_ASSET_ENV_VAR]?.trim()
+  return modelAssetPath ? modelAssetPath : null
+}
+
+function resolveMediapipeHelperScriptPath(repoRoot: string): string {
+  return join(repoRoot, MEDIAPIPE_HELPER_SCRIPT_RELATIVE_PATH)
+}
+
+// Treats missing, empty, whitespace-only, nonexistent, or non-file
+// configuration as unavailable. Never throws or surfaces raw fs error text.
+function isExistingFile(candidatePath: string | null): boolean {
+  if (!candidatePath) {
+    return false
+  }
+  try {
+    return existsSync(candidatePath) && statSync(candidatePath).isFile()
+  } catch {
+    return false
+  }
 }
 
 function getFaceDetector(
@@ -365,7 +418,8 @@ export class NativePipelineManager {
     cameraIndex = 0,
     cameraFps = DEFAULT_CAMERA_FPS,
     cameraWidth = DEFAULT_CAMERA_WIDTH,
-    cameraHeight = DEFAULT_CAMERA_HEIGHT
+    cameraHeight = DEFAULT_CAMERA_HEIGHT,
+    trackingBackend = 'face-pipeline'
   }: {
     cameraSource?: NativePipelineCameraSource
     faceDetector?: NativePipelineFaceDetector
@@ -373,6 +427,7 @@ export class NativePipelineManager {
     cameraFps?: number
     cameraWidth?: number
     cameraHeight?: number
+    trackingBackend?: NativePipelineTrackingBackend
   } = {}): LvkRuntimeStatus {
     if (
       isActiveStatus(this.status.nativeTrackerStatus) ||
@@ -411,6 +466,83 @@ export class NativePipelineManager {
       return this.getStatus()
     }
 
+    let mediapipePythonPath: string | null = null
+    let mediapipeModelAssetPath: string | null = null
+    let mediapipeHelperScriptPath: string | null = null
+
+    if (trackingBackend === 'mediapipe-face-landmarker') {
+      if (cameraSource !== 'opencv') {
+        this.status = {
+          ...this.status,
+          nativeTrackerStatus: 'error',
+          motionBridgeStatus: 'not_started',
+          startupWarning: 'none',
+          pipelineCameraSource: cameraSource,
+          pipelineFaceDetector: faceDetector,
+          pipelineCameraIndex: cameraIndex,
+          pipelineCameraFps: cameraFps,
+          pipelineCameraWidth: cameraWidth,
+          pipelineCameraHeight: cameraHeight,
+          lastError: MEDIAPIPE_INCOMPATIBLE_CAMERA_SOURCE_ERROR
+        }
+        return this.getStatus()
+      }
+
+      mediapipePythonPath = getConfiguredMediapipePythonPath()
+      if (!isExistingFile(mediapipePythonPath)) {
+        this.status = {
+          ...this.status,
+          nativeTrackerStatus: 'error',
+          motionBridgeStatus: 'not_started',
+          startupWarning: 'none',
+          pipelineCameraSource: cameraSource,
+          pipelineFaceDetector: faceDetector,
+          pipelineCameraIndex: cameraIndex,
+          pipelineCameraFps: cameraFps,
+          pipelineCameraWidth: cameraWidth,
+          pipelineCameraHeight: cameraHeight,
+          lastError: MEDIAPIPE_PYTHON_CONFIG_ERROR
+        }
+        return this.getStatus()
+      }
+
+      mediapipeModelAssetPath = getConfiguredMediapipeModelAssetPath()
+      if (!isExistingFile(mediapipeModelAssetPath)) {
+        this.status = {
+          ...this.status,
+          nativeTrackerStatus: 'error',
+          motionBridgeStatus: 'not_started',
+          startupWarning: 'none',
+          pipelineCameraSource: cameraSource,
+          pipelineFaceDetector: faceDetector,
+          pipelineCameraIndex: cameraIndex,
+          pipelineCameraFps: cameraFps,
+          pipelineCameraWidth: cameraWidth,
+          pipelineCameraHeight: cameraHeight,
+          lastError: MEDIAPIPE_MODEL_CONFIG_ERROR
+        }
+        return this.getStatus()
+      }
+
+      mediapipeHelperScriptPath = resolveMediapipeHelperScriptPath(repoRoot)
+      if (!isExistingFile(mediapipeHelperScriptPath)) {
+        this.status = {
+          ...this.status,
+          nativeTrackerStatus: 'error',
+          motionBridgeStatus: 'not_started',
+          startupWarning: 'none',
+          pipelineCameraSource: cameraSource,
+          pipelineFaceDetector: faceDetector,
+          pipelineCameraIndex: cameraIndex,
+          pipelineCameraFps: cameraFps,
+          pipelineCameraWidth: cameraWidth,
+          pipelineCameraHeight: cameraHeight,
+          lastError: MEDIAPIPE_HELPER_SCRIPT_ERROR
+        }
+        return this.getStatus()
+      }
+    }
+
     const trackerArgs = createTrackerArgs(
       cameraSource,
       faceDetector,
@@ -419,6 +551,24 @@ export class NativePipelineManager {
       cameraWidth,
       cameraHeight
     )
+
+    if (
+      trackingBackend === 'mediapipe-face-landmarker' &&
+      mediapipePythonPath &&
+      mediapipeHelperScriptPath &&
+      mediapipeModelAssetPath
+    ) {
+      trackerArgs.push(
+        '--tracking-backend',
+        'mediapipe-face-landmarker',
+        '--mediapipe-python',
+        mediapipePythonPath,
+        '--mediapipe-helper-script',
+        mediapipeHelperScriptPath,
+        '--mediapipe-model-asset',
+        mediapipeModelAssetPath
+      )
+    }
 
     if (trackerExecutablePath === null) {
       this.status = {

@@ -16,6 +16,12 @@ export type MotionBridgeStatus =
 export type NativePipelineCameraSource = 'dummy' | 'opencv'
 export type NativePipelineFaceDetector = 'noop' | 'opencv'
 
+// Closed set of Electron-launchable Native Core tracking backends (#595).
+// 'face-pipeline' is the current default; 'mediapipe-face-landmarker' is the
+// existing opt-in development route. Adding a production backend selector,
+// renderer UI, or settings persistence is out of scope for this type.
+export type NativePipelineTrackingBackend = 'face-pipeline' | 'mediapipe-face-landmarker'
+
 // Distinct from nativeTrackerStatus/motionBridgeStatus: this represents a
 // bounded "tracker and bridge started, but no MotionFrame arrived yet" signal,
 // not a spawn failure, bridge failure, or tracker exit.
@@ -28,6 +34,7 @@ export interface NativePipelineStartOptions {
   cameraFps?: number
   cameraWidth?: number
   cameraHeight?: number
+  trackingBackend?: NativePipelineTrackingBackend
 }
 
 export interface DesktopRuntimeSettings {

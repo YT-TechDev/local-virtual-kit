@@ -8,7 +8,8 @@ import {
   LVK_IPC_CHANNELS,
   type NativePipelineCameraSource,
   type NativePipelineFaceDetector,
-  type NativePipelineStartOptions
+  type NativePipelineStartOptions,
+  type NativePipelineTrackingBackend
 } from '../preload/api'
 
 const nativePipeline = new NativePipelineManager()
@@ -41,15 +42,23 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
     throw new Error('Native pipeline start options must be an object when provided.')
   }
 
-  const { cameraSource, faceDetector, cameraIndex, cameraFps, cameraWidth, cameraHeight } =
-    options as {
-      cameraSource?: unknown
-      faceDetector?: unknown
-      cameraIndex?: unknown
-      cameraFps?: unknown
-      cameraWidth?: unknown
-      cameraHeight?: unknown
-    }
+  const {
+    cameraSource,
+    faceDetector,
+    cameraIndex,
+    cameraFps,
+    cameraWidth,
+    cameraHeight,
+    trackingBackend
+  } = options as {
+    cameraSource?: unknown
+    faceDetector?: unknown
+    cameraIndex?: unknown
+    cameraFps?: unknown
+    cameraWidth?: unknown
+    cameraHeight?: unknown
+    trackingBackend?: unknown
+  }
   const parsedOptions: NativePipelineStartOptions = {}
 
   if (cameraSource !== undefined) {
@@ -126,6 +135,16 @@ function parseNativePipelineStartOptions(options: unknown): NativePipelineStartO
     }
 
     parsedOptions.cameraHeight = cameraHeight
+  }
+
+  if (trackingBackend !== undefined) {
+    if (trackingBackend !== 'face-pipeline' && trackingBackend !== 'mediapipe-face-landmarker') {
+      throw new Error(
+        'Native pipeline tracking backend must be either face-pipeline or mediapipe-face-landmarker.'
+      )
+    }
+
+    parsedOptions.trackingBackend = trackingBackend satisfies NativePipelineTrackingBackend
   }
 
   return parsedOptions
