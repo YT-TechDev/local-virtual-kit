@@ -164,18 +164,46 @@ requireNoMatch(
 );
 
 // ---------------------------------------------------------------------------
-// 4. Incompatible state blocks Start (rejected in both start handlers)
+// 4. Incompatible state blocks Start via the central canStartNativePipeline
+//    predicate (primary UI guard), with a defensive early-return guard
+//    retained in both start handlers (defense in depth, not the only guard)
 // ---------------------------------------------------------------------------
 
+// Primary guard: canStartNativePipeline itself must require
+// !isMediaPipeCameraIncompatible, so both Start buttons (which bind
+// disabled={!canStartNativePipeline}) are disabled consistently and the
+// existing readiness summary reports the incompatible state as not ready.
+requireMatch(
+  rendererSource,
+  /const\s+canStartNativePipeline\s*=\s*Boolean\(\s*\n?\s*desktopApi\s*&&\s*\n?\s*runtimeStatus\s*&&\s*\n?\s*!isPipelineBusy\s*&&\s*\n?\s*!isPipelineActionPending\s*&&\s*\n?\s*!isMediaPipeCameraIncompatible\s*\n?\s*\)/u,
+  "canStartNativePipeline must require desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending && !isMediaPipeCameraIncompatible",
+);
+
+// Both Start buttons must stay bound to the central predicate (no bespoke
+// second disabled condition bypassing it)
+requireMatch(
+  rendererSource,
+  /<button[\s\S]*?onClick=\{startNativePipeline\}[\s\S]*?disabled=\{!canStartNativePipeline\}/u,
+  "Start native pipeline button must bind disabled={!canStartNativePipeline}",
+);
+requireMatch(
+  rendererSource,
+  /<button[\s\S]*?onClick=\{startNativePipelineAndOpenPreview\}[\s\S]*?disabled=\{!canStartNativePipeline\}/u,
+  "Start and open native preview button must bind disabled={!canStartNativePipeline}",
+);
+
+// Defense in depth: both start handlers retain their own early-return guard
+// so a stale canStartNativePipeline snapshot can never start an incompatible
+// pipeline even if a button were somehow clicked while disabled
 requireMatch(
   rendererSource,
   /const\s+startNativePipeline\s*=\s*async[\s\S]*?if\s*\(\s*!desktopApi\s*\|\|\s*pipelineActionPending\s*\|\|\s*isMediaPipeCameraIncompatible\s*\)\s*\{\s*\n\s*return\s*\n\s*\}/u,
-  "startNativePipeline must return early when isMediaPipeCameraIncompatible is true",
+  "startNativePipeline must retain its defensive early return when isMediaPipeCameraIncompatible is true",
 );
 requireMatch(
   rendererSource,
   /const\s+startNativePipelineAndOpenPreview\s*=\s*async[\s\S]*?if\s*\(\s*!desktopApi\s*\|\|\s*pipelineActionPending\s*\|\|\s*isMediaPipeCameraIncompatible\s*\)\s*\{\s*\n\s*return\s*\n\s*\}/u,
-  "startNativePipelineAndOpenPreview must return early when isMediaPipeCameraIncompatible is true",
+  "startNativePipelineAndOpenPreview must retain its defensive early return when isMediaPipeCameraIncompatible is true",
 );
 
 // A concise, accessible compatibility explanation renders while the
@@ -293,7 +321,8 @@ console.log(
     "isMediaPipeCameraIncompatible requires the mediapipe-face-landmarker backend plus a non-OpenCV camera source; " +
     "the mediapipe-face-landmarker option is disabled while a non-OpenCV camera source is selected; " +
     "backend selection never rewrites cameraSource, and camera-source selection never rewrites trackingBackend; " +
-    "both start handlers reject (return early) when isMediaPipeCameraIncompatible is true, and an accessible role=alert compatibility explanation renders; " +
+    "canStartNativePipeline requires !isMediaPipeCameraIncompatible alongside the existing busy/pending guards, and both Start buttons stay bound to disabled={!canStartNativePipeline}; " +
+    "both start handlers additionally retain a defensive early return when isMediaPipeCameraIncompatible is true, and an accessible role=alert compatibility explanation renders; " +
     "both start actions pass trackingBackend: selectedTrackingBackend through the existing typed desktopApi.startNativePipeline call, with no new IPC channel; " +
     "updateSelectedTrackingBackend only touches trackingBackend when saving; " +
     "the selector obeys the existing isPipelineBusy/isPipelineActionPending disabling; " +

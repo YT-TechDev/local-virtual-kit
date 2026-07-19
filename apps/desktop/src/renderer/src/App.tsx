@@ -1011,7 +1011,11 @@ function App(): React.JSX.Element {
   const isPipelineActionPending = pipelineActionPending !== null
   const isObsActionPending = obsActionPending !== null
   const canStartNativePipeline = Boolean(
-    desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending
+    desktopApi &&
+    runtimeStatus &&
+    !isPipelineBusy &&
+    !isPipelineActionPending &&
+    !isMediaPipeCameraIncompatible
   )
   const canStopNativePipeline = runtimeStatus
     ? !isPipelineActionPending &&
