@@ -142,7 +142,7 @@ requireMatch(
 
 // isStopping must be reset to false before starting the bridge
 const isStoppingFalseBeforeStart = src.match(
-  /this\.isStopping\s*=\s*false[\s\S]{0,600}?startMotionBridgeServer\s*\(/u,
+  /this\.isStopping\s*=\s*false[\s\S]{0,800}?startMotionBridgeServer\s*\(/u,
 );
 if (!isStoppingFalseBeforeStart) {
   fail(

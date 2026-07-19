@@ -118,7 +118,8 @@ requireMatch(
 
 // ---------------------------------------------------------------------------
 // 13. DesktopRuntimeSettings and the renderer carry trackingBackend (#596);
-//     LvkRuntimeStatus still must not (belongs to #597)
+//     LvkRuntimeStatus now exposes the sanitized pipelineTrackingBackend/
+//     pipelineRouteReadiness fields approved for #597
 // ---------------------------------------------------------------------------
 
 const desktopRuntimeSettingsBlockMatch = apiSource.match(
@@ -139,11 +140,16 @@ const lvkRuntimeStatusBlockMatch = apiSource.match(
 if (!lvkRuntimeStatusBlockMatch) {
   fail("api.ts must declare export interface LvkRuntimeStatus");
 }
-if (/trackingBackend/u.test(lvkRuntimeStatusBlockMatch[1])) {
-  fail(
-    "LvkRuntimeStatus must not add a renderer-facing trackingBackend field in this Issue (belongs to #597)",
-  );
-}
+requireMatch(
+  lvkRuntimeStatusBlockMatch[1],
+  /pipelineTrackingBackend:\s*NativePipelineTrackingBackend/u,
+  "LvkRuntimeStatus must declare pipelineTrackingBackend: NativePipelineTrackingBackend (#597)",
+);
+requireMatch(
+  lvkRuntimeStatusBlockMatch[1],
+  /pipelineRouteReadiness:\s*NativePipelineRouteReadiness/u,
+  "LvkRuntimeStatus must declare pipelineRouteReadiness: NativePipelineRouteReadiness (#597)",
+);
 
 requireMatch(
   rendererSource,
@@ -444,7 +450,7 @@ console.log(
   "Electron tracking-backend launch contract OK: " +
     "NativePipelineTrackingBackend is a closed union of exactly face-pipeline and mediapipe-face-landmarker; " +
     "NativePipelineStartOptions declares the optional typed trackingBackend field with no helper-script path input; " +
-    "DesktopRuntimeSettings and the renderer carry the persisted trackingBackend token (#596); LvkRuntimeStatus stays free of it (#597); " +
+    "DesktopRuntimeSettings and the renderer carry the persisted trackingBackend token (#596); LvkRuntimeStatus declares the sanitized pipelineTrackingBackend/pipelineRouteReadiness fields (#597); " +
     "the IPC parser rejects any explicit value other than the two approved tokens and only assigns after validation; " +
     "NativePipelineManager.start() defaults trackingBackend to face-pipeline; " +
     "createTrackerArgs() never unconditionally adds MediaPipe flags, keeping the default face-pipeline argv unchanged; " +

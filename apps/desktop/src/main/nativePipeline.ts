@@ -9,6 +9,7 @@ import type {
   NativeRuntimeCapabilities,
   NativePipelineCameraSource,
   NativePipelineFaceDetector,
+  NativePipelineRouteReadiness,
   NativePipelineTrackingBackend,
   NativeTrackerStatus
 } from '../preload/api'
@@ -154,6 +155,24 @@ function getFaceDetectorLabel(faceDetector: NativePipelineFaceDetector): string 
   return faceDetector === 'opencv' ? 'OpenCV face detection' : 'noop face detector'
 }
 
+// Before any MediaPipe-specific preflight check has run for this start
+// attempt (default route, or an unrelated rejection short-circuits start()
+// first), the route readiness is either not-applicable (face-pipeline) or
+// unchecked (mediapipe-face-landmarker, validation not yet reached).
+function getUncheckedOrNotApplicableReadiness(
+  trackingBackend: NativePipelineTrackingBackend
+): NativePipelineRouteReadiness {
+  return trackingBackend === 'mediapipe-face-landmarker' ? 'unchecked' : 'not-applicable'
+}
+
+// Once every MediaPipe preflight check has passed, the route is ready even if
+// a later unrelated executable/spawn/runtime failure occurs.
+function getReadyOrNotApplicableReadiness(
+  trackingBackend: NativePipelineTrackingBackend
+): NativePipelineRouteReadiness {
+  return trackingBackend === 'mediapipe-face-landmarker' ? 'ready' : 'not-applicable'
+}
+
 function createInitialStatus(): LvkRuntimeStatus {
   return {
     previewDummyUrl: PREVIEW_DUMMY_URL,
@@ -164,6 +183,8 @@ function createInitialStatus(): LvkRuntimeStatus {
     nativeTrackerStatus: 'not_started',
     motionBridgeStatus: 'not_started',
     startupWarning: 'none',
+    pipelineTrackingBackend: 'face-pipeline',
+    pipelineRouteReadiness: 'not-applicable',
     pipelineCameraSource: 'dummy',
     pipelineFaceDetector: 'noop',
     pipelineCameraIndex: 0,
@@ -454,6 +475,8 @@ export class NativePipelineManager {
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'not_started',
         startupWarning: 'none',
+        pipelineTrackingBackend: trackingBackend,
+        pipelineRouteReadiness: getUncheckedOrNotApplicableReadiness(trackingBackend),
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
@@ -477,6 +500,8 @@ export class NativePipelineManager {
           nativeTrackerStatus: 'error',
           motionBridgeStatus: 'not_started',
           startupWarning: 'none',
+          pipelineTrackingBackend: 'mediapipe-face-landmarker',
+          pipelineRouteReadiness: 'incompatible-camera-source',
           pipelineCameraSource: cameraSource,
           pipelineFaceDetector: faceDetector,
           pipelineCameraIndex: cameraIndex,
@@ -495,6 +520,8 @@ export class NativePipelineManager {
           nativeTrackerStatus: 'error',
           motionBridgeStatus: 'not_started',
           startupWarning: 'none',
+          pipelineTrackingBackend: 'mediapipe-face-landmarker',
+          pipelineRouteReadiness: 'python-unavailable',
           pipelineCameraSource: cameraSource,
           pipelineFaceDetector: faceDetector,
           pipelineCameraIndex: cameraIndex,
@@ -513,6 +540,8 @@ export class NativePipelineManager {
           nativeTrackerStatus: 'error',
           motionBridgeStatus: 'not_started',
           startupWarning: 'none',
+          pipelineTrackingBackend: 'mediapipe-face-landmarker',
+          pipelineRouteReadiness: 'model-unavailable',
           pipelineCameraSource: cameraSource,
           pipelineFaceDetector: faceDetector,
           pipelineCameraIndex: cameraIndex,
@@ -531,6 +560,8 @@ export class NativePipelineManager {
           nativeTrackerStatus: 'error',
           motionBridgeStatus: 'not_started',
           startupWarning: 'none',
+          pipelineTrackingBackend: 'mediapipe-face-landmarker',
+          pipelineRouteReadiness: 'helper-unavailable',
           pipelineCameraSource: cameraSource,
           pipelineFaceDetector: faceDetector,
           pipelineCameraIndex: cameraIndex,
@@ -576,6 +607,8 @@ export class NativePipelineManager {
         nativeTrackerStatus: 'error',
         motionBridgeStatus: 'not_started',
         startupWarning: 'none',
+        pipelineTrackingBackend: trackingBackend,
+        pipelineRouteReadiness: getReadyOrNotApplicableReadiness(trackingBackend),
         pipelineCameraSource: cameraSource,
         pipelineFaceDetector: faceDetector,
         pipelineCameraIndex: cameraIndex,
@@ -592,6 +625,8 @@ export class NativePipelineManager {
       ...createInitialStatus(),
       nativeTrackerStatus: 'starting',
       motionBridgeStatus: 'starting',
+      pipelineTrackingBackend: trackingBackend,
+      pipelineRouteReadiness: getReadyOrNotApplicableReadiness(trackingBackend),
       pipelineCameraSource: cameraSource,
       pipelineFaceDetector: faceDetector,
       pipelineCameraIndex: cameraIndex,
