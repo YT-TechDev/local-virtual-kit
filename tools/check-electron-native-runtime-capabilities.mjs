@@ -405,7 +405,25 @@ requireMatch(
 
 requireMatch(
   appSrc,
-  /const\s+canStartNativePipeline\s*=\s*Boolean\(\s*desktopApi\s*&&\s*runtimeStatus\s*&&\s*!isPipelineBusy\s*&&\s*!isPipelineActionPending\s*\)/u,
+  /const\s+canStartNativePipeline\s*=\s*Boolean\(\s*\n?\s*desktopApi\s*&&\s*\n?\s*runtimeStatus\s*&&\s*\n?\s*!isPipelineBusy\s*&&\s*\n?\s*!isPipelineActionPending\s*&&\s*\n?\s*!isMediaPipeCameraIncompatible\s*\n?\s*\)/u,
+  "App.tsx canStartNativePipeline must require desktopApi, runtimeStatus, !isPipelineBusy, !isPipelineActionPending, and !isMediaPipeCameraIncompatible (#596 correction)",
+);
+
+// canStartNativePipeline must still not be gated by native-capabilities-preflight
+// terms specifically: that preflight stays advisory-only. isMediaPipeCameraIncompatible
+// is a fixed backend/camera compatibility rule, not a probed capability result, so it
+// is exempted from this check.
+const canStartNativePipelineBlockMatch = appSrc.match(
+  /const\s+canStartNativePipeline\s*=\s*Boolean\(([\s\S]*?)\)/u,
+);
+if (!canStartNativePipelineBlockMatch) {
+  fail(
+    "App.tsx must declare canStartNativePipeline as a Boolean(...) expression",
+  );
+}
+requireNoMatch(
+  canStartNativePipelineBlockMatch[1],
+  /opencvCameraSupport|opencvFaceDetectorSupport|capabilitiesChecked|hasSuccessfulNativeCapabilities|nativeCapabilities/u,
   "App.tsx canStartNativePipeline must not be gated by native capabilities support",
 );
 
