@@ -6,6 +6,7 @@ import type {
   NativeRuntimeCapabilities,
   NativePipelineCameraSource,
   NativePipelineFaceDetector,
+  NativePipelineRouteReadiness,
   NativePipelineTrackingBackend,
   NativeTrackerStatus
 } from '../../preload/api'
@@ -172,6 +173,25 @@ const trackingBackendLabels: Record<NativePipelineTrackingBackend, string> = {
   'mediapipe-face-landmarker': 'MediaPipe Face Landmarker (development)'
 }
 
+// Fixed, renderer-owned labels for the typed pipelineTrackingBackend/
+// pipelineRouteReadiness status fields (#597). Distinct from
+// trackingBackendLabels above, which labels the persisted development
+// selector rather than the reported runtime status.
+const pipelineTrackingBackendStatusLabels: Record<NativePipelineTrackingBackend, string> = {
+  'face-pipeline': 'Default face pipeline',
+  'mediapipe-face-landmarker': 'MediaPipe Face Landmarker'
+}
+
+const pipelineRouteReadinessLabels: Record<NativePipelineRouteReadiness, string> = {
+  'not-applicable': 'Not applicable',
+  unchecked: 'Not checked',
+  ready: 'Configured',
+  'incompatible-camera-source': 'OpenCV camera required',
+  'python-unavailable': 'Local Python configuration unavailable',
+  'model-unavailable': 'Local model configuration unavailable',
+  'helper-unavailable': 'Repository helper unavailable'
+}
+
 const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
   not_started: 'Not started',
   starting: 'Starting',
@@ -237,6 +257,8 @@ const buildNativeRuntimeDiagnostics = (
   [
     `Native tracker status: ${statusLabels[status.nativeTrackerStatus]}`,
     `Motion bridge status: ${bridgeLabels[status.motionBridgeStatus]}`,
+    `Tracking backend: ${pipelineTrackingBackendStatusLabels[status.pipelineTrackingBackend]}`,
+    `MediaPipe route readiness: ${pipelineRouteReadinessLabels[status.pipelineRouteReadiness]}`,
     status.startupWarning === 'no_frame_timeout'
       ? 'Startup warning: no MotionFrame received within the startup window.'
       : null,
@@ -411,6 +433,22 @@ const getStatusTone = (status: NativeTrackerStatus | MotionBridgeStatus): Status
   }
 
   return 'neutral'
+}
+
+const getRouteReadinessTone = (readiness: NativePipelineRouteReadiness): StatusTone => {
+  if (readiness === 'ready') {
+    return 'success'
+  }
+
+  if (readiness === 'unchecked') {
+    return 'warning'
+  }
+
+  if (readiness === 'not-applicable') {
+    return 'neutral'
+  }
+
+  return 'danger'
 }
 
 function StatusPill({
@@ -1452,6 +1490,14 @@ function App(): React.JSX.Element {
                   <span>Camera source</span>
                   <StatusPill label={cameraSourceLabels[activeCameraSource]} />
                 </li>
+                <li className="runtime-status-summary__item">
+                  <span>Tracking backend</span>
+                  <StatusPill
+                    label={
+                      pipelineTrackingBackendStatusLabels[runtimeStatus.pipelineTrackingBackend]
+                    }
+                  />
+                </li>
                 {lastRuntimeStatusRefreshLabel ? (
                   <li className="runtime-status-summary__item">
                     <span>Last refreshed</span>
@@ -1512,6 +1558,25 @@ function App(): React.JSX.Element {
                 <dt>Face detector</dt>
                 <dd>
                   <StatusPill label={faceDetectorLabels[activeFaceDetector]} />
+                </dd>
+              </div>
+              <div>
+                <dt>Tracking backend</dt>
+                <dd>
+                  <StatusPill
+                    label={
+                      pipelineTrackingBackendStatusLabels[runtimeStatus.pipelineTrackingBackend]
+                    }
+                  />
+                </dd>
+              </div>
+              <div>
+                <dt>MediaPipe route readiness</dt>
+                <dd>
+                  <StatusPill
+                    label={pipelineRouteReadinessLabels[runtimeStatus.pipelineRouteReadiness]}
+                    tone={getRouteReadinessTone(runtimeStatus.pipelineRouteReadiness)}
+                  />
                 </dd>
               </div>
               <div>

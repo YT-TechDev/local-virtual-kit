@@ -27,6 +27,18 @@ export type NativePipelineTrackingBackend = 'face-pipeline' | 'mediapipe-face-la
 // not a spawn failure, bridge failure, or tracker exit.
 export type NativePipelineStartupWarning = 'none' | 'no_frame_timeout'
 
+// Sanitized readiness of the selected/last-attempted tracking backend's launch
+// route (#597). Always one of this fixed set; never a path, env value, argv,
+// or raw exception/stderr text.
+export type NativePipelineRouteReadiness =
+  | 'not-applicable'
+  | 'unchecked'
+  | 'ready'
+  | 'incompatible-camera-source'
+  | 'python-unavailable'
+  | 'model-unavailable'
+  | 'helper-unavailable'
+
 export interface NativePipelineStartOptions {
   cameraSource?: NativePipelineCameraSource
   faceDetector?: NativePipelineFaceDetector
@@ -68,6 +80,8 @@ export interface LvkRuntimeStatus {
   nativeTrackerStatus: NativeTrackerStatus
   motionBridgeStatus: MotionBridgeStatus
   startupWarning: NativePipelineStartupWarning
+  pipelineTrackingBackend: NativePipelineTrackingBackend
+  pipelineRouteReadiness: NativePipelineRouteReadiness
   pipelineCameraSource?: NativePipelineCameraSource
   pipelineFaceDetector?: NativePipelineFaceDetector
   pipelineCameraIndex?: number
