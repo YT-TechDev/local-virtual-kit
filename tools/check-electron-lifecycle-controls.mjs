@@ -46,8 +46,8 @@ requireMatch(
 
 requireMatch(
   source,
-  /const\s+canStartNativePipeline\s*=\s*Boolean\(\s*desktopApi\s*&&\s*runtimeStatus\s*&&\s*!isPipelineBusy\s*&&\s*!isPipelineActionPending\s*\)/u,
-  "canStartNativePipeline must require desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending",
+  /const\s+canStartNativePipeline\s*=\s*Boolean\(\s*desktopApi\s*&&\s*runtimeStatus\s*&&\s*!isPipelineBusy\s*&&\s*!isPipelineActionPending\s*&&\s*!isMediaPipeCameraIncompatible\s*\)/u,
+  "canStartNativePipeline must require desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending && !isMediaPipeCameraIncompatible (#596 correction)",
 );
 
 requireMatch(
@@ -369,7 +369,7 @@ requireMatch(
 console.log(
   "Electron lifecycle controls smoke OK: isPipelineBusy checks starting/running/stopping on both " +
     "tracker and bridge; isPipelineActionPending derives from pipelineActionPending !== null; " +
-    "canStartNativePipeline requires desktopApi, runtimeStatus, and both busy/pending guards; " +
+    "canStartNativePipeline requires desktopApi, runtimeStatus, both busy/pending guards, and !isMediaPipeCameraIncompatible (#596 correction); " +
     "canStopNativePipeline requires !isPipelineActionPending and active tracker or bridge; " +
     "start buttons bind disabled={!canStartNativePipeline}; stop button binds disabled={!canStopNativePipeline}; " +
     "startNativePipeline and stopNativePipeline clear pipelineError before setting pipelineActionPending; " +

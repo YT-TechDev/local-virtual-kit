@@ -11,7 +11,8 @@ export const DEFAULT_DESKTOP_RUNTIME_SETTINGS: DesktopRuntimeSettings = {
   cameraIndex: 0,
   cameraFps: 60,
   cameraWidth: 640,
-  cameraHeight: 480
+  cameraHeight: 480,
+  trackingBackend: 'face-pipeline'
 }
 
 function getRuntimeSettingsPath(): string {
@@ -38,8 +39,15 @@ export function normalizeDesktopRuntimeSettings(settings: unknown): DesktopRunti
     return { ...DEFAULT_DESKTOP_RUNTIME_SETTINGS }
   }
 
-  const { cameraSource, faceDetector, cameraIndex, cameraFps, cameraWidth, cameraHeight } =
-    settings as Record<string, unknown>
+  const {
+    cameraSource,
+    faceDetector,
+    cameraIndex,
+    cameraFps,
+    cameraWidth,
+    cameraHeight,
+    trackingBackend
+  } = settings as Record<string, unknown>
 
   return {
     cameraSource:
@@ -77,7 +85,11 @@ export function normalizeDesktopRuntimeSettings(settings: unknown): DesktopRunti
       1,
       4320,
       true
-    )
+    ),
+    trackingBackend:
+      trackingBackend === 'face-pipeline' || trackingBackend === 'mediapipe-face-landmarker'
+        ? trackingBackend
+        : DEFAULT_DESKTOP_RUNTIME_SETTINGS.trackingBackend
   }
 }
 

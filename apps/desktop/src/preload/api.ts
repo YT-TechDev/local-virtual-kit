@@ -18,8 +18,8 @@ export type NativePipelineFaceDetector = 'noop' | 'opencv'
 
 // Closed set of Electron-launchable Native Core tracking backends (#595).
 // 'face-pipeline' is the current default; 'mediapipe-face-landmarker' is the
-// existing opt-in development route. Adding a production backend selector,
-// renderer UI, or settings persistence is out of scope for this type.
+// existing opt-in development route. The renderer development selector and
+// DesktopRuntimeSettings persistence for this token are added in #596.
 export type NativePipelineTrackingBackend = 'face-pipeline' | 'mediapipe-face-landmarker'
 
 // Distinct from nativeTrackerStatus/motionBridgeStatus: this represents a
@@ -44,6 +44,7 @@ export interface DesktopRuntimeSettings {
   cameraFps: number
   cameraWidth: number
   cameraHeight: number
+  trackingBackend: NativePipelineTrackingBackend
 }
 
 export interface NativeRuntimeCapabilities {

@@ -6,6 +6,7 @@ import type {
   NativeRuntimeCapabilities,
   NativePipelineCameraSource,
   NativePipelineFaceDetector,
+  NativePipelineTrackingBackend,
   NativeTrackerStatus
 } from '../../preload/api'
 
@@ -75,7 +76,8 @@ const DEFAULT_RUNTIME_SETTINGS: DesktopRuntimeSettings = {
   cameraIndex: MIN_CAMERA_INDEX,
   cameraFps: DEFAULT_CAMERA_FPS,
   cameraWidth: DEFAULT_CAMERA_WIDTH,
-  cameraHeight: DEFAULT_CAMERA_HEIGHT
+  cameraHeight: DEFAULT_CAMERA_HEIGHT,
+  trackingBackend: 'face-pipeline'
 }
 const MIN_CAMERA_WIDTH = 1
 const MAX_CAMERA_WIDTH = 7680
@@ -142,13 +144,19 @@ const isNativePipelineCameraSource = (value: string | null): value is NativePipe
 const isNativePipelineFaceDetector = (value: string | null): value is NativePipelineFaceDetector =>
   value === 'noop' || value === 'opencv'
 
+const isNativePipelineTrackingBackend = (
+  value: string | null
+): value is NativePipelineTrackingBackend =>
+  value === 'face-pipeline' || value === 'mediapipe-face-landmarker'
+
 const normalizeRuntimeSettings = (settings: DesktopRuntimeSettings): DesktopRuntimeSettings => ({
   cameraSource: settings.cameraSource,
   faceDetector: settings.faceDetector,
   cameraIndex: coerceCameraIndex(settings.cameraIndex),
   cameraFps: coerceCameraFps(settings.cameraFps),
   cameraWidth: coerceCameraWidth(settings.cameraWidth),
-  cameraHeight: coerceCameraHeight(settings.cameraHeight)
+  cameraHeight: coerceCameraHeight(settings.cameraHeight),
+  trackingBackend: settings.trackingBackend
 })
 
 const getRuntimeSettingsKey = (settings: DesktopRuntimeSettings): string =>
@@ -157,6 +165,11 @@ const getRuntimeSettingsKey = (settings: DesktopRuntimeSettings): string =>
 const faceDetectorLabels: Record<NativePipelineFaceDetector, string> = {
   noop: 'Noop face detector',
   opencv: 'OpenCV face detection'
+}
+
+const trackingBackendLabels: Record<NativePipelineTrackingBackend, string> = {
+  'face-pipeline': 'Face pipeline',
+  'mediapipe-face-landmarker': 'MediaPipe Face Landmarker (development)'
 }
 
 const statusLabels: Record<RuntimeStatus['nativeTrackerStatus'], string> = {
@@ -432,6 +445,10 @@ function App(): React.JSX.Element {
   const [selectedCameraHeight, setSelectedCameraHeight] = useState<number>(
     DEFAULT_RUNTIME_SETTINGS.cameraHeight
   )
+  const [selectedTrackingBackend, setSelectedTrackingBackend] =
+    useState<NativePipelineTrackingBackend>(DEFAULT_RUNTIME_SETTINGS.trackingBackend)
+  const isMediaPipeCameraIncompatible =
+    selectedTrackingBackend === 'mediapipe-face-landmarker' && selectedCameraSource !== 'opencv'
   const [loadError, setLoadError] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const [pipelineError, setPipelineError] = useState<string | null>(null)
@@ -521,6 +538,7 @@ function App(): React.JSX.Element {
         setSelectedCameraFps(settings.cameraFps)
         setSelectedCameraWidth(settings.cameraWidth)
         setSelectedCameraHeight(settings.cameraHeight)
+        setSelectedTrackingBackend(settings.trackingBackend)
         setSettingsError(null)
         setSettingsSaveFeedback(null)
       } catch (error) {
@@ -722,7 +740,7 @@ function App(): React.JSX.Element {
   }
 
   const startNativePipeline = async (): Promise<void> => {
-    if (!desktopApi || pipelineActionPending) {
+    if (!desktopApi || pipelineActionPending || isMediaPipeCameraIncompatible) {
       return
     }
 
@@ -739,7 +757,8 @@ function App(): React.JSX.Element {
         cameraIndex: coerceCameraIndex(selectedCameraIndex),
         cameraFps: coerceCameraFps(selectedCameraFps),
         cameraWidth: coerceCameraWidth(selectedCameraWidth),
-        cameraHeight: coerceCameraHeight(selectedCameraHeight)
+        cameraHeight: coerceCameraHeight(selectedCameraHeight),
+        trackingBackend: selectedTrackingBackend
       })
       setRuntimeStatus(startedStatus)
       setStartFeedback({
@@ -754,7 +773,7 @@ function App(): React.JSX.Element {
   }
 
   const startNativePipelineAndOpenPreview = async (): Promise<void> => {
-    if (!desktopApi || pipelineActionPending) {
+    if (!desktopApi || pipelineActionPending || isMediaPipeCameraIncompatible) {
       return
     }
 
@@ -771,7 +790,8 @@ function App(): React.JSX.Element {
         cameraIndex: coerceCameraIndex(selectedCameraIndex),
         cameraFps: coerceCameraFps(selectedCameraFps),
         cameraWidth: coerceCameraWidth(selectedCameraWidth),
-        cameraHeight: coerceCameraHeight(selectedCameraHeight)
+        cameraHeight: coerceCameraHeight(selectedCameraHeight),
+        trackingBackend: selectedTrackingBackend
       })
       setRuntimeStatus(status)
       setStartFeedback({
@@ -813,6 +833,7 @@ function App(): React.JSX.Element {
       setSelectedCameraFps(savedSettings.cameraFps)
       setSelectedCameraWidth(savedSettings.cameraWidth)
       setSelectedCameraHeight(savedSettings.cameraHeight)
+      setSelectedTrackingBackend(savedSettings.trackingBackend)
       setSettingsError(null)
       setSettingsSaveFeedback({
         message: 'Settings saved.',
@@ -833,7 +854,8 @@ function App(): React.JSX.Element {
     cameraIndex: coerceCameraIndex(selectedCameraIndex),
     cameraFps: coerceCameraFps(selectedCameraFps),
     cameraWidth: coerceCameraWidth(selectedCameraWidth),
-    cameraHeight: coerceCameraHeight(selectedCameraHeight)
+    cameraHeight: coerceCameraHeight(selectedCameraHeight),
+    trackingBackend: selectedTrackingBackend
   })
 
   const updateSelectedCameraSource = (cameraSource: NativePipelineCameraSource): void => {
@@ -844,6 +866,11 @@ function App(): React.JSX.Element {
   const updateSelectedFaceDetector = (faceDetector: NativePipelineFaceDetector): void => {
     setSelectedFaceDetector(faceDetector)
     void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), faceDetector })
+  }
+
+  const updateSelectedTrackingBackend = (trackingBackend: NativePipelineTrackingBackend): void => {
+    setSelectedTrackingBackend(trackingBackend)
+    void saveRuntimeSettings({ ...getSelectedRuntimeSettings(), trackingBackend })
   }
 
   const updateSelectedCameraIndex = (cameraIndexValue: string): void => {
@@ -984,7 +1011,11 @@ function App(): React.JSX.Element {
   const isPipelineActionPending = pipelineActionPending !== null
   const isObsActionPending = obsActionPending !== null
   const canStartNativePipeline = Boolean(
-    desktopApi && runtimeStatus && !isPipelineBusy && !isPipelineActionPending
+    desktopApi &&
+    runtimeStatus &&
+    !isPipelineBusy &&
+    !isPipelineActionPending &&
+    !isMediaPipeCameraIncompatible
   )
   const canStopNativePipeline = runtimeStatus
     ? !isPipelineActionPending &&
@@ -1601,6 +1632,52 @@ function App(): React.JSX.Element {
                 <option value="opencv">OpenCV face detection</option>
               </select>
             </label>
+
+            <label className="field-row" htmlFor="tracking-backend">
+              <span>Tracking backend</span>
+              <select
+                id="tracking-backend"
+                value={selectedTrackingBackend}
+                disabled={isPipelineBusy || isPipelineActionPending}
+                aria-describedby="tracking-backend-description"
+                onChange={(event) => {
+                  const trackingBackend = event.currentTarget.value
+
+                  if (isNativePipelineTrackingBackend(trackingBackend)) {
+                    updateSelectedTrackingBackend(trackingBackend)
+                  }
+                }}
+              >
+                <option value="face-pipeline">{trackingBackendLabels['face-pipeline']}</option>
+                <option
+                  value="mediapipe-face-landmarker"
+                  disabled={selectedCameraSource !== 'opencv'}
+                >
+                  {trackingBackendLabels['mediapipe-face-landmarker']}
+                </option>
+              </select>
+            </label>
+            <p id="tracking-backend-description" className="note">
+              MediaPipe Face Landmarker is a local development route and requires the OpenCV camera
+              source. Python, model, and helper configuration remain owned by the Electron main
+              process.
+            </p>
+
+            {isMediaPipeCameraIncompatible ? (
+              <p
+                className="runtime-message compact"
+                role="alert"
+                aria-labelledby="tracking-backend-compatibility-label"
+              >
+                <strong id="tracking-backend-compatibility-label" className="status-detail-label">
+                  Tracking backend compatibility
+                </strong>
+                <span>
+                  MediaPipe Face Landmarker requires the OpenCV camera source. Switch Camera source
+                  to OpenCV camera, or choose Face pipeline, before starting.
+                </span>
+              </p>
+            ) : null}
 
             {currentSettingsSaveFeedback ? (
               <p className="settings-save-feedback" role="status">
