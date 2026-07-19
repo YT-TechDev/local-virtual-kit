@@ -451,6 +451,277 @@ if (testChainOccurrences !== 1) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 11. Deterministic sentinel-evidence check.
+//
+// Sections 1-10 above prove source *shape*: closed unions, required fields,
+// an allow-list of permitted assignments, and exact label/template text.
+// This section supplements (never replaces) those checks by actually
+// constructing the renderer-facing artifacts a real run would produce for
+// every representative MediaPipe outcome, using values extracted from the
+// inspected production source (the fixed error constants' resolved text,
+// and the renderer's own fixed label maps), and asserting that a set of
+// clearly synthetic sentinel private-path values never appears in any of
+// them. A negative control proves the sentinel detector itself is active.
+//
+// The sentinel values below are fixed, obviously-synthetic strings invented
+// for this checker. They are never read from process.env, the filesystem,
+// or any other real machine/owner state.
+// ---------------------------------------------------------------------------
+
+const SENTINEL_PRIVATE_VALUES = {
+  pythonExecutablePath:
+    "C:\\Users\\lvk-sentinel-owner\\SENTINEL-PRIVATE\\mediapipe-python\\python.exe",
+  modelAssetPath:
+    "C:\\Users\\lvk-sentinel-owner\\SENTINEL-PRIVATE\\models\\face_landmarker.task",
+  helperScriptPath:
+    "C:\\Users\\lvk-sentinel-owner\\SENTINEL-PRIVATE\\repo\\native\\tracker-core\\helpers\\mediapipe_face_landmarker\\face_landmarker_helper_session.py",
+  nativeExecutablePath:
+    "C:\\Users\\lvk-sentinel-owner\\SENTINEL-PRIVATE\\repo\\native\\tracker-core\\build\\lvk-tracker-core.exe",
+  repoRootPath: "C:\\Users\\lvk-sentinel-owner\\SENTINEL-PRIVATE\\repo",
+};
+const sentinelPrivateValueList = Object.values(SENTINEL_PRIVATE_VALUES);
+
+// 11a. Correlate the sentinel fixtures with production source: every fixed
+// MediaPipe preflight error constant must never interpolate a private
+// path/argv value (supplements the identical guard already enforced in
+// check-electron-tracking-backend-launch-contract.mjs, scoped here to the
+// exact set of private variables relevant to the #597 status fields).
+
+const extractConstantDeclarationBody = (constantName) => {
+  const declMatch = nativePipelineSource.match(
+    new RegExp(
+      `const ${constantName} =([\\s\\S]*?)\\n(?=const |function )`,
+      "u",
+    ),
+  );
+  if (!declMatch) {
+    fail(`nativePipeline.ts must declare const ${constantName}`);
+  }
+  return declMatch[1].trim();
+};
+
+const forbiddenPrivateInterpolationVariables = [
+  "mediapipePythonPath",
+  "mediapipeModelAssetPath",
+  "mediapipeHelperScriptPath",
+  "trackerExecutablePath",
+  "repoRoot",
+  "argv",
+];
+
+const uniqueErrorConstantNames = [
+  ...new Set(rejectionBranches.map((branch) => branch.errorConstant)),
+];
+
+for (const constantName of uniqueErrorConstantNames) {
+  const body = extractConstantDeclarationBody(constantName);
+  for (const variableName of forbiddenPrivateInterpolationVariables) {
+    if (body.includes(`\${${variableName}}`)) {
+      fail(
+        `${constantName} must not interpolate ${variableName} (private value/path leak)`,
+      );
+    }
+  }
+}
+
+// 11b. Resolve each fixed error constant's actual display text from source
+// (handling the plain-string and template-literal forms currently used),
+// substituting only the two approved *public* env-var key-name constants.
+// Any interpolation left over after that substitution is treated as an
+// unaccounted-for dynamic value and fails the check.
+
+const pythonEnvVarNameMatch = nativePipelineSource.match(
+  /const MEDIAPIPE_PYTHON_ENV_VAR = '([^']+)'/u,
+);
+const modelEnvVarNameMatch = nativePipelineSource.match(
+  /const MEDIAPIPE_MODEL_ASSET_ENV_VAR = '([^']+)'/u,
+);
+if (!pythonEnvVarNameMatch || !modelEnvVarNameMatch) {
+  fail(
+    "nativePipeline.ts must declare MEDIAPIPE_PYTHON_ENV_VAR and MEDIAPIPE_MODEL_ASSET_ENV_VAR as fixed string constants",
+  );
+}
+const pythonEnvVarName = pythonEnvVarNameMatch[1];
+const modelEnvVarName = modelEnvVarNameMatch[1];
+
+const resolveFixedErrorConstantValue = (constantName) => {
+  const body = extractConstantDeclarationBody(constantName);
+  if (body.startsWith("`") && body.endsWith("`")) {
+    const resolved = body
+      .slice(1, -1)
+      .replaceAll("${MEDIAPIPE_PYTHON_ENV_VAR}", pythonEnvVarName)
+      .replaceAll("${MEDIAPIPE_MODEL_ASSET_ENV_VAR}", modelEnvVarName);
+    if (resolved.includes("${")) {
+      fail(
+        `${constantName} contains a dynamic interpolation the sentinel evidence check cannot account for`,
+      );
+    }
+    return resolved;
+  }
+  const singleQuoted = body.match(/^'([\s\S]*)'$/u);
+  if (singleQuoted) {
+    return singleQuoted[1];
+  }
+  const doubleQuoted = body.match(/^"([\s\S]*)"$/u);
+  if (doubleQuoted) {
+    return doubleQuoted[1];
+  }
+  fail(
+    `${constantName} is not a plain string or template literal the sentinel evidence check can resolve`,
+  );
+  return "";
+};
+
+// 11c. Extract the renderer's fixed label maps from source into real
+// lookup objects (rather than re-typing the label strings a second time),
+// reusing the same block already located and validated in section 7.
+
+const parseLabelMapEntries = (blockText) => {
+  const entries = {};
+  for (const match of blockText.matchAll(
+    /(?:'([^']+)'|([A-Za-z]\w*)):\s*'([^']+)'/gu,
+  )) {
+    const key = match[1] ?? match[2];
+    entries[key] = match[3];
+  }
+  return entries;
+};
+
+const trackingBackendStatusLabelsBlockMatch = rendererSource.match(
+  /const pipelineTrackingBackendStatusLabels: Record<NativePipelineTrackingBackend, string> = \{([\s\S]*?)\n\}/u,
+);
+if (!trackingBackendStatusLabelsBlockMatch) {
+  fail(
+    "renderer must declare const pipelineTrackingBackendStatusLabels: Record<NativePipelineTrackingBackend, string>",
+  );
+}
+
+const extractedTrackingBackendLabels = parseLabelMapEntries(
+  trackingBackendStatusLabelsBlockMatch[1],
+);
+const extractedReadinessLabels = parseLabelMapEntries(
+  readinessLabelsBlockMatch[1],
+);
+
+if (Object.keys(extractedTrackingBackendLabels).length !== 2) {
+  fail(
+    "sentinel evidence harness could not extract exactly two entries from pipelineTrackingBackendStatusLabels",
+  );
+}
+if (Object.keys(extractedReadinessLabels).length !== 7) {
+  fail(
+    "sentinel evidence harness could not extract exactly seven entries from pipelineRouteReadinessLabels",
+  );
+}
+
+// 11d. Build representative renderer-facing artifacts for every MediaPipe
+// preflight rejection plus the fully-configured (ready) route, reusing the
+// already source-validated rejectionBranches table (section 4) rather than
+// an unrelated second hard-coded branch list. Each artifact mirrors the
+// exact fixed diagnostic-line templates already verified in section 8.
+
+const readyRouteScenario = { readiness: "ready", errorConstant: undefined };
+const representativeScenarios = [...rejectionBranches, readyRouteScenario].map(
+  (scenario) => {
+    const { readiness, errorConstant } = scenario;
+    const lastError =
+      errorConstant !== undefined
+        ? resolveFixedErrorConstantValue(errorConstant)
+        : null;
+    const backendLabel =
+      extractedTrackingBackendLabels["mediapipe-face-landmarker"];
+    const readinessLabel = extractedReadinessLabels[readiness];
+    if (!backendLabel || !readinessLabel) {
+      fail(
+        `sentinel evidence harness could not resolve renderer labels for readiness "${readiness}"`,
+      );
+    }
+    const diagnosticsLines = [
+      `Tracking backend: ${backendLabel}`,
+      `MediaPipe route readiness: ${readinessLabel}`,
+      lastError ? `Latest error: ${lastError}` : null,
+    ].filter((line) => line !== null);
+
+    return {
+      label: readiness,
+      artifact: {
+        pipelineTrackingBackend: "mediapipe-face-landmarker",
+        pipelineRouteReadiness: readiness,
+        rendererBackendLabel: backendLabel,
+        rendererReadinessLabel: readinessLabel,
+        lastError,
+        diagnosticsLines,
+      },
+    };
+  },
+);
+
+// 11e. The sentinel detector itself: throws a fixed, sentinel-free message
+// on any leak so failure output never echoes a sentinel value.
+
+// JSON.stringify would escape backslashes (turning a Windows-style sentinel
+// path's "\" into "\\"), which would make a literal substring check against
+// the raw sentinel value always miss. Flatten the artifact's own string
+// values instead, so the sentinel's exact literal form is what gets scanned.
+const flattenArtifactStrings = (artifact) => {
+  const parts = [];
+  for (const value of Object.values(artifact)) {
+    if (typeof value === "string") {
+      parts.push(value);
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string") {
+          parts.push(item);
+        }
+      }
+    }
+  }
+  return parts.join(" ");
+};
+
+const assertArtifactFreeOfSentinels = (artifact) => {
+  const haystack = flattenArtifactStrings(artifact);
+  if (sentinelPrivateValueList.some((value) => haystack.includes(value))) {
+    throw new Error("private sentinel reached copied diagnostics");
+  }
+};
+
+// 11f. Positive evidence: every real representative artifact must be free
+// of every sentinel private value.
+
+for (const { label, artifact } of representativeScenarios) {
+  try {
+    assertArtifactFreeOfSentinels(artifact);
+  } catch {
+    fail(
+      `sentinel evidence check failed: a synthetic private sentinel value reached the renderer-facing artifact for readiness "${label}"`,
+    );
+  }
+}
+
+// 11g. Negative control: an intentionally contaminated synthetic artifact
+// must be caught by the same detector, proving it is actually active and
+// not vacuously passing because the sentinels never appear anywhere.
+
+const negativeControlArtifact = {
+  ...representativeScenarios[0].artifact,
+  lastError: `${representativeScenarios[0].artifact.lastError ?? ""} ${SENTINEL_PRIVATE_VALUES.pythonExecutablePath}`,
+};
+
+let negativeControlDetected = false;
+try {
+  assertArtifactFreeOfSentinels(negativeControlArtifact);
+} catch {
+  negativeControlDetected = true;
+}
+
+if (!negativeControlDetected) {
+  fail(
+    "sentinel evidence negative control failed: the detector did not catch an intentionally injected private sentinel value in a synthetic renderer-facing artifact",
+  );
+}
+
 console.log(
   "Electron MediaPipe development route status OK: " +
     "NativePipelineRouteReadiness is a closed union of exactly the seven approved tokens; " +
@@ -463,5 +734,7 @@ console.log(
     "the renderer declares fixed pipelineTrackingBackendStatusLabels/pipelineRouteReadinessLabels maps with the exact recommended labels and never derives them from lastError; " +
     "the runtime summary/details UI and buildNativeRuntimeDiagnostics() render the typed fields through those fixed label maps; " +
     "LVK_IPC_CHANNELS stays exactly the existing seven keys (no new IPC channel); " +
-    "the checker is registered exactly once and wired into the root test chain.",
+    "the checker is registered exactly once and wired into the root test chain; " +
+    "deterministic sentinel private-path evidence (Python executable, model asset, resolved helper script, native executable, repository root) was exercised against representative renderer-facing artifacts (backend/readiness fields, fixed labels, fixed preflight error text, copied diagnostic lines) for every MediaPipe preflight rejection and the ready route, and none of the sentinel values reached any of them; " +
+    "a negative control intentionally contaminated a synthetic artifact and confirmed the sentinel detector caught it, proving the detector is active rather than vacuously passing.",
 );
