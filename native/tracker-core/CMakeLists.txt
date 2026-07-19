@@ -98,6 +98,40 @@ else()
   target_compile_definitions(lvk-tracker-core PRIVATE LVK_HAS_OPENCV_FACE_DETECTOR=0)
 endif()
 
+# Windows OpenCV-enabled development runtime DLL adjacency contract (#603).
+# Issue #598 showed the built lvk-tracker-core.exe can fail before main() with
+# STATUS_DLL_NOT_FOUND (0xC0000135) when the vcpkg/OpenCV runtime directory is
+# not already present on the caller's PATH. An earlier revision of this
+# contract staged CMake's own resolved runtime-DLL-closure generator
+# expression, but real Windows execution proof showed that closure to be
+# incomplete (several vcpkg-built dependency DLLs --
+# zlib/libjpeg/libpng/tiff/liblzma/libwebp family -- are not visible to
+# CMake's transitive imported-target graph even though they are required at
+# runtime), so that mechanism was rejected.
+#
+# The supported development route instead relies on vcpkg's own app-local
+# deployment (VCPKG_APPLOCAL_DEPS), which already resolves and copies the
+# complete dependent runtime DLL set beside the built executable. Native Core
+# CMake does not reimplement that dependency discovery or copy DLLs itself;
+# it only enforces, via VCPKG_APPLOCAL_DEPS's public CACHE presence/value
+# (the vcpkg toolchain is the sole owner of that cache variable, so its
+# presence already proves the toolchain engaged; no vcpkg/toolchain path is
+# read, compared, or printed), that a Windows OpenCV-enabled configure was
+# actually run through the vcpkg toolchain with app-local deployment
+# enabled -- failing configure with one fixed actionable message otherwise,
+# so a silently incomplete development build can never reach a build step
+# believing it is runtime-adjacency-safe.
+if(WIN32 AND (LVK_HAS_OPENCV_CAMERA OR LVK_HAS_OPENCV_FACE_DETECTOR))
+  if(NOT DEFINED CACHE{VCPKG_APPLOCAL_DEPS} OR NOT VCPKG_APPLOCAL_DEPS)
+    message(FATAL_ERROR
+      "LVK: Windows OpenCV-enabled Native Core development builds require the vcpkg "
+      "CMake toolchain with app-local runtime deployment enabled, so dependent "
+      "runtime DLLs are copied beside lvk-tracker-core.exe. Configure with "
+      "-DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake "
+      "-DVCPKG_APPLOCAL_DEPS=ON; see docs/LOCAL_RUNTIME_CHECKLIST.md.")
+  endif()
+endif()
+
 if(MSVC)
   target_compile_options(lvk-tracker-core PRIVATE /W4)
 else()
