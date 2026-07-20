@@ -64,7 +64,8 @@
     "test:native-mediapipe-helper-route": "node tools/check-native-mediapipe-helper-route.mjs",
     "test:mediapipe-face-landmarker-runtime-smoke": "node tools/check-mediapipe-face-landmarker-runtime-smoke.mjs --self-test",
     "smoke:mediapipe-face-landmarker-runtime:local": "node tools/check-mediapipe-face-landmarker-runtime-smoke.mjs",
-    "test:mediapipe-face-landmarker-helper-session": "node tools/check-mediapipe-face-landmarker-helper-session.mjs"
+    "test:mediapipe-face-landmarker-helper-session": "node tools/check-mediapipe-face-landmarker-helper-session.mjs",
+    "smoke:native-dev-runtime-adjacency:local": "node tools/check-native-dev-runtime-adjacency.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"

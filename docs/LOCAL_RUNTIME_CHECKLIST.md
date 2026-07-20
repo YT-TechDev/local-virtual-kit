@@ -114,8 +114,29 @@ This is a local/manual check because it requires local OpenCV support, a webcam,
 Use [`docs/reports/opencv-camera-smoke-template.md`](./reports/opencv-camera-smoke-template.md) when recording future OpenCV camera smoke results.
 
 - [ ] Confirm CMake found OpenCV during native configure.
-- [ ] On Windows OpenCV-enabled builds that dynamically link against vcpkg OpenCV, confirm the relevant vcpkg OpenCV DLL directory is available on `PATH` before running native runtime commands. Placeholder examples: `<vcpkg-root>/installed/x64-windows/bin` for release builds or `<vcpkg-root>/installed/x64-windows/debug/bin` for debug builds. If this runtime DLL path is missing, the native binary can fail to start with `STATUS_DLL_NOT_FOUND` / `0xC0000135`. This can affect `--print-runtime-capabilities`, `pnpm smoke:native-opencv-camera:local`, and `pnpm test` when the tested native binary is OpenCV-enabled and dynamically linked.
+- [ ] **Windows development runtime DLL adjacency contract (#603):** the supported Windows OpenCV-enabled Native Core development build configures with the vcpkg CMake toolchain and `-DVCPKG_APPLOCAL_DEPS=ON` (for example `-DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_APPLOCAL_DEPS=ON`). vcpkg app-local deployment is the supported staging route: it copies the complete dependent runtime DLL set beside the built `lvk-tracker-core.exe`. **Real execution — not a configure-time cache variable — is the authoritative proof** that the runtime closure is actually complete; CMake does not attempt to authenticate which package manager produced the artifact.
+- [ ] **Route A (default build, no `--target`):** `cmake --build <dir> --config <Debug|Release|RelWithDebInfo|MinSizeRel>` is the repository's standard Windows OpenCV-enabled Native Core development build and includes a mandatory automatic `ALL`-target gate. That gate runs only after `lvk-tracker-core` (including vcpkg's app-local `POST_BUILD` staging) has finished, executes the exact built `lvk-tracker-core.exe --print-runtime-capabilities` under a deliberately minimal Windows-only PATH (no vcpkg/OpenCV directory), and fails the build with one fixed safe category if that real execution proof does not pass. A successful Route A build is therefore authoritative evidence of runtime adjacency for that configuration; the gate re-runs on every build, including no-op rebuilds.
+- [ ] **Route B (explicit target or direct IDE project build):** `cmake --build <dir> --target lvk-tracker-core --config <cfg>`, or building the executable project directly from an IDE, can bypass the Route A automatic gate by construction. **Route B build success alone is INCOMPLETE / UNVERIFIED** for runtime adjacency. Before a Route B artifact is used by Electron development startup, direct runtime commands, or reported as runtime-adjacency-safe, run the matching explicit-configuration checker command:
+
+```bash
+pnpm smoke:native-dev-runtime-adjacency:local -- --config Debug
+pnpm smoke:native-dev-runtime-adjacency:local -- --config Release
+pnpm smoke:native-dev-runtime-adjacency:local -- --config RelWithDebInfo
+pnpm smoke:native-dev-runtime-adjacency:local -- --config MinSizeRel
+```
+
+Only the command matching the configuration actually built is required. Its real minimal-PATH execution PASS completes the Route B proof. **The no-argument form of the checker (below) does not substitute for this exact-configuration Route B proof** — it only exercises the same candidate-resolution order Electron's development spawn uses, and could silently accept a stale executable from a different configuration.
+
+- [ ] The explicit `PATH` guidance below is still required for legacy, externally supplied, CMake-unmanaged, or otherwise unstaged binaries (for example a binary built without the app-local contract, or moved outside its build output directory). For those cases, confirm the relevant vcpkg OpenCV DLL directory is available on `PATH` before running native runtime commands. Placeholder examples: `<vcpkg-root>/installed/x64-windows/bin` for release builds or `<vcpkg-root>/installed/x64-windows/debug/bin` for debug builds. If this runtime DLL path is missing for such a binary, it can fail to start with `STATUS_DLL_NOT_FOUND` / `0xC0000135`.
 - [ ] Do not commit local absolute vcpkg paths to docs, PR bodies, reports, logs, or source comments; use placeholders such as `<vcpkg-root>/installed/x64-windows/bin` instead.
+- [ ] For Electron-candidate-order testing only (not a substitute for Route A or the Route B exact-`--config` proof above), the owner-local real-execution smoke can also be run with no arguments. It spawns the resolved `lvk-tracker-core.exe --print-runtime-capabilities` with a deliberately minimal Windows-only child `PATH` (no vcpkg/OpenCV directory) and requires real process success:
+
+```bash
+pnpm smoke:native-dev-runtime-adjacency:local
+```
+
+- [ ] OpenCV-disabled Windows builds and non-Windows builds (macOS/Linux) are unchanged by this contract: no cross-compiling rejection, no build-time gate, and no `--config` requirement apply to them. Packaged (Release manifest / `extraResources`) runtime staging is also unchanged; this contract governs only Windows OpenCV-enabled Native Core development builds.
+
 - [ ] Confirm the OS grants camera permission to the terminal or Electron host process being tested.
 - [ ] Run a finite local camera smoke only when a webcam is available. Use the helper script (which first checks `--print-runtime-capabilities` and skips honestly when OpenCV is unavailable):
 
