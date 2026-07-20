@@ -59,14 +59,24 @@ function executableName() {
 // multi-config build tree from a single-config one. Never reads, compares,
 // normalizes, stores, or prints CMAKE_TOOLCHAIN_FILE, a vcpkg root, an
 // OpenCV path, or any other private toolchain location from the cache.
+// Returns null on any failure -- including an existing-but-unreadable cache
+// file (permission, I/O, or replacement race) -- so the caller always fails
+// closed with the fixed config-not-built category; the raw exception (which
+// can carry an absolute path and OS error text) is never printed or rethrown.
 function readCMakeCacheConfigFacts(buildDir) {
   const cachePath = join(buildDir, "CMakeCache.txt");
   if (!existsSync(cachePath)) {
     return null;
   }
 
+  let content;
+  try {
+    content = readFileSync(cachePath, "utf8");
+  } catch {
+    return null;
+  }
+
   const facts = { generator: null, configurationTypes: null, buildType: null };
-  const content = readFileSync(cachePath, "utf8");
   for (const line of content.split(/\r?\n/)) {
     const match = line.match(/^([A-Za-z0-9_]+):[A-Za-z]+=(.*)$/);
     if (!match) {
