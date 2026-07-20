@@ -101,35 +101,178 @@ endif()
 # Windows OpenCV-enabled development runtime DLL adjacency contract (#603).
 # Issue #598 showed the built lvk-tracker-core.exe can fail before main() with
 # STATUS_DLL_NOT_FOUND (0xC0000135) when the vcpkg/OpenCV runtime directory is
-# not already present on the caller's PATH. An earlier revision of this
-# contract staged CMake's own resolved runtime-DLL-closure generator
-# expression, but real Windows execution proof showed that closure to be
-# incomplete (several vcpkg-built dependency DLLs --
-# zlib/libjpeg/libpng/tiff/liblzma/libwebp family -- are not visible to
-# CMake's transitive imported-target graph even though they are required at
-# runtime), so that mechanism was rejected.
+# not already present on the caller's PATH. Two earlier revisions of this
+# contract were rejected by real Windows execution evidence:
+#   - CMake's own resolved runtime-DLL-closure generator expression
+#     ($<TARGET_RUNTIME_DLLS:...>) omitted several vcpkg-built transitive
+#     dependency DLLs that are required at runtime.
+#   - A configure-time check of VCPKG_APPLOCAL_DEPS's CACHE presence/value
+#     cannot prove the vcpkg toolchain or its app-local deployment hook
+#     actually engaged: the variable is a caller-controlled, documented
+#     vcpkg input, so a non-vcpkg configure can pass `-DVCPKG_APPLOCAL_DEPS=ON`
+#     and satisfy that check with no app-local hook attached and no DLLs
+#     staged.
 #
-# The supported development route instead relies on vcpkg's own app-local
-# deployment (VCPKG_APPLOCAL_DEPS), which already resolves and copies the
-# complete dependent runtime DLL set beside the built executable. Native Core
-# CMake does not reimplement that dependency discovery or copy DLLs itself;
-# it only enforces, via VCPKG_APPLOCAL_DEPS's public CACHE presence/value
-# (the vcpkg toolchain is the sole owner of that cache variable, so its
-# presence already proves the toolchain engaged; no vcpkg/toolchain path is
-# read, compared, or printed), that a Windows OpenCV-enabled configure was
-# actually run through the vcpkg toolchain with app-local deployment
-# enabled -- failing configure with one fixed actionable message otherwise,
-# so a silently incomplete development build can never reach a build step
-# believing it is runtime-adjacency-safe.
+# The owner-approved mechanism moves mandatory enforcement from configure-time
+# toolchain attestation to build-time real execution proof. vcpkg app-local
+# deployment remains the supported Windows development staging route, but
+# real execution -- not a cache variable -- is the authoritative proof of
+# runtime closure. This gate never stages or copies DLLs itself, and never
+# reads, compares, normalizes, persists, or prints a toolchain/vcpkg/OpenCV
+# path.
+#
+# Route A (this gate): the default/ALL development build
+# (`cmake --build <dir> --config <cfg>` with no explicit --target) is only
+# successful if the exact generated lvk-tracker-core.exe configuration
+# actually starts and reports OpenCV camera capability from its own output
+# directory using only the Windows system DLL search path, with no
+# vcpkg/OpenCV runtime directory supplied. The verifier runs as a separate
+# `ALL` custom target that depends on lvk-tracker-core (never a same-target
+# POST_BUILD command), so it always runs after the executable target --
+# including vcpkg's app-local POST_BUILD staging -- has completed, and always
+# re-executes on a no-op rebuild because it has no output artifact.
+#
+# Route B (explicit `--target lvk-tracker-core` builds or a direct IDE
+# executable-project build) can bypass this automatic ALL-target gate by
+# construction; a Route B build succeeding is INCOMPLETE / UNVERIFIED for
+# runtime adjacency on its own. tools/check-native-dev-runtime-adjacency.mjs
+# run with an explicit `--config <cfg>` is the required independent Route B
+# proof for those routes -- see docs/LOCAL_RUNTIME_CHECKLIST.md.
 if(WIN32 AND (LVK_HAS_OPENCV_CAMERA OR LVK_HAS_OPENCV_FACE_DETECTOR))
-  if(NOT DEFINED CACHE{VCPKG_APPLOCAL_DEPS} OR NOT VCPKG_APPLOCAL_DEPS)
+  if(CMAKE_CROSSCOMPILING)
     message(FATAL_ERROR
-      "LVK: Windows OpenCV-enabled Native Core development builds require the vcpkg "
-      "CMake toolchain with app-local runtime deployment enabled, so dependent "
-      "runtime DLLs are copied beside lvk-tracker-core.exe. Configure with "
-      "-DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake "
-      "-DVCPKG_APPLOCAL_DEPS=ON; see docs/LOCAL_RUNTIME_CHECKLIST.md.")
+      "LVK: Windows OpenCV-enabled Native Core builds require real native "
+      "execution to prove runtime DLL adjacency (#603), which is unavailable "
+      "while CMAKE_CROSSCOMPILING is set. Configure a native (non-cross-"
+      "compiling) Windows toolchain; see docs/LOCAL_RUNTIME_CHECKLIST.md.")
   endif()
+
+  set(LVK_NATIVE_RUNTIME_ADJACENCY_GATE_SCRIPT
+    "${CMAKE_CURRENT_BINARY_DIR}/lvk-tracker-core-runtime-adjacency-gate/run-adjacency-gate-$<CONFIG>.cmake")
+
+  # The generated file lives only in the ignored build tree; it is not a
+  # committed source file and is regenerated on every configure. The exact
+  # $<TARGET_FILE:lvk-tracker-core> generator expression is embedded here so
+  # the executable path never appears on the outer build command line -- only
+  # inside this private, per-configuration runner.
+  file(GENERATE
+    OUTPUT "${LVK_NATIVE_RUNTIME_ADJACENCY_GATE_SCRIPT}"
+    CONTENT [[
+# Generated by native/tracker-core/CMakeLists.txt for #603. Do not edit; this
+# file is regenerated on every configure and lives only in the ignored build
+# tree. Proves the exact built lvk-tracker-core.exe configuration can start
+# and report OpenCV camera capability from its own output directory using
+# only the Windows system DLL search path, with no vcpkg/OpenCV runtime
+# directory supplied. Never prints an executable or dependency path, PATH
+# contents, environment values, argv beyond a fixed label, raw stdout/stderr,
+# raw OS error text, PID, or HANDLE.
+set(_lvk_exe "$<TARGET_FILE:lvk-tracker-core>")
+set(_lvk_workdir "$<TARGET_FILE_DIR:lvk-tracker-core>")
+
+if(DEFINED ENV{SystemRoot} AND NOT "$ENV{SystemRoot}" STREQUAL "")
+  set(_lvk_system_root "$ENV{SystemRoot}")
+else()
+  set(_lvk_system_root "C:/Windows")
+endif()
+set(ENV{SystemRoot} "${_lvk_system_root}")
+set(ENV{PATH} "${_lvk_system_root}\\System32;${_lvk_system_root}")
+
+function(lvk_adjacency_gate_fail category)
+  message(FATAL_ERROR "LVK: native runtime adjacency gate failed (category=${category})")
+endfunction()
+
+execute_process(
+  COMMAND "${_lvk_exe}" --print-runtime-capabilities
+  WORKING_DIRECTORY "${_lvk_workdir}"
+  RESULT_VARIABLE _lvk_result
+  OUTPUT_VARIABLE _lvk_stdout
+  ERROR_VARIABLE _lvk_stderr
+  TIMEOUT 30
+)
+
+if(_lvk_result MATCHES "[Tt]imeout")
+  lvk_adjacency_gate_fail("timeout")
+endif()
+
+# A loader failure before main() (for example STATUS_DLL_NOT_FOUND /
+# 0xC0000135) is a real process exit, not a failure to launch, but CMake
+# reports it as "Exit code 0x<hex>" rather than a plain decimal code. Treat
+# both forms as an exit result; anything else means the process never
+# actually started.
+if(_lvk_result MATCHES "^-?[0-9]+$")
+  if(NOT _lvk_result EQUAL 0)
+    lvk_adjacency_gate_fail("nonzero-exit")
+  endif()
+elseif(_lvk_result MATCHES "^Exit code 0x[0-9A-Fa-f]+$")
+  lvk_adjacency_gate_fail("nonzero-exit")
+else()
+  lvk_adjacency_gate_fail("spawn-failed")
+endif()
+
+string(LENGTH "${_lvk_stdout}" _lvk_stdout_len)
+string(LENGTH "${_lvk_stderr}" _lvk_stderr_len)
+if(_lvk_stdout_len GREATER 65536 OR _lvk_stderr_len GREATER 65536)
+  lvk_adjacency_gate_fail("output-too-large")
+endif()
+
+if(NOT _lvk_stdout MATCHES "LVK native runtime capabilities")
+  lvk_adjacency_gate_fail("malformed-capabilities")
+endif()
+
+if(_lvk_stdout MATCHES "opencvCameraSupport=([a-zA-Z]+)")
+  set(_lvk_opencv "${CMAKE_MATCH_1}")
+else()
+  lvk_adjacency_gate_fail("malformed-capabilities")
+endif()
+
+if(_lvk_stdout MATCHES "localOnly=([a-zA-Z]+)")
+  set(_lvk_local_only "${CMAKE_MATCH_1}")
+else()
+  lvk_adjacency_gate_fail("malformed-capabilities")
+endif()
+
+if(_lvk_stdout MATCHES "cameraOpened=([a-zA-Z]+)")
+  set(_lvk_camera_opened "${CMAKE_MATCH_1}")
+else()
+  lvk_adjacency_gate_fail("malformed-capabilities")
+endif()
+
+if(_lvk_stdout MATCHES "motionFramesEmitted=([a-zA-Z]+)")
+  set(_lvk_motion_frames_emitted "${CMAKE_MATCH_1}")
+else()
+  lvk_adjacency_gate_fail("malformed-capabilities")
+endif()
+
+if(NOT _lvk_opencv STREQUAL "true")
+  lvk_adjacency_gate_fail("opencv-camera-support-not-enabled")
+endif()
+
+if(NOT _lvk_local_only STREQUAL "true")
+  lvk_adjacency_gate_fail("local-only-missing")
+endif()
+
+if(NOT _lvk_camera_opened STREQUAL "false")
+  lvk_adjacency_gate_fail("camera-opened-unexpected")
+endif()
+
+if(NOT _lvk_motion_frames_emitted STREQUAL "false")
+  lvk_adjacency_gate_fail("motion-frames-emitted-unexpected")
+endif()
+
+if(_lvk_stdout MATCHES "\"type\":\"motion_frame\"")
+  lvk_adjacency_gate_fail("motionframe-shaped-output-detected")
+endif()
+
+message(STATUS "LVK: native runtime adjacency gate passed.")
+]]
+  )
+
+  add_custom_target(lvk-tracker-core-runtime-adjacency-gate ALL
+    COMMAND ${CMAKE_COMMAND} -P "${LVK_NATIVE_RUNTIME_ADJACENCY_GATE_SCRIPT}"
+    VERBATIM
+    COMMENT "LVK: proving lvk-tracker-core.exe runtime DLL adjacency (#603)"
+  )
+  add_dependencies(lvk-tracker-core-runtime-adjacency-gate lvk-tracker-core)
 endif()
 
 if(MSVC)
