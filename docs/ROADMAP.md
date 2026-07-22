@@ -4,7 +4,7 @@ This document describes the intended implementation sequence. It is not a fixed 
 
 Before choosing the next task, inspect the current repository state and open PRs.
 
-For current release-prep work, v0.10.0 is the completed Local Avatar Preview Foundation release. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. v0.10.0 keeps selected avatar files local, parsed avatar state in memory, camera frames local, OBS routes localhost-based, and Native Core / MotionFrame ownership boundaries unchanged.
+For current release-prep work, v0.14.0 is the verified Desktop Real Tracking Workflow baseline. Keep changes small, preserve local-first camera/privacy boundaries, and do not change the `MotionFrame` schema unless explicitly planned. The MediaPipe Face Landmarker route remains opt-in, development-only, locally configured, and non-packaged; Native Core retains camera, helper, tracking, and MotionFrame ownership. Issues #586 and #589 remain open and v0.14.0 does not prove the long-running reliability defect fixed.
 
 ---
 
@@ -176,6 +176,46 @@ Goal:
 
 ---
 
+## v0.14.0 - Desktop Real Tracking Workflow
+
+Implementation outcome for v0.14.0:
+
+- closed typed Electron backend selection containing only `face-pipeline` and
+  `mediapipe-face-landmarker`
+- backward-compatible `face-pipeline` default
+- persistence of only the approved fixed backend token
+- one accessible development backend selector in the existing Electron Runtime
+  controls
+- MediaPipe/OpenCV camera-source compatibility enforcement without silently
+  rewriting unrelated settings
+- Electron-main-only Python and model configuration through the two approved
+  environment-variable keys
+- repository-derived helper script configuration
+- pre-spawn file validation and fixed sanitized failures
+- typed existing-IPC launch using argument-array spawning with `shell: false`
+- fixed renderer-visible backend and route-readiness categories
+- sentinel-based source-contract coverage proving private values do not reach
+  renderer-facing status or copied diagnostics
+- Windows OpenCV development runtime-adjacency proof owned by the Native build
+- bounded owner-performed Windows validation of Electron -> Native Core ->
+  MediaPipe helper -> MotionFrame bridge -> Web Preview using camera index 0
+- owner-observed tracking, intentional loss, same-session reacquisition, head,
+  eye, mouth, explicit Stop, and normal application-quit behavior
+- no MotionFrame, WebSocket, Web Preview backend, camera-ownership, network,
+  telemetry, cloud, or remote-inference expansion
+
+The merged source implementation landed through Issue #595 / PR #600, Issue
+#596 / PR #601, Issue #597 / PR #602, and the Windows development runtime
+adjacency follow-up Issue #603 / PR #604. Issue #598 contains the accepted
+Windows workflow evidence; Issue #605 contains the bounded camera-start
+diagnostic evidence that preceded the accepted index-0 run.
+
+v0.14.0 is not production backend selection. It does not bundle or distribute
+Python, MediaPipe, the model asset, or a packaged Electron application. OBS,
+cross-machine hardware coverage, final accuracy/performance approval, and the
+long-running #586/#589 recovery outcome remain unverified or open as recorded in
+`docs/releases/v0.14.0.md`.
+
 ## v0.10.0 - Local Avatar Preview Foundation
 
 Implementation outcome for v0.10.0:
@@ -214,10 +254,17 @@ v0.8.0 followed up with the first user-facing Web Preview renderer calibration w
 
 v0.9.0 followed up with OBS Browser Source workflow polish: Electron OBS dummy URL exposure, Desktop OBS setup Copy/Open actions for dummy and native routes, focused Web Preview OBS route-contract checker coverage, and renderer calibration compatibility with OBS rendering. v0.9.0 keeps architecture and privacy boundaries unchanged: no MotionFrame or Motion Protocol changes, no Native Core behavior changes, no dependencies, no telemetry, no cloud upload, no remote inference, no runtime downloads, and no new network behavior.
 
-Future post-v0.10 direction should not begin another docs-only Gate cycle by default. After the v0.10.0 documentation PR merges, Issue #510 can close, parent Issue #506 can close after all child issues are confirmed complete, and the v0.10.0 milestone can close after final verification. The next visible implementation milestone must be selected from current repository and open issue state; do not invent v0.11.0 scope here. No avatar format, rig standard, tracking backend, MediaPipe integration, VRM direction, Live2D direction, or another major avatar format is implicitly approved.
+After the v0.14.0 documentation PR merges, Issue #599 can close, parent Issue
+#594 can close after every child is confirmed complete, and Milestone #15 can
+close after final verification. The current open Issue state supports completing
+the existing #589 -> #586 -> #532 long-running reliability evidence and
+closeout path before selecting another visible product milestone. Do not infer a
+v0.15.0 scope, performance approval, packaged distribution plan, another
+tracking backend, or another avatar-format direction from this document.
 
 ## Release Entry Points
 
+- v0.14.0 release-readiness notes: `docs/releases/v0.14.0.md`.
 - v0.10.0 release-readiness notes: `docs/releases/v0.10.0.md`.
 - v0.9.0 release-readiness notes: `docs/releases/v0.9.0.md`.
 - v0.8.0 release-readiness notes: `docs/releases/v0.8.0.md`.
