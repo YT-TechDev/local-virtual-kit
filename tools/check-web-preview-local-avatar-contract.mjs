@@ -3863,6 +3863,328 @@ const runCheck = async () => {
     );
   }
 
+  // Shared-storage lifecycle --------------------------------------------------
+  // Proves the approved #611 OBS-profile-local workflow end to end: an
+  // interactive controller (Standard Preview) seeds one shared storage
+  // instance and is disposed, a restore-only controller (mode=obs) restores
+  // the exact durable record from that same storage and rejects every
+  // mutator, a fresh interactive controller can still clear the shared
+  // workspace, and a final restore-only controller reaches the primitive
+  // fallback without any further storage mutation.
+  {
+    const sharedStorage = createStorage(undefined);
+    const seedFraming = {
+      uniformScale: 1.75,
+      verticalOffset: -0.5,
+      yawDegrees: 30,
+    };
+
+    // Step 1 — interactive seed
+    const h1 = createHarness({
+      storage: sharedStorage,
+      accessMode: "interactive",
+    });
+    h1.controller.start();
+    await settle();
+    assertEqual(
+      h1.controller.getState().lifecycleStatus,
+      "empty",
+      "shared-storage lifecycle: interactive seed starts empty",
+    );
+    assertEqual(
+      h1.controller.getState().asset,
+      null,
+      "shared-storage lifecycle: interactive seed starts with the primitive",
+    );
+
+    const seededAsset = { tag: "seeded" };
+    h1.parser.program(() => seededAsset);
+    await h1.controller.loadFile(
+      makeFile("workspace-seed.glb", {
+        seed: 21,
+        type: "model/gltf-binary",
+      }),
+    );
+    h1.controller.setFraming(seedFraming);
+    h1.scheduler.flush();
+    await settle();
+
+    const seededState = h1.controller.getState();
+    assertEqual(
+      seededState.lifecycleStatus,
+      "ready",
+      "shared-storage lifecycle: interactive seed reaches ready",
+    );
+    assertEqual(
+      seededState.persistenceStatus,
+      "persisted",
+      "shared-storage lifecycle: interactive seed is persisted",
+    );
+    assertEqual(
+      seededState.framingStatus,
+      "saved",
+      "shared-storage lifecycle: interactive seed framing is saved",
+    );
+    assert(
+      framingsEqual(seededState.framing, seedFraming),
+      "shared-storage lifecycle: interactive seed framing matches the non-default values",
+    );
+
+    const durableAfterSeed = sharedStorage.getDurable();
+    assertEqual(
+      durableAfterSeed.fileName,
+      "workspace-seed.glb",
+      "shared-storage lifecycle: durable filename after interactive seed",
+    );
+    assertEqual(
+      durableAfterSeed.mimeType,
+      "model/gltf-binary",
+      "shared-storage lifecycle: durable MIME type after interactive seed",
+    );
+    assertArrayBufferBytes(
+      durableAfterSeed.glbBytes,
+      [21, 2, 3, 4, 5, 6, 7, 8],
+      "shared-storage lifecycle: durable GLB bytes after interactive seed",
+    );
+    assert(
+      framingsEqual(durableAfterSeed.framing, seedFraming),
+      "shared-storage lifecycle: durable framing after interactive seed",
+    );
+
+    h1.controller.dispose();
+    assertEqual(
+      h1.disposer.countFor(seededAsset),
+      1,
+      "shared-storage lifecycle: interactive controller disposes its parsed asset exactly once",
+    );
+    assert(
+      sharedStorage.getDurable() !== undefined,
+      "shared-storage lifecycle: durable workspace survives interactive disposal",
+    );
+
+    // Step 2 — restore-only recovery from the same storage
+    const saveCallsAfterSeed = sharedStorage.calls.save.length;
+    const clearCallsAfterSeed = sharedStorage.calls.clear;
+
+    const h2 = createHarness({
+      storage: sharedStorage,
+      accessMode: "restore-only",
+    });
+    const restoredAsset = { tag: "restored" };
+    h2.parser.program(() => restoredAsset);
+    h2.controller.start();
+    await settle();
+
+    const restoredState = h2.controller.getState();
+    assertEqual(
+      restoredState.lifecycleStatus,
+      "ready",
+      "shared-storage lifecycle: restore-only recovery reaches ready",
+    );
+    assertEqual(
+      restoredState.persistenceStatus,
+      "persisted",
+      "shared-storage lifecycle: restore-only recovery is marked persisted",
+    );
+    assertEqual(
+      restoredState.asset,
+      restoredAsset,
+      "shared-storage lifecycle: restore-only recovery commits the parsed asset",
+    );
+    assert(
+      framingsEqual(restoredState.framing, seedFraming),
+      "shared-storage lifecycle: restore-only recovery applies the exact stored framing",
+    );
+    assertEqual(
+      h2.parser.calls.length,
+      1,
+      "shared-storage lifecycle: restore-only recovery parses the stored bytes once",
+    );
+    assertEqual(
+      h2.parser.calls[0].fileName,
+      "workspace-seed.glb",
+      "shared-storage lifecycle: restore-only recovery receives the exact stored filename",
+    );
+    assertArrayBufferBytes(
+      h2.parser.calls[0].glbBytes,
+      [21, 2, 3, 4, 5, 6, 7, 8],
+      "shared-storage lifecycle: restore-only recovery receives the exact stored bytes",
+    );
+    assertEqual(
+      sharedStorage.calls.save.length,
+      saveCallsAfterSeed,
+      "shared-storage lifecycle: restore-only recovery performs no save",
+    );
+    assertEqual(
+      sharedStorage.calls.clear,
+      clearCallsAfterSeed,
+      "shared-storage lifecycle: restore-only recovery performs no clear",
+    );
+
+    // Step 3 — restore-only mutation rejection
+    const mutationSaveSnapshot = sharedStorage.calls.save.length;
+    const mutationClearSnapshot = sharedStorage.calls.clear;
+
+    h2.controller.setFraming(framingB);
+    h2.scheduler.flush();
+    h2.controller.resetFraming();
+    h2.parser.program(() => ({ tag: "rejected-candidate" }));
+    await h2.controller.loadFile(makeFile("rejected.glb", { seed: 77 }));
+    await h2.controller.clearAvatar();
+    await settle();
+
+    assertEqual(
+      sharedStorage.calls.save.length,
+      mutationSaveSnapshot,
+      "shared-storage lifecycle: restore-only mutators perform no save",
+    );
+    assertEqual(
+      sharedStorage.calls.clear,
+      mutationClearSnapshot,
+      "shared-storage lifecycle: restore-only mutators perform no clear",
+    );
+    assertEqual(
+      h2.scheduler.pending(),
+      0,
+      "shared-storage lifecycle: restore-only mutators leave no pending framing timer",
+    );
+
+    const durableAfterMutationAttempt = sharedStorage.getDurable();
+    assertEqual(
+      durableAfterMutationAttempt.fileName,
+      "workspace-seed.glb",
+      "shared-storage lifecycle: durable filename unchanged after restore-only mutation attempts",
+    );
+    assertEqual(
+      durableAfterMutationAttempt.mimeType,
+      "model/gltf-binary",
+      "shared-storage lifecycle: durable MIME type unchanged after restore-only mutation attempts",
+    );
+    assertArrayBufferBytes(
+      durableAfterMutationAttempt.glbBytes,
+      [21, 2, 3, 4, 5, 6, 7, 8],
+      "shared-storage lifecycle: durable GLB bytes unchanged after restore-only mutation attempts",
+    );
+    assert(
+      framingsEqual(durableAfterMutationAttempt.framing, seedFraming),
+      "shared-storage lifecycle: durable framing unchanged after restore-only mutation attempts",
+    );
+
+    const stateAfterMutationAttempt = h2.controller.getState();
+    assertEqual(
+      stateAfterMutationAttempt.asset,
+      restoredAsset,
+      "shared-storage lifecycle: restore-only active asset unchanged after mutation attempts",
+    );
+    assert(
+      framingsEqual(stateAfterMutationAttempt.framing, seedFraming),
+      "shared-storage lifecycle: restore-only active framing unchanged after mutation attempts",
+    );
+
+    h2.controller.dispose();
+    assertEqual(
+      h2.disposer.countFor(restoredAsset),
+      1,
+      "shared-storage lifecycle: restore-only controller disposes the restored asset exactly once",
+    );
+
+    // Step 4 — interactive Clear
+    const h3 = createHarness({
+      storage: sharedStorage,
+      accessMode: "interactive",
+    });
+    const restoredAssetForClear = { tag: "restored-for-clear" };
+    h3.parser.program(() => restoredAssetForClear);
+    h3.controller.start();
+    await settle();
+    assertEqual(
+      h3.controller.getState().asset,
+      restoredAssetForClear,
+      "shared-storage lifecycle: new interactive controller restores the shared workspace before clearing",
+    );
+
+    const clearCallsBeforeInteractiveClear = sharedStorage.calls.clear;
+    await h3.controller.clearAvatar();
+    await settle();
+
+    assertEqual(
+      sharedStorage.calls.clear,
+      clearCallsBeforeInteractiveClear + 1,
+      "shared-storage lifecycle: exactly one interactive clear mutation is added",
+    );
+    assertEqual(
+      sharedStorage.getDurable(),
+      undefined,
+      "shared-storage lifecycle: durable storage becomes empty after interactive clear",
+    );
+    const clearedState = h3.controller.getState();
+    assertEqual(
+      clearedState.asset,
+      null,
+      "shared-storage lifecycle: controller asset is null after interactive clear",
+    );
+    assert(
+      isDefaultFraming(clearedState.framing),
+      "shared-storage lifecycle: framing returns to defaults after interactive clear",
+    );
+    assertEqual(
+      h3.disposer.countFor(restoredAssetForClear),
+      1,
+      "shared-storage lifecycle: interactive clear disposes the restored asset exactly once",
+    );
+
+    h3.controller.dispose();
+    assertEqual(
+      h3.disposer.countFor(restoredAssetForClear),
+      1,
+      "shared-storage lifecycle: disposing after clear does not double-dispose",
+    );
+
+    // Step 5 — final restore-only primitive fallback
+    const finalSaveSnapshot = sharedStorage.calls.save.length;
+    const finalClearSnapshot = sharedStorage.calls.clear;
+
+    const h4 = createHarness({
+      storage: sharedStorage,
+      accessMode: "restore-only",
+    });
+    h4.controller.start();
+    await settle();
+
+    const finalState = h4.controller.getState();
+    assertEqual(
+      finalState.lifecycleStatus,
+      "empty",
+      "shared-storage lifecycle: final restore-only controller resolves to empty",
+    );
+    assertEqual(
+      finalState.asset,
+      null,
+      "shared-storage lifecycle: final restore-only controller has no asset",
+    );
+    assert(
+      isDefaultFraming(finalState.framing),
+      "shared-storage lifecycle: final restore-only controller has default framing",
+    );
+    assertEqual(
+      sharedStorage.calls.save.length,
+      finalSaveSnapshot,
+      "shared-storage lifecycle: final restore-only controller performs no save",
+    );
+    assertEqual(
+      sharedStorage.calls.clear,
+      finalClearSnapshot,
+      "shared-storage lifecycle: final restore-only controller performs no clear",
+    );
+    assertEqual(
+      h4.scheduler.pending(),
+      0,
+      "shared-storage lifecycle: final restore-only controller leaves no pending write timer",
+    );
+
+    h4.controller.dispose();
+  }
+
   console.log(
     `Web Preview local avatar contract check passed.\n  - extracted framing contract remains shared with AvatarPreview and keeps exact v0.11.0 bounds
   - versioned v1 workspace validation, defensive cloning, and the 50 MiB GLB byte limit are covered
@@ -3871,7 +4193,7 @@ const runCheck = async () => {
   - local-only and dependency-free storage boundary assertions are present
   - the local-only GLB byte parser is shared by selected and restored bytes with user-safe error mapping
   - the pure lifecycle controller stays framework-free and reuses the versioned workspace module
-  - scale, vertical offset, and yaw framing are owned by the workspace controller and restored coherently with the GLB asset; framing persists through a 200 ms trailing debounce with an injected manual scheduler\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - restore lifecycle, save-before-commit, first-selection unsaved fallback, failed-replacement preservation, durable mutation ordering with stale reconciliation, explicit durable clear, and Three.js resource ownership are behaviorally covered with fake storage/parser/assets and deferred Promises\n  - framing debounce correctness, stale/superseded framing-save invalidation, reset-to-default persistence, and framing/replacement/clear ordering are behaviorally covered\n  - standard Preview uses interactive read/write access; OBS uses restore-only access that hydrates the durable GLB and framing without ever mutating storage\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: automated lifecycle/source evidence only; NOT real browser IndexedDB reload persistence, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
+  - scale, vertical offset, and yaw framing are owned by the workspace controller and restored coherently with the GLB asset; framing persists through a 200 ms trailing debounce with an injected manual scheduler\n  - yaw is displayed/stored in degrees and converted to radians exactly once for the loaded-GLB path\n  - static framing remains separated from MotionFrame root/head motion before the parsed GLB primitive\n  - restore lifecycle, save-before-commit, first-selection unsaved fallback, failed-replacement preservation, durable mutation ordering with stale reconciliation, explicit durable clear, and Three.js resource ownership are behaviorally covered with fake storage/parser/assets and deferred Promises\n  - framing debounce correctness, stale/superseded framing-save invalidation, reset-to-default persistence, and framing/replacement/clear ordering are behaviorally covered\n  - standard Preview uses interactive read/write access; OBS uses restore-only access that hydrates the durable GLB and framing without ever mutating storage\n  - a shared-storage scenario proves the approved #611 OBS-profile-local workflow end to end: interactive save survives controller disposal, restore-only recovery reproduces the exact filename/MIME/bytes/framing and rejects every mutator (setFraming, resetFraming, loadFile, clearAvatar), a fresh interactive controller can still clear the shared workspace, and a final restore-only controller reaches primitive fallback with zero further storage mutation\n  - dummy/native source selection remains independent\n  - local avatar controls remain excluded from OBS output while Canvas/AvatarScene remain renderable\n  - OBS alpha canvas, transparent shell/canvas, and full-viewport contracts remain present\n  - checker registration is exact-once through the Web Preview test chain\n  NOTE: automated lifecycle/source evidence only; NOT real browser IndexedDB reload persistence, representative GLB, GPU, OBS application, Electron GUI, Native Core runtime, webcam, or hardware validation.`,
   );
 };
 

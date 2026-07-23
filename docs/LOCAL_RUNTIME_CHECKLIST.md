@@ -190,13 +190,25 @@ pnpm prep:native-runtime:verify:local
 
 ### 7. OBS Browser Source preview URL
 
-This is a local/manual check because it requires OBS or equivalent browser-source validation.
+This is a local/manual check because it requires OBS or equivalent Browser Source validation, including the OBS-profile-local avatar workspace setup approved by #610/#611. See [`docs/OBS_BROWSER_SOURCE_GUIDE.md`](./OBS_BROWSER_SOURCE_GUIDE.md) for the full setup procedure and troubleshooting reference this checklist follows.
 
-- [ ] Run `pnpm dev:web`.
-- [ ] Start the native dummy or OpenCV-backed bridge path.
-- [ ] Add an OBS Browser Source that points to `http://localhost:5173/?mode=obs&source=native`.
-- [ ] Confirm the OBS-friendly layout renders and updates from local MotionFrame transport.
-- [ ] Confirm OBS is pointed at a local URL and does not require raw camera frame upload.
+- [ ] Record the exact environment and tested commit before starting (OS, OBS version, tested `git` SHA).
+- [ ] Run `pnpm dev:web` and use `localhost` consistently for every URL below (not `127.0.0.1`).
+- [ ] Confirm the final Browser Source URL used is exactly `http://localhost:5173/?mode=obs&source=native`.
+- [ ] Before any OBS-profile-local avatar workspace exists, confirm the final route renders the built-in primitive avatar.
+- [ ] Temporarily change that same Browser Source to `http://localhost:5173/?source=native`.
+- [ ] Use OBS **Interact** on that source to select one compatible, non-sensitive local `.glb` and set clearly non-default scale, vertical offset, and yaw.
+- [ ] Record all three numeric framing values and confirm both exact persistence messages appear:
+      `Saved in browser-local storage` and `Framing saved · OBS may need a refresh or reopen to update.`
+- [ ] Return the source to the final URL and confirm the restored GLB/framing render **without an initial refresh**.
+- [ ] Record the restore result: GLB restored, framing restored, management controls absent, transparent background, full viewport.
+- [ ] Check a Browser Source refresh (right-click → Refresh) separately and confirm the same output.
+- [ ] Check a scene switch away and back separately and confirm the same output.
+- [ ] Check a normal OBS restart separately, without opening Interact first, and confirm the same output.
+- [ ] Treat source removal/recreation as a bounded diagnostic only: recreate using the exact final URL, then inspect the three numeric framing values through Standard Preview via Interact. Record whether they were retained or reset to defaults. If reset, recover only through the documented Standard Preview re-entry flow. Do not claim a root cause for any observed reset.
+- [ ] Exercise **Clear local avatar** in Standard Preview and confirm the workspace becomes empty.
+- [ ] Confirm the final `mode=obs` route falls back to the built-in primitive after Clear, remaining control-free, transparent, and full viewport.
+- [ ] Do not record or publish raw/private evidence (GLB bytes, absolute paths, OBS profile contents, or screenshots of private local state).
 
 ### 8. Local-first privacy confirmation
 
@@ -240,7 +252,13 @@ Local/manual checks:
 - OpenCV camera pipeline:
 - MotionFrame bridge smoke path:
 - OBS Browser Source preview URL:
+- OBS-profile-local avatar setup (Interact, same Browser Source):
+- Final route no-refresh restore:
+- Refresh/reopen recovery path:
+- Numeric framing checkpoint (source recreation):
+- Clear + primitive fallback:
 - Raw camera frames stayed local:
+- Checks not run (list):
 
 Notes / unresolved items:
 -
