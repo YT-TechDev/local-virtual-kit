@@ -171,13 +171,13 @@ A prior investigation (#609) observed this exact reset (GLB bytes retained, fram
 
 ## Clear local avatar and primitive fallback
 
-**Clear local avatar** is available only through interactive Standard Preview (`?source=native`, opened via OBS Interact, or in a normal browser purely to inspect/manage the workspace — see the note below).
+To clear the avatar workspace used by OBS, temporarily open the setup URL (`http://localhost:5173/?source=native`) in that same OBS Browser Source and use **Clear local avatar** through OBS Interact. Clearing a workspace in a normal browser affects only that normal browser profile and does not clear the OBS Browser Source workspace.
 
-After using Clear local avatar:
+After clearing the workspace from the same OBS Browser Source through Interact:
 
 - the file selector shows no file selected;
-- the workspace is no longer stored;
-- returning to the final `mode=obs` route renders the built-in primitive avatar;
+- the workspace is no longer stored in that OBS browser profile;
+- returning the same Browser Source to the final `mode=obs` route renders the built-in primitive avatar;
 - the final output remains control-free, transparent, and full viewport, exactly as with a GLB workspace.
 
 ## Troubleshooting
