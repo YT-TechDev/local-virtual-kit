@@ -151,3 +151,7 @@ Architecture, MotionFrame, and development policy references remain focused here
 ## Git policy
 
 Do not push directly to `main`. Use a dedicated branch and open a small, reviewable pull request for changes.
+
+## License
+
+Local Virtual Kit is licensed under the [MIT License](LICENSE.md).
