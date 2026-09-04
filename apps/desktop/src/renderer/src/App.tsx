@@ -264,6 +264,9 @@ const buildNativeRuntimeDiagnostics = (
       : null,
     status.lastMessage ? `Latest status: ${status.lastMessage}` : null,
     status.lastError ? `Latest error: ${status.lastError}` : null,
+    status.helperSessionDiagnostics && status.helperSessionDiagnostics.length > 0
+      ? `Helper session diagnostics: ${status.helperSessionDiagnostics.join('; ')}`
+      : null,
     pipelineError ? `Pipeline error: ${pipelineError}` : null
   ]
     .filter((line): line is string => Boolean(line))
@@ -1866,7 +1869,11 @@ function App(): React.JSX.Element {
               </div>
             ) : null}
 
-            {runtimeStatus.lastMessage || runtimeStatus.lastError || pipelineError ? (
+            {runtimeStatus.lastMessage ||
+            runtimeStatus.lastError ||
+            pipelineError ||
+            (runtimeStatus.helperSessionDiagnostics &&
+              runtimeStatus.helperSessionDiagnostics.length > 0) ? (
               <div className="runtime-details-panel">
                 <p className="runtime-details-panel__header">Runtime details</p>
                 <div className="runtime-details-panel__items">
@@ -1893,6 +1900,23 @@ function App(): React.JSX.Element {
                       </strong>
                       {runtimeStatus.lastError}
                     </p>
+                  ) : null}
+                  {runtimeStatus.helperSessionDiagnostics &&
+                  runtimeStatus.helperSessionDiagnostics.length > 0 ? (
+                    <div
+                      className="runtime-message"
+                      role="status"
+                      aria-labelledby="helper-session-diagnostics-label"
+                    >
+                      <strong id="helper-session-diagnostics-label" className="status-detail-label">
+                        Helper session diagnostics
+                      </strong>
+                      <ul className="helper-session-diagnostics-list">
+                        {runtimeStatus.helperSessionDiagnostics.map((line, index) => (
+                          <li key={`${index}-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
                   ) : null}
                   {pipelineError ? (
                     <p className="error-message compact" role="alert">
