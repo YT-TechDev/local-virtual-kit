@@ -91,6 +91,12 @@ export interface LvkRuntimeStatus {
   faceCascadePathConfigured?: boolean
   lastError?: string
   lastMessage?: string
+  // Bounded, fixed-category-only Native Core [helper-session] lifecycle
+  // diagnostics for the current pipeline lifetime (#589 follow-up). Never raw
+  // stderr, paths, argv, PIDs, or frame/tracking data -- see
+  // matchHelperSessionDiagnosticLine() in nativePipeline.ts for the exact
+  // recognized forms. Cleared on every new pipeline start.
+  helperSessionDiagnostics?: string[]
 }
 
 export interface LvkDesktopApi {

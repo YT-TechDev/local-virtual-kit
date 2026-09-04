@@ -329,6 +329,12 @@ dd {
   color: var(--ev-c-text-2);
 }
 
+.helper-session-diagnostics-list {
+  margin: 0;
+  padding-left: 18px;
+  font-weight: 400;
+}
+
 .command-list li::marker {
   color: #9fb2d4;
   font-weight: 800;

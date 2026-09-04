@@ -33,6 +33,62 @@ const DEFAULT_CAMERA_FPS = 60
 const DEFAULT_CAMERA_WIDTH = 640
 const DEFAULT_CAMERA_HEIGHT = 480
 
+// #589 follow-up: Native Core's fixed, privacy-safe [helper-session] lifecycle
+// diagnostic labels (see native/tracker-core/src/helper_process_session.cpp
+// helperDiagnosticCategoryLabel()/helperChildCleanupDispositionLabel() and
+// tracking_backend.cpp). Closed sets only -- recognizing a line requires an
+// exact match against one of these fixed labels, never arbitrary text.
+const HELPER_SESSION_CATEGORY_LABELS = [
+  'none',
+  'launch-failure',
+  'ready-timeout',
+  'malformed-message',
+  'result-timeout',
+  'child-exit',
+  'shutdown-timeout',
+  'frame-write-timeout',
+  'frame-ack-mismatch'
+] as const
+
+const HELPER_SESSION_DISPOSITION_LABELS = [
+  'not-applicable',
+  'confirmed-release',
+  'deferred-registry-transfer',
+  'unknown'
+] as const
+
+// The only four fixed Native Core [helper-session] lifecycle diagnostic forms
+// this boundary preserves. Any other stderr line (including the unrelated
+// "[helper-session] shutdown incomplete (...)" diagnostic and all periodic
+// [pipeline]/[camera] status lines) is treated as ordinary lastMessage text
+// and is never added to the bounded helper-session evidence below.
+const HELPER_SESSION_LINE_PATTERNS: readonly RegExp[] = [
+  new RegExp(
+    `^\\[helper-session\\] session failed \\(category=(?:${HELPER_SESSION_CATEGORY_LABELS.join('|')})\\)$`
+  ),
+  new RegExp(
+    `^\\[helper-session\\] recovery gen1-cleanup \\(disposition=(?:${HELPER_SESSION_DISPOSITION_LABELS.join('|')})\\)$`
+  ),
+  /^\[helper-session\] recovery succeeded$/,
+  new RegExp(
+    `^\\[helper-session\\] recovery failed \\(category=(?:${HELPER_SESSION_CATEGORY_LABELS.join('|')})\\)$`
+  )
+]
+
+// Bounded so a long-running pipeline can never accumulate unbounded evidence.
+const MAX_HELPER_SESSION_DIAGNOSTICS = 20
+
+// Returns the trimmed line only when it exactly matches one of the fixed
+// [helper-session] lifecycle forms; otherwise null. This is the sole gate
+// between raw tracker stderr and the bounded helper-session evidence store.
+function matchHelperSessionDiagnosticLine(line: string): string | null {
+  const trimmed = line.trim()
+  if (!trimmed) {
+    return null
+  }
+  return HELPER_SESSION_LINE_PATTERNS.some((pattern) => pattern.test(trimmed)) ? trimmed : null
+}
+
 // #595: the only two approved private environment-variable keys for the
 // opt-in mediapipe-face-landmarker development route. Their values are read
 // here in Electron main only and must never be persisted, rendered, copied
@@ -191,7 +247,8 @@ function createInitialStatus(): LvkRuntimeStatus {
     pipelineCameraFps: DEFAULT_CAMERA_FPS,
     pipelineCameraWidth: DEFAULT_CAMERA_WIDTH,
     pipelineCameraHeight: DEFAULT_CAMERA_HEIGHT,
-    faceCascadePathConfigured: getConfiguredFaceCascadePath() !== null
+    faceCascadePathConfigured: getConfiguredFaceCascadePath() !== null,
+    helperSessionDiagnostics: []
   }
 }
 
@@ -425,9 +482,14 @@ export class NativePipelineManager {
   private status = createInitialStatus()
   private trackerProcess: ChildProcessWithoutNullStreams | null = null
   private trackerStdoutReader: RlInterface | null = null
+  private trackerStderrReader: RlInterface | null = null
   private isStopping = false
   private noFrameStartupTimer: NodeJS.Timeout | null = null
   private hasReceivedMotionFrameSinceStart = false
+  // Bounded, in-memory-only [helper-session] lifecycle evidence for the
+  // current pipeline lifetime. Reset on every new pipeline start; never
+  // persisted, never containing raw stderr outside the fixed matched forms.
+  private helperSessionDiagnostics: string[] = []
 
   getStatus(): LvkRuntimeStatus {
     return { ...this.status }
@@ -621,6 +683,7 @@ export class NativePipelineManager {
     }
 
     this.isStopping = false
+    this.helperSessionDiagnostics = []
     this.status = {
       ...createInitialStatus(),
       nativeTrackerStatus: 'starting',
@@ -658,6 +721,15 @@ export class NativePipelineManager {
         ...(trackerEnv ? { env: trackerEnv } : {})
       })
       this.attachProcessHandlers('tracker', this.trackerProcess)
+
+      this.trackerStderrReader = createInterface({
+        input: this.trackerProcess.stderr,
+        crlfDelay: Infinity,
+        terminal: false
+      })
+      this.trackerStderrReader.on('line', (line: string) => {
+        this.handleTrackerStderrLine(line)
+      })
 
       this.trackerStdoutReader = createInterface({
         input: this.trackerProcess.stdout,
@@ -720,6 +792,8 @@ export class NativePipelineManager {
 
       this.trackerStdoutReader?.close()
       this.trackerStdoutReader = null
+      this.trackerStderrReader?.close()
+      this.trackerStderrReader = null
 
       await this.terminateProcess(this.trackerProcess)
       stopMotionBridgeServer()
@@ -745,6 +819,8 @@ export class NativePipelineManager {
 
     this.trackerStdoutReader?.close()
     this.trackerStdoutReader = null
+    this.trackerStderrReader?.close()
+    this.trackerStderrReader = null
 
     this.killProcess(this.trackerProcess)
     this.trackerProcess = null
@@ -757,18 +833,7 @@ export class NativePipelineManager {
     childProcess: ChildProcessWithoutNullStreams
   ): void {
     // tracker stdout is consumed by the readline interface created in start()
-
-    childProcess.stderr.on('data', (data: Buffer) => {
-      const message = truncateStatusMessage(data.toString('utf8'))
-      if (!message) {
-        return
-      }
-
-      this.status = {
-        ...this.status,
-        lastMessage: `${kind === 'tracker' ? 'Native tracker' : 'Motion bridge'}: ${message}`
-      }
-    })
+    // tracker stderr is consumed by the readline interface created in start()
 
     childProcess.once('error', (error) => {
       if (kind === 'tracker') {
@@ -828,6 +893,40 @@ export class NativePipelineManager {
     }
   }
 
+  // Boundary between raw tracker stderr and status: a fixed-form
+  // [helper-session] lifecycle line is preserved separately (and survives
+  // later periodic [pipeline]/[camera] status lines); every other line is
+  // ordinary, truncated lastMessage text as before.
+  private handleTrackerStderrLine(line: string): void {
+    const helperSessionLine = matchHelperSessionDiagnosticLine(line)
+    if (helperSessionLine) {
+      this.appendHelperSessionDiagnostic(helperSessionLine)
+      return
+    }
+
+    const message = truncateStatusMessage(line)
+    if (!message) {
+      return
+    }
+
+    this.status = {
+      ...this.status,
+      lastMessage: `Native tracker: ${message}`
+    }
+  }
+
+  private appendHelperSessionDiagnostic(line: string): void {
+    const next = [...this.helperSessionDiagnostics, line]
+    if (next.length > MAX_HELPER_SESSION_DIAGNOSTICS) {
+      next.splice(0, next.length - MAX_HELPER_SESSION_DIAGNOSTICS)
+    }
+    this.helperSessionDiagnostics = next
+    this.status = {
+      ...this.status,
+      helperSessionDiagnostics: next
+    }
+  }
+
   private handleValidMotionFrameReceived(): void {
     if (this.hasReceivedMotionFrameSinceStart) {
       return
@@ -846,6 +945,8 @@ export class NativePipelineManager {
 
     this.trackerStdoutReader?.close()
     this.trackerStdoutReader = null
+    this.trackerStderrReader?.close()
+    this.trackerStderrReader = null
 
     this.status = {
       ...this.status,
