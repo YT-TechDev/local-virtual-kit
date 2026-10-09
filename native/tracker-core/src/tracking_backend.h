@@ -254,6 +254,12 @@ class FrameHelperTrackingBackend final : public TrackingBackend {
   // on a successful replacement start().
   HelperTerminalDiagnosticDisposition terminalDiagnostic_ =
       HelperTerminalDiagnosticDisposition::SuppressedUntilStarted;
+
+  // v0.13.0 (#616): backend-owned generation of the current session_, printed
+  // only in the fixed diagnostic-only "[helper-session] failure timing (...)"
+  // line: 1 for the initial session, 2 once the single #589 replacement is
+  // constructed. Never changes recovery policy, budget, or control flow.
+  int sessionGeneration_ = 1;
 };
 
 // v0.13.0 (#569) thin compatibility wrapper preserving the existing

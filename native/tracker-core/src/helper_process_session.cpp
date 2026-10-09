@@ -164,6 +164,8 @@ class ChildFallbackReservationGuard {
 }  // namespace lvk::tracker
 
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+#include <thread>
+
 namespace lvk::tracker {
 namespace {
 // Test-only lifecycle fault-injection flags. Declared before the platform
@@ -219,6 +221,12 @@ std::atomic<bool> g_forceNextGracefulStopThrow{false};
 // Ready/Running branch). Consumed by the next stop(). Shared across
 // platforms; compiled out of production builds.
 std::atomic<bool> g_forceNextCleanupResolveThrow{false};
+// v0.13.0 (#616): one-shot result-wait stall. 0=None, 1=AfterFirstPump,
+// 2=AfterCompleteLineBuffered (mirrors test_seam::ResultWaitStallMode).
+// Consumed by the result wait that fires it. Shared across platforms;
+// compiled out of production builds.
+std::atomic<int> g_nextResultWaitStallMode{0};
+std::atomic<int> g_nextResultWaitStallMs{0};
 }  // namespace
 }  // namespace lvk::tracker
 #endif
@@ -2530,6 +2538,14 @@ void setForceNextGracefulStopThrow(bool enabled) {
 void setForceNextCleanupResolveThrow(bool enabled) {
   g_forceNextCleanupResolveThrow.store(enabled, std::memory_order_release);
 }
+void setNextResultWaitStall(ResultWaitStallMode mode, int stallMs) {
+  g_nextResultWaitStallMs.store(stallMs < 0 ? 0 : stallMs);
+  g_nextResultWaitStallMode.store(static_cast<int>(mode));
+}
+bool resultWaitStallArmedForTest() {
+  return g_nextResultWaitStallMode.load() !=
+      static_cast<int>(ResultWaitStallMode::None);
+}
 }  // namespace test_seam
 #endif
 
@@ -2712,8 +2728,20 @@ bool HelperProcessSession::drainStderr() {
 bool HelperProcessSession::nextStdoutLine(
     std::string& lineOut,
     int timeoutMs,
-    HelperDiagnosticCategory timeoutCategory) {
-  const long long deadline = nowMs() + timeoutMs;
+    HelperDiagnosticCategory timeoutCategory,
+    WaitTiming* timing) {
+  const long long startMs = nowMs();
+  const long long deadline = startMs + timeoutMs;
+  // v0.13.0 (#616): diagnostic-only. The previous deadline-check sample
+  // (initially the deadline setup), reused to measure check-to-check gaps.
+  long long lastCheckMs = startMs;
+  if (timing != nullptr) {
+    *timing = WaitTiming{};
+    timing->startMs = startMs;
+  }
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+  bool firstPump = true;
+#endif
   while (true) {
     if (!drainStderr()) {
       lastDiagnostic_ = HelperDiagnosticCategory::MalformedMessage;
@@ -2726,6 +2754,9 @@ bool HelperProcessSession::nextStdoutLine(
       return false;
     }
     if (scan == HelperLineScan::Line) {
+      if (timing != nullptr) {
+        timing->endMs = nowMs();
+      }
       return true;
     }
 
@@ -2737,15 +2768,51 @@ bool HelperProcessSession::nextStdoutLine(
       return false;
     }
 
-    const long long remaining = deadline - nowMs();
+    const long long checkMs = nowMs();
+    if (timing != nullptr && checkMs - lastCheckMs > timing->maxGapMs) {
+      timing->maxGapMs = checkMs - lastCheckMs;
+    }
+    lastCheckMs = checkMs;
+    const long long remaining = deadline - checkMs;
     if (remaining <= 0) {
+      if (timing != nullptr) {
+        timing->endMs = checkMs;
+        timing->overshootMs = checkMs - deadline;
+      }
       lastDiagnostic_ = timeoutCategory;
       return false;
     }
 
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    const std::size_t stdoutBytesBeforePump = stdoutBuffer_.size();
+#endif
     platformPump(
         *handles_, static_cast<int>(remaining), stdoutBuffer_, stdoutEof_,
         stderrBuffer_, stderrEof_);
+#ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
+    // v0.13.0 (#616): test-only, one-shot result-wait stall (see
+    // test_seam::setNextResultWaitStall). Result waits only.
+    if (timeoutCategory == HelperDiagnosticCategory::ResultTimeout) {
+      int armedMode = g_nextResultWaitStallMode.load();
+      const bool fire =
+          (armedMode ==
+               static_cast<int>(test_seam::ResultWaitStallMode::AfterFirstPump) &&
+           firstPump) ||
+          (armedMode ==
+               static_cast<int>(
+                   test_seam::ResultWaitStallMode::AfterCompleteLineBuffered) &&
+           stdoutBuffer_.size() > stdoutBytesBeforePump &&
+           stdoutBuffer_.find('\n') != std::string::npos);
+      if (fire &&
+          g_nextResultWaitStallMode.compare_exchange_strong(
+              armedMode,
+              static_cast<int>(test_seam::ResultWaitStallMode::None))) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(g_nextResultWaitStallMs.load()));
+      }
+    }
+    firstPump = false;
+#endif
   }
 }
 
@@ -2920,7 +2987,28 @@ bool HelperProcessSession::start() {
   }
 
   state_ = HelperSessionState::Ready;
+  // v0.13.0 (#616): diagnostic-only age reference for timingSnapshot().
+  readyAtMs_ = nowMs();
   return true;
+}
+
+HelperSessionTimingSnapshot HelperProcessSession::timingSnapshot()
+    const noexcept {
+  HelperSessionTimingSnapshot snapshot;
+  snapshot.hasResultTimeout = timingHasResultTimeout_;
+  snapshot.exchanges = saturateHelperTimingCount(timingExchanges_);
+  if (timingHasResultTimeout_) {
+    snapshot.ageMs = saturateHelperTimingValue(timingFailedAtMs_ - readyAtMs_);
+    snapshot.writeMs = saturateHelperTimingValue(timingFailedWriteMs_);
+    snapshot.maxGapMs = saturateHelperTimingValue(timingFailedMaxGapMs_);
+    snapshot.overshootMs = saturateHelperTimingValue(timingFailedOvershootMs_);
+  }
+  snapshot.lastWaitMs = saturateHelperTimingValue(timingLastWaitMs_);
+  snapshot.maxWaitMs = saturateHelperTimingValue(timingMaxWaitMs_);
+  snapshot.slowWaits = saturateHelperTimingCount(timingSlowWaits_);
+  snapshot.lastInferenceMs = timingLastInferenceMs_;
+  snapshot.maxInferenceMs = timingMaxInferenceMs_;
+  return snapshot;
 }
 
 HelperTrackOutcome HelperProcessSession::track(long long frameTimestampMs) {
@@ -2950,6 +3038,10 @@ HelperTrackOutcome HelperProcessSession::trackInternal(
   }
 
   const std::uint64_t requestId = ++nextRequestId_;
+  // v0.13.0 (#616): diagnostic-only. writeMs ends at the result wait's own
+  // deadline-setup sample, so this is the only extra clock read per exchange
+  // besides the wait's successful-line sample.
+  const long long writeStartMs = nowMs();
   if (!writeControlLine(buildRequestLine(requestId, frameTimestampMs))) {
     lastDiagnostic_ = HelperDiagnosticCategory::ChildExit;
     state_ = HelperSessionState::Failed;
@@ -2970,9 +3062,19 @@ HelperTrackOutcome HelperProcessSession::trackInternal(
   }
 
   std::string line;
+  WaitTiming waitTiming;
   if (!nextStdoutLine(
           line, config_.resultTimeoutMs,
-          HelperDiagnosticCategory::ResultTimeout)) {
+          HelperDiagnosticCategory::ResultTimeout, &waitTiming)) {
+    // v0.13.0 (#616): diagnostic-only capture of the failed exchange. Records
+    // already-measured values only; the failure path itself is unchanged.
+    if (lastDiagnostic_ == HelperDiagnosticCategory::ResultTimeout) {
+      timingHasResultTimeout_ = true;
+      timingFailedAtMs_ = waitTiming.endMs;
+      timingFailedWriteMs_ = waitTiming.startMs - writeStartMs;
+      timingFailedMaxGapMs_ = waitTiming.maxGapMs;
+      timingFailedOvershootMs_ = waitTiming.overshootMs;
+    }
     state_ = HelperSessionState::Failed;
     return outcome;
   }
@@ -3014,6 +3116,25 @@ HelperTrackOutcome HelperProcessSession::trackInternal(
       state_ = HelperSessionState::Failed;
       return outcome;
     }
+  }
+
+  // v0.13.0 (#616): diagnostic-only per-generation aggregates over successful
+  // exchanges (including legitimate no-face results).
+  const long long waitMs = waitTiming.endMs - waitTiming.startMs;
+  if (timingExchanges_ < kHelperTimingSaturationCap) {
+    ++timingExchanges_;
+  }
+  timingLastWaitMs_ = waitMs;
+  if (waitMs > timingMaxWaitMs_) {
+    timingMaxWaitMs_ = waitMs;
+  }
+  if (waitMs >= static_cast<long long>(config_.resultTimeoutMs / 2) &&
+      timingSlowWaits_ < kHelperTimingSaturationCap) {
+    ++timingSlowWaits_;
+  }
+  timingLastInferenceMs_ = saturateHelperTimingDouble(parsed.payload.inferenceMs);
+  if (timingLastInferenceMs_ > timingMaxInferenceMs_) {
+    timingMaxInferenceMs_ = timingLastInferenceMs_;
   }
 
   outcome.ok = true;

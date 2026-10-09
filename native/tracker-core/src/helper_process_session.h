@@ -232,6 +232,86 @@ struct HelperTrackOutcome {
   HelperTrackingResult result;    // valid only when ok == true
 };
 
+// v0.13.0 (#616): the fixed saturation cap for every diagnostic-only helper
+// timing value (decimal 0-999999999). Every value is clamped to
+// [0, kHelperTimingSaturationCap] BEFORE any signed/unsigned conversion, so no
+// value can ever wrap.
+inline constexpr unsigned long long kHelperTimingSaturationCap = 999999999ull;
+
+// v0.13.0 (#616): overflow-safe clamps shared by the session's timing snapshot
+// and its deterministic smoke. Negative (and, for doubles, non-finite or NaN)
+// inputs become 0; anything at or above the cap becomes the cap. The double
+// form rounds half up after clamping. Pure, allocation-free, and noexcept.
+inline constexpr unsigned long long saturateHelperTimingValue(
+    long long value) noexcept {
+  if (value <= 0) {
+    return 0;
+  }
+  const unsigned long long magnitude = static_cast<unsigned long long>(value);
+  return magnitude >= kHelperTimingSaturationCap ? kHelperTimingSaturationCap
+                                                 : magnitude;
+}
+inline constexpr unsigned long long saturateHelperTimingCount(
+    unsigned long long value) noexcept {
+  return value >= kHelperTimingSaturationCap ? kHelperTimingSaturationCap
+                                             : value;
+}
+inline constexpr unsigned long long saturateHelperTimingDouble(
+    double value) noexcept {
+  // `!(value > 0.0)` is true for NaN as well as for any value <= 0.
+  if (!(value > 0.0)) {
+    return 0;
+  }
+  if (value >= static_cast<double>(kHelperTimingSaturationCap)) {
+    return kHelperTimingSaturationCap;  // includes +infinity
+  }
+  const unsigned long long rounded =
+      static_cast<unsigned long long>(value + 0.5);
+  return rounded >= kHelperTimingSaturationCap ? kHelperTimingSaturationCap
+                                               : rounded;
+}
+
+// v0.13.0 (#616): bounded, Native Core-internal, diagnostic-only timing
+// snapshot for ONE helper session generation. Plain values only: no raw
+// helper text, frame bytes, path, pid, or handle. All values are monotonic
+// steady-clock millisecond quantities, already saturated to
+// kHelperTimingSaturationCap. Never serialized into MotionFrame.
+//
+// The failed-exchange fields (ageMs, writeMs, maxGapMs, overshootMs) are
+// meaningful only when hasResultTimeout is true, i.e. only after this session
+// reached terminal ResultTimeout on its result wait. The successful-exchange
+// fields (lastWaitMs, maxWaitMs, lastInferenceMs, maxInferenceMs) are
+// meaningful only when exchanges > 0; the owner prints them as "na" otherwise.
+//
+// Interpretation limits (see #616): waits describe only SUCCESSFULLY returned
+// exchanges and may exceed resultTimeoutMs, because the existing wait loop
+// scans for a complete line before it checks the deadline. Inference values
+// come from successfully parsed envelopes only (never the timed-out request);
+// a missing diag block, a missing/zero/sub-0.5ms field, and a clamped negative
+// value all read as 0, so 0 is not evidence of inference work.
+struct HelperSessionTimingSnapshot {
+  bool hasResultTimeout = false;
+  // Successful trackInternal() outcomes (ok == true), including legitimate
+  // no-face results.
+  unsigned long long exchanges = 0;
+  // Ready -> terminal ResultTimeout detection.
+  unsigned long long ageMs = 0;
+  // Failed exchange: before the control-line write -> frame-packet write
+  // return (including Native checksum work).
+  unsigned long long writeMs = 0;
+  // Failed exchange: largest interval between adjacent deadline checks in the
+  // result wait, including the initial entry.
+  unsigned long long maxGapMs = 0;
+  // Failed exchange: timeout detection minus its deadline (never negative).
+  unsigned long long overshootMs = 0;
+  unsigned long long lastWaitMs = 0;
+  unsigned long long maxWaitMs = 0;
+  // Successful waits >= resultTimeoutMs / 2 (integer division).
+  unsigned long long slowWaits = 0;
+  unsigned long long lastInferenceMs = 0;
+  unsigned long long maxInferenceMs = 0;
+};
+
 class HelperProcessSession {
  public:
   explicit HelperProcessSession(HelperSessionConfig config);
@@ -294,6 +374,11 @@ class HelperProcessSession {
     return shutdownDiagnostic_;
   }
 
+  // v0.13.0 (#616): diagnostic-only, saturated timing snapshot for this
+  // session generation (see HelperSessionTimingSnapshot). Read-only: never
+  // changes session state, timeouts, or control flow.
+  HelperSessionTimingSnapshot timingSnapshot() const noexcept;
+
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
   // Test-only observability for the POSIX pid this session currently directly
   // owns (before any transfer to the durable registry), or -1 if none (either
@@ -332,10 +417,22 @@ class HelperProcessSession {
     Timeout,         // bounded drain elapsed without a valid "stopped" line
   };
 
+  // v0.13.0 (#616): bounded result-wait timing samples, filled only when a
+  // caller passes a non-null pointer to nextStdoutLine(). Every value reuses
+  // the wait loop's existing deadline-check clock samples; the only extra
+  // sample is one per successful line (endMs).
+  struct WaitTiming {
+    long long startMs = 0;      // deadline setup
+    long long endMs = 0;        // complete line found, or timeout detected
+    long long maxGapMs = 0;     // largest adjacent deadline-check interval
+    long long overshootMs = 0;  // timeout detection minus deadline
+  };
+
   bool nextStdoutLine(
       std::string& lineOut,
       int timeoutMs,
-      HelperDiagnosticCategory timeoutCategory);
+      HelperDiagnosticCategory timeoutCategory,
+      WaitTiming* timing = nullptr);
   bool drainStderr();
   // v0.13.0 (#580): the BoundedOpaqueDiscard branch of drainStderr(). Consumes
   // and discards all currently buffered child stderr bytes after adding their
@@ -404,6 +501,23 @@ class HelperProcessSession {
   // forwarded. Invariantly <= kHelperOpaqueStderrMaxBytes. Never exposed
   // publicly or in MotionFrame.
   unsigned long long opaqueStderrByteTotal_ = 0;
+
+  // v0.13.0 (#616): diagnostic-only per-generation timing state behind
+  // timingSnapshot(). Raw steady-clock millisecond values; saturated only when
+  // the snapshot is produced. Never alters control flow and never leaves
+  // Native Core except as the owner's fixed, saturated timing line.
+  long long readyAtMs_ = 0;
+  bool timingHasResultTimeout_ = false;
+  long long timingFailedAtMs_ = 0;
+  long long timingFailedWriteMs_ = 0;
+  long long timingFailedMaxGapMs_ = 0;
+  long long timingFailedOvershootMs_ = 0;
+  unsigned long long timingExchanges_ = 0;
+  long long timingLastWaitMs_ = 0;
+  long long timingMaxWaitMs_ = 0;
+  unsigned long long timingSlowWaits_ = 0;
+  unsigned long long timingLastInferenceMs_ = 0;  // already saturated
+  unsigned long long timingMaxInferenceMs_ = 0;   // already saturated
 };
 
 #ifdef LVK_HELPER_LIFECYCLE_TEST_SEAM
@@ -559,6 +673,28 @@ void setForceNextWriterTeardownWaitUnconfirmed(bool enabled);
 // round-tripped back to its pre-call baseline. No-op (returns true
 // trivially) on POSIX.
 bool exerciseWriterTeardownForTest();
+
+// v0.13.0 (#616): one-shot, controlled stall inside the NEXT result wait
+// (nextStdoutLine() with the ResultTimeout category only -- never the ready
+// handshake or shutdown drain), so the diagnostic-only timing fields can be
+// asserted relationally without timing-flaky child behavior.
+//   AfterFirstPump: sleep stallMs immediately after that wait's first
+//     platform pump returns.
+//   AfterCompleteLineBuffered: sleep stallMs immediately after a pump grows
+//     stdout AND the buffer already holds a complete ('\n'-terminated) line,
+//     so the following scan deterministically accepts that line even when the
+//     stall pushed it past the deadline (the existing scan-before-deadline
+//     ordering).
+// Consumed (reset to None) when it fires. Changes no timeout, state, or
+// protocol behavior; compiled out of production.
+enum class ResultWaitStallMode {
+  None,
+  AfterFirstPump,
+  AfterCompleteLineBuffered,
+};
+void setNextResultWaitStall(ResultWaitStallMode mode, int stallMs);
+// True while a stall armed above has not fired yet.
+bool resultWaitStallArmedForTest();
 
 }  // namespace test_seam
 #endif
