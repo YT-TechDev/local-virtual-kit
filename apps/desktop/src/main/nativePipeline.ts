@@ -57,8 +57,14 @@ const HELPER_SESSION_DISPOSITION_LABELS = [
   'unknown'
 ] as const
 
-// The only four fixed Native Core [helper-session] lifecycle diagnostic forms
-// this boundary preserves. Any other stderr line (including the unrelated
+// #616: the closed numeric grammar of the diagnostic-only
+// "[helper-session] failure timing (...)" form. U is a saturated decimal
+// 0-999999999 with no sign or leading zero; V is U or the literal "na".
+const HELPER_SESSION_TIMING_UINT = '(?:0|[1-9][0-9]{0,8})'
+const HELPER_SESSION_TIMING_VALUE = `(?:${HELPER_SESSION_TIMING_UINT}|na)`
+
+// The only five fixed Native Core [helper-session] diagnostic forms this
+// boundary preserves. Any other stderr line (including the unrelated
 // "[helper-session] shutdown incomplete (...)" diagnostic and all periodic
 // [pipeline]/[camera] status lines) is treated as ordinary lastMessage text
 // and is never added to the bounded helper-session evidence below.
@@ -72,6 +78,14 @@ const HELPER_SESSION_LINE_PATTERNS: readonly RegExp[] = [
   /^\[helper-session\] recovery succeeded$/,
   new RegExp(
     `^\\[helper-session\\] recovery failed \\(category=(?:${HELPER_SESSION_CATEGORY_LABELS.join('|')})\\)$`
+  ),
+  new RegExp(
+    `^\\[helper-session\\] failure timing \\(generation=[12], exchanges=${HELPER_SESSION_TIMING_UINT}, ` +
+      `ageMs=${HELPER_SESSION_TIMING_UINT}, writeMs=${HELPER_SESSION_TIMING_UINT}, ` +
+      `maxGapMs=${HELPER_SESSION_TIMING_UINT}, overshootMs=${HELPER_SESSION_TIMING_UINT}, ` +
+      `lastWaitMs=${HELPER_SESSION_TIMING_VALUE}, maxWaitMs=${HELPER_SESSION_TIMING_VALUE}, ` +
+      `slowWaits=${HELPER_SESSION_TIMING_UINT}, lastInferenceMs=${HELPER_SESSION_TIMING_VALUE}, ` +
+      `maxInferenceMs=${HELPER_SESSION_TIMING_VALUE}\\)$`
   )
 ]
 

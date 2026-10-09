@@ -162,7 +162,7 @@ for (const label of dispositionLabels) {
 }
 assertMatches("[helper-session] recovery succeeded", "recovery succeeded");
 
-// Only the four fixed forms are recognized -- the unrelated
+// Only the five fixed forms are recognized -- the unrelated
 // "shutdown incomplete" diagnostic, ordinary periodic status lines, and
 // label-injection attempts must never enter the bounded evidence store.
 assertRejects(
@@ -187,10 +187,239 @@ assertRejects(
 );
 assertRejects("totally unrelated stderr noise", "arbitrary unrelated stderr");
 
+// --- #616: the fifth fixed form, "[helper-session] failure timing (...)" ---
+
+const timingKeys = [
+  "exchanges",
+  "ageMs",
+  "writeMs",
+  "maxGapMs",
+  "overshootMs",
+  "lastWaitMs",
+  "maxWaitMs",
+  "slowWaits",
+  "lastInferenceMs",
+  "maxInferenceMs",
+];
+const optionalTimingKeys = new Set([
+  "lastWaitMs",
+  "maxWaitMs",
+  "lastInferenceMs",
+  "maxInferenceMs",
+]);
+const canonicalTimingValues = {
+  exchanges: "3",
+  ageMs: "147",
+  writeMs: "1",
+  maxGapMs: "18",
+  overshootMs: "14",
+  lastWaitMs: "13",
+  maxWaitMs: "15",
+  slowWaits: "0",
+  lastInferenceMs: "0",
+  maxInferenceMs: "12",
+};
+const buildTimingLine = ({
+  generation = "1",
+  values = canonicalTimingValues,
+  keys = timingKeys,
+  separator = ", ",
+  prefix = "[helper-session] failure timing (",
+  suffix = ")",
+} = {}) =>
+  `${prefix}generation=${generation}${separator}${keys
+    .map((key) => `${key}=${values[key]}`)
+    .join(separator)}${suffix}`;
+const withValue = (key, value) => ({ ...canonicalTimingValues, [key]: value });
+
+// Canonical generation 1 and 2 records, all-"na" first-exchange failure,
+// boundary values, and saturation.
+assertMatches(buildTimingLine(), "timing / canonical generation=1");
+assertMatches(
+  buildTimingLine({ generation: "2" }),
+  "timing / canonical generation=2",
+);
+const firstExchangeFailure = {
+  ...canonicalTimingValues,
+  exchanges: "0",
+  lastWaitMs: "na",
+  maxWaitMs: "na",
+  lastInferenceMs: "na",
+  maxInferenceMs: "na",
+};
+assertMatches(
+  buildTimingLine({ generation: "2", values: firstExchangeFailure }),
+  "timing / generation=2 exchanges=0 with na fields",
+);
+for (const key of timingKeys) {
+  assertMatches(
+    buildTimingLine({ values: withValue(key, "0") }),
+    `timing / ${key}=0`,
+  );
+  assertMatches(
+    buildTimingLine({ values: withValue(key, "999999999") }),
+    `timing / ${key}=999999999 (saturation cap)`,
+  );
+  if (optionalTimingKeys.has(key)) {
+    assertMatches(
+      buildTimingLine({ values: withValue(key, "na") }),
+      `timing / ${key}=na`,
+    );
+  } else {
+    assertRejects(
+      buildTimingLine({ values: withValue(key, "na") }),
+      `timing / na is not allowed for ${key}`,
+    );
+  }
+  // Signed, leading-zero, too-many-digit, fractional, exponent, hex,
+  // whitespace-padded, empty, and non-literal "na" values.
+  for (const bad of [
+    "-1",
+    "+1",
+    "01",
+    "00",
+    "1000000000",
+    "9999999999",
+    "1.5",
+    "1e3",
+    "0x1",
+    " 1",
+    "1 ",
+    "",
+    "NA",
+    "n/a",
+    "null",
+  ]) {
+    assertRejects(
+      buildTimingLine({ values: withValue(key, bad) }),
+      `timing / invalid ${key}=${JSON.stringify(bad)}`,
+    );
+  }
+}
+
+// Invalid generations.
+for (const generation of ["0", "3", "01", "-1", "12", "", "na", "1.0"]) {
+  assertRejects(
+    buildTimingLine({ generation }),
+    `timing / invalid generation=${JSON.stringify(generation)}`,
+  );
+}
+
+// Changed key order, missing keys, duplicated/extra keys, renamed keys.
+assertRejects(
+  buildTimingLine({ keys: [...timingKeys].reverse() }),
+  "timing / reversed key order",
+);
+assertRejects(
+  buildTimingLine({
+    keys: [
+      "ageMs",
+      "exchanges",
+      ...timingKeys.filter((key) => key !== "ageMs" && key !== "exchanges"),
+    ],
+  }),
+  "timing / two adjacent keys swapped",
+);
+for (const key of timingKeys) {
+  assertRejects(
+    buildTimingLine({ keys: timingKeys.filter((other) => other !== key) }),
+    `timing / missing ${key}`,
+  );
+}
+assertRejects(
+  buildTimingLine({ keys: [...timingKeys, "maxInferenceMs"] }),
+  "timing / duplicated trailing key",
+);
+assertRejects(
+  buildTimingLine({
+    keys: [...timingKeys, "extraMs"],
+    values: { ...canonicalTimingValues, extraMs: "1" },
+  }),
+  "timing / extra key",
+);
+assertRejects(
+  buildTimingLine({
+    keys: timingKeys.map((key) => (key === "ageMs" ? "AgeMs" : key)),
+    values: { ...canonicalTimingValues, AgeMs: "147" },
+  }),
+  "timing / key case changed",
+);
+assertRejects(
+  `[helper-session] failure timing (exchanges=3, ${buildTimingLine()
+    .slice("[helper-session] failure timing (".length)
+    .replace("exchanges=3, ", "")}`,
+  "timing / generation moved out of first position",
+);
+
+// Malformed spacing, delimiters, parentheses, and prefix.
+for (const [separator, label] of [
+  [",", "missing space after comma"],
+  [",  ", "double space after comma"],
+  [" , ", "space before comma"],
+  ["; ", "semicolon delimiter"],
+  ["\t", "tab delimiter"],
+]) {
+  assertRejects(buildTimingLine({ separator }), `timing / ${label}`);
+}
+assertRejects(
+  buildTimingLine({ prefix: "[helper-session] failure timing(" }),
+  "timing / missing space before parenthesis",
+);
+assertRejects(
+  buildTimingLine({ prefix: "[helper-session] failure  timing (" }),
+  "timing / doubled inner space",
+);
+assertRejects(
+  buildTimingLine({ prefix: "[helper-session] Failure timing (" }),
+  "timing / changed prefix case",
+);
+assertRejects(
+  buildTimingLine({ prefix: "[helper-session] failure timing " }),
+  "timing / missing opening parenthesis",
+);
+assertRejects(
+  buildTimingLine({ suffix: "" }),
+  "timing / missing closing parenthesis",
+);
+assertRejects(
+  buildTimingLine().replace("generation=1", "generation = 1"),
+  "timing / spaces around '='",
+);
+assertRejects(
+  buildTimingLine().replace("ageMs=", "ageMs:"),
+  "timing / ':' instead of '='",
+);
+
+// Arbitrary prefixes/suffixes, including private paths and helper text.
+for (const suffix of [
+  " /Users/dev/secret/path",
+  " C:\\Users\\dev\\secret\\model.task",
+  ")",
+  " extra",
+  ", note=private",
+  " [helper] raw child stderr",
+]) {
+  assertRejects(
+    `${buildTimingLine()}${suffix}`,
+    `timing / trailing ${JSON.stringify(suffix)}`,
+  );
+}
+assertRejects(
+  `prefix ${buildTimingLine()}`,
+  "timing / arbitrary text before the fixed form",
+);
+assertRejects(
+  `${buildTimingLine()}\n[helper-session] recovery succeeded`,
+  "timing / embedded newline followed by another form",
+);
+
 console.log(
-  "Behavioral guard OK: matchHelperSessionDiagnosticLine() recognizes only the four fixed " +
-    "[helper-session] lifecycle forms with fixed labels, and rejects the unrelated " +
-    "shutdown-incomplete diagnostic, periodic status lines, label-injection, and trailing raw text.",
+  "Behavioral guard OK: matchHelperSessionDiagnosticLine() recognizes only the five fixed " +
+    "[helper-session] forms with fixed labels and the closed #616 timing grammar " +
+    "(generation=1|2, saturated decimals, na only for the four successful-exchange fields), " +
+    "and rejects the unrelated shutdown-incomplete diagnostic, periodic status lines, " +
+    "label-injection, invalid generations/numbers, key reordering, missing/extra keys, " +
+    "malformed spacing, and trailing raw text or private paths.",
 );
 
 // ---------------------------------------------------------------------------
@@ -226,6 +455,19 @@ requireMatch(
   /const\s+MAX_HELPER_SESSION_DIAGNOSTICS\s*=\s*\d+/u,
   "nativePipeline.ts must define a bounded MAX_HELPER_SESSION_DIAGNOSTICS constant",
 );
+
+// #616: the existing 20-entry bound is retained unchanged, and it holds the
+// largest fixed sequence one pipeline run can produce (six lines: per
+// generation a session-failed line plus its timing line, plus the single
+// recovery's gen1-cleanup and outcome lines).
+const maxHelperSessionDiagnostics = Number(
+  /const\s+MAX_HELPER_SESSION_DIAGNOSTICS\s*=\s*(\d+)/u.exec(pipelineSrc)?.[1],
+);
+if (maxHelperSessionDiagnostics !== 20) {
+  fail(
+    `MAX_HELPER_SESSION_DIAGNOSTICS must stay exactly 20 (found ${maxHelperSessionDiagnostics})`,
+  );
+}
 
 requireMatch(
   pipelineSrc,

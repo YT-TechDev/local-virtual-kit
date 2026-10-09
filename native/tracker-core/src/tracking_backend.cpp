@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <opencv2/core.hpp>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #endif
 
@@ -98,21 +99,26 @@ static void armHelperSessionTerminalDiagnostic(
 // lastDiagnostic() accessor and prints only its fixed
 // helperDiagnosticCategoryLabel() -- never raw child/exception text -- and
 // never mutates session state, return values, or control flow.
-static void reportHelperSessionTerminalFailure(
+//
+// v0.13.0 (#616): returns true only for the call that just emitted the line,
+// so FrameHelperTrackingBackend can place its diagnostic-only timing line
+// immediately after it; callers that do not need this ignore the result.
+static bool reportHelperSessionTerminalFailure(
     const HelperProcessSession& session,
     HelperTerminalDiagnosticDisposition& disposition) {
   if (disposition !=
           HelperTerminalDiagnosticDisposition::ArmedAfterSuccessfulStart ||
       session.state() != HelperSessionState::Failed) {
-    return;
+    return false;
   }
   const HelperDiagnosticCategory category = session.lastDiagnostic();
   if (!isTerminalFailureTrackCategory(category)) {
-    return;
+    return false;
   }
   disposition = HelperTerminalDiagnosticDisposition::Reported;
   std::cerr << "[helper-session] session failed (category="
             << helperDiagnosticCategoryLabel(category) << ")\n";
+  return true;
 }
 
 FaceTrackingPipelineBackend::FaceTrackingPipelineBackend(
@@ -209,6 +215,89 @@ bool isValidFrameHelperBackendLabel(const char* data, std::size_t len) {
 constexpr char kFrameHelperFallbackLabel[] = "frame-helper";
 
 }  // namespace
+
+// v0.13.0 (#616): file-static (like the #587 reporter above) rather than in
+// the label-validation anonymous namespace, which never writes diagnostics.
+//
+// Appends one already-saturated value (always <=
+// kHelperTimingSaturationCap, so at most nine decimal digits, no sign, no
+// leading zero) to the fixed timing line.
+static void appendHelperTimingValue(std::string& out, unsigned long long value) {
+  out += std::to_string(saturateHelperTimingCount(value));
+}
+
+// v0.13.0 (#616): a successful-exchange field: the saturated value, or the
+// fixed literal "na" before this generation's first successful exchange.
+static void appendOptionalHelperTimingValue(
+    std::string& out, bool known, unsigned long long value) {
+  if (known) {
+    appendHelperTimingValue(out, value);
+  } else {
+    out += "na";
+  }
+}
+
+// v0.13.0 (#616): diagnostic-only companion to the #587 terminal line. Called
+// only from FrameHelperTrackingBackend::track(), and only for the call that
+// just emitted that generation's #587 line, so it is printed at most once per
+// generation and always immediately after "[helper-session] session failed
+// (category=result-timeout)". Emits exactly the closed form
+//
+//   [helper-session] failure timing (generation=G, exchanges=U, ageMs=U,
+//   writeMs=U, maxGapMs=U, overshootMs=U, lastWaitMs=V, maxWaitMs=V,
+//   slowWaits=U, lastInferenceMs=V, maxInferenceMs=V)
+//
+// on one line, where every value is a fixed-key saturated decimal (or the
+// literal "na" for successful-exchange fields before the first successful
+// exchange). Contains no helper text, path, pid, handle, or frame data. Any
+// condition that prevents a safe snapshot (non-ResultTimeout category, no
+// captured failed wait, out-of-range generation, or an allocation failure
+// while formatting) omits this line without affecting the #587 line, the
+// session, or #589 recovery.
+static void reportHelperSessionFailureTiming(
+    const HelperProcessSession& session, int generation) noexcept {
+  if (session.lastDiagnostic() != HelperDiagnosticCategory::ResultTimeout ||
+      (generation != 1 && generation != 2)) {
+    return;
+  }
+  const HelperSessionTimingSnapshot snapshot = session.timingSnapshot();
+  if (!snapshot.hasResultTimeout) {
+    return;
+  }
+  const bool hasExchange = snapshot.exchanges > 0;
+  try {
+    std::string line;
+    line.reserve(256);
+    line += "[helper-session] failure timing (generation=";
+    line += generation == 1 ? "1" : "2";
+    line += ", exchanges=";
+    appendHelperTimingValue(line, snapshot.exchanges);
+    line += ", ageMs=";
+    appendHelperTimingValue(line, snapshot.ageMs);
+    line += ", writeMs=";
+    appendHelperTimingValue(line, snapshot.writeMs);
+    line += ", maxGapMs=";
+    appendHelperTimingValue(line, snapshot.maxGapMs);
+    line += ", overshootMs=";
+    appendHelperTimingValue(line, snapshot.overshootMs);
+    line += ", lastWaitMs=";
+    appendOptionalHelperTimingValue(line, hasExchange, snapshot.lastWaitMs);
+    line += ", maxWaitMs=";
+    appendOptionalHelperTimingValue(line, hasExchange, snapshot.maxWaitMs);
+    line += ", slowWaits=";
+    appendHelperTimingValue(line, snapshot.slowWaits);
+    line += ", lastInferenceMs=";
+    appendOptionalHelperTimingValue(
+        line, hasExchange, snapshot.lastInferenceMs);
+    line += ", maxInferenceMs=";
+    appendOptionalHelperTimingValue(
+        line, hasExchange, snapshot.maxInferenceMs);
+    line += ")\n";
+    std::cerr << line;
+  } catch (...) {
+    // Omit the diagnostic-only line; never surface exception text.
+  }
+}
 
 FrameHelperTrackingBackend::FrameHelperTrackingBackend(
     HelperSessionConfig config,
@@ -341,6 +430,10 @@ void FrameHelperTrackingBackend::maybeRecoverAfterResultTimeout() {
   terminalDiagnostic_ =
       HelperTerminalDiagnosticDisposition::SuppressedUntilStarted;
 
+  // v0.13.0 (#616): diagnostic-only. Whatever session_ holds from here on is
+  // the single replacement generation.
+  sessionGeneration_ = 2;
+
   // Construct and start a fresh generation from the retained config. Any
   // failure here fails closed: session_ is left null and, because the budget is
   // already spent, no further attempt ever occurs. Local exception containment
@@ -459,7 +552,11 @@ TrackingSample FrameHelperTrackingBackend::track(
     }
   }
 
-  reportHelperSessionTerminalFailure(*session_, terminalDiagnostic_);
+  if (reportHelperSessionTerminalFailure(*session_, terminalDiagnostic_)) {
+    // v0.13.0 (#616): diagnostic-only; emits nothing unless the line just
+    // reported was result-timeout.
+    reportHelperSessionFailureTiming(*session_, sessionGeneration_);
+  }
   if (!outcome.ok) {
     // Safe fallback: a neutral lost sample for this frame. No stale helper
     // tracking is ever reused after a failure.
