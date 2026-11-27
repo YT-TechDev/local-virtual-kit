@@ -33,8 +33,12 @@
  * starting at `data` and writes exactly one uint32_t to `output`. The
  * caller must supply `length` readable bytes at `data` and a writable,
  * suitably aligned uint32_t at `output` for the duration of the call. The
- * NULL and length checks above do NOT establish that an arbitrary non-NULL
- * pointer is valid; passing an invalid pointer is undefined behavior.
+ * `length` input bytes at `data` and the uint32_t at `output` must not
+ * overlap; overlapping input and output memory is a caller contract
+ * violation and its result is undefined (the library does not detect it).
+ * The NULL and length checks above do NOT establish that an arbitrary
+ * non-NULL pointer is valid; passing an invalid pointer is undefined
+ * behavior.
  *
  * Guarantees: input bytes are never modified; no pointer is retained after
  * return; no dynamic allocation; no mutable global state (calls are
