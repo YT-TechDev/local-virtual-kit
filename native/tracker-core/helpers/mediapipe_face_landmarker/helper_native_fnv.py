@@ -1,10 +1,22 @@
 """Explicit ctypes loader for the Native Core ``lvk-fnv1a32`` shared library.
 
-P2-B foundation. This module is NOT used by the helper runtime yet: it does
-not replace either existing pure-Python checksum (``helper_frame_input`` /
-``helper_frame_rgb``), and nothing imports it outside its own tests. Runtime
-integration and trusted library path derivation belong to a later, separately
-approved slice (P2-C).
+Runtime use (P2-C). This module is the helper runtime's only FNV-1a32
+implementation:
+
+* Native Core derives the library location from its own executable path
+  (fixed filename next to the executable: ``lvk-fnv1a32.dll`` /
+  ``liblvk-fnv1a32.so``) and passes it through the private startup argument
+  ``--native-fnv-library-path``. It cannot be overridden by CLI flag,
+  environment variable, or setting.
+* ``face_landmarker_helper_session`` calls ``load_native_fnv1a32`` exactly
+  once per session, at startup, before NumPy/MediaPipe are imported and
+  before READY. Any load, ABI-version, maximum-length, or self-test failure is
+  a sanitized startup failure: no READY, no result.
+* The returned callable is invoked independently in both stages: once in
+  ``helper_frame_input`` frame assembly and again in ``helper_frame_rgb``,
+  which recomputes the checksum from the BGR24 bytes before RGB conversion.
+* There is no runtime fallback: no pure-Python checksum, no alternative
+  library, no search.
 
 Contract (see native/tracker-core/src/fnv1a32_abi.h for the C ABI):
 
