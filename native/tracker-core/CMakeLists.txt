@@ -553,3 +553,60 @@ if(LVK_HAS_OPENCV_CAMERA)
     target_compile_options(lvk-tracking-backend-result-timeout-recovery-smoke PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
+
+# Native FNV-1a32 shared library foundation (P2-A). Standalone shared library
+# exposing the existing Native Core lvk::tracker::fnv1a32() implementation
+# (helper_frame_packet.cpp, reused unchanged) through the minimal, versioned C
+# ABI in src/fnv1a32_abi.h: lvk_fnv1a32_abi_version, lvk_fnv1a32_max_len, and
+# lvk_fnv1a32_v1. Standard library only: no OpenCV, no camera, no network. It
+# is NOT linked into or loaded by lvk-tracker-core, any helper, Electron, or
+# Web Preview; no install, packaging, or runtime discovery rule exists.
+#
+# Export boundary: only the three LVK_FNV1A32_API functions are exported.
+# Windows exports nothing without __declspec(dllexport) (no
+# WINDOWS_EXPORT_ALL_SYMBOLS); POSIX builds hide every other symbol (including
+# the linked helper_frame_packet.cpp C++ symbols) via hidden default
+# visibility.
+#
+# MSVC CRT: this target alone links the static CRT (/MT, /MTd for Debug) so the
+# DLL depends only on Windows system DLLs and needs no Visual C++
+# Redistributable to load. Safe because the ABI passes only caller-owned POD
+# pointers and never allocates, frees, or throws across the boundary. No
+# repository-wide CMAKE_MSVC_RUNTIME_LIBRARY or compiler setting is changed.
+add_library(lvk-fnv1a32 SHARED
+  src/fnv1a32_abi.cpp
+  src/helper_frame_packet.cpp
+)
+
+target_compile_features(lvk-fnv1a32 PRIVATE cxx_std_17)
+target_compile_definitions(lvk-fnv1a32 PRIVATE LVK_FNV1A32_BUILDING=1)
+set_target_properties(lvk-fnv1a32 PROPERTIES
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN ON
+  WINDOWS_EXPORT_ALL_SYMBOLS OFF
+  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+)
+
+if(MSVC)
+  target_compile_options(lvk-fnv1a32 PRIVATE /W4)
+else()
+  target_compile_options(lvk-fnv1a32 PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Deterministic ABI behavioral smoke (P2-A). Calls lvk-fnv1a32 through its
+# exported C ABI only and compiles helper_frame_packet.cpp separately so
+# results can be compared with the existing Native implementation. Not wired
+# into the lvk-tracker-core runtime.
+add_executable(lvk-fnv1a32-abi-smoke
+  src/fnv1a32_abi_smoke.cpp
+  src/helper_frame_packet.cpp
+)
+
+target_compile_features(lvk-fnv1a32-abi-smoke PRIVATE cxx_std_17)
+target_link_libraries(lvk-fnv1a32-abi-smoke PRIVATE lvk-fnv1a32)
+
+if(MSVC)
+  target_compile_options(lvk-fnv1a32-abi-smoke PRIVATE /W4)
+else()
+  target_compile_options(lvk-fnv1a32-abi-smoke PRIVATE -Wall -Wextra -Wpedantic)
+endif()

@@ -24,6 +24,22 @@ jobs:
       - run: node tools/check-native-mediapipe-helper-route-config.mjs native/tracker-core/build/lvk-mediapipe-helper-route-config-smoke
       - run: node tools/check-native-mediapipe-helper-frame-bridge.mjs native/tracker-core/build/lvk-mediapipe-helper-frame-bridge-smoke python3
       - run: node tools/check-native-mediapipe-helper-route.mjs native/tracker-core/build/lvk-tracker-core
+      # P2-A: lvk-fnv1a32 shared library C ABI. Behavioral smoke, then export
+      # and linkage inspection: exactly the three ABI symbols are exported,
+      # no C++ symbol leaks, no OpenCV dependency, and lvk-tracker-core does
+      # not link the library.
+      - run: native/tracker-core/build/lvk-fnv1a32-abi-smoke
+      - run: |
+          set -euo pipefail
+          lib=native/tracker-core/build/liblvk-fnv1a32.so
+          echo "Dynamic dependencies:"; readelf -d "$lib" | grep NEEDED
+          echo "Defined dynamic symbols:"; nm -D --defined-only "$lib"
+          exported=$(nm -D --defined-only "$lib" | awk '$2 ~ /^[TtWwDdBbRr]$/ {print $3}' | grep -v '^_init$\|^_fini$' | sort | tr '\n' ' ')
+          expected="lvk_fnv1a32_abi_version lvk_fnv1a32_max_len lvk_fnv1a32_v1 "
+          test "$exported" = "$expected" || { echo "unexpected exports: $exported"; exit 1; }
+          if readelf -d "$lib" | grep NEEDED | grep -qi opencv; then echo "unexpected OpenCV dependency"; exit 1; fi
+          if readelf -d native/tracker-core/build/lvk-tracker-core | grep -q 'lvk-fnv1a32'; then echo "lvk-tracker-core must not link lvk-fnv1a32"; exit 1; fi
+          echo "lvk-fnv1a32 export/linkage inspection passed"
       # v0.13.0 (#589): bounded helper result-timeout recovery smoke. The
       # OpenCV-linked recovery smoke drives the real FrameHelperTrackingBackend
       # owner path, which is only compiled with OpenCV enabled. The baseline
