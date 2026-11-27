@@ -33,6 +33,35 @@ _FRAME_HEADER_BYTES = 48
 _MAGIC = b"LVKF"
 
 
+def _reference_fnv1a32(data: bytes) -> int:
+    """Test-only deterministic FNV-1a32 oracle (P2-C).
+
+    The reader never computes or discovers a checksum: the helper session
+    supplies the verified native callable. These tests supply this
+    pure-Python reference explicitly as the deterministic oracle.
+    """
+    hash_value = 2166136261
+    for byte in data:
+        hash_value ^= byte
+        hash_value = (hash_value * 16777619) & 0xFFFFFFFF
+    return hash_value
+
+
+class _CountingChecksum:
+    def __init__(self, *, error: BaseException | None = None, result: object = None):
+        self.calls: list = []
+        self._error = error
+        self._result = result
+
+    def __call__(self, data: bytes) -> object:
+        self.calls.append(data)
+        if self._error is not None:
+            raise self._error
+        if self._result is not None:
+            return self._result
+        return _reference_fnv1a32(data)
+
+
 # =============================================================================
 # Fixture helpers
 # =============================================================================
@@ -237,7 +266,7 @@ class OutputContractTest(unittest.TestCase):
 
     def test_frame_input_hidden_from_repr(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -249,7 +278,7 @@ class OutputContractTest(unittest.TestCase):
 
     def test_frame_status_has_exact_frame_input_type(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -276,7 +305,7 @@ class OutputContractTest(unittest.TestCase):
 class ValidOperationTest(unittest.TestCase):
     def test_compact_valid_request_produces_frame(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -287,7 +316,7 @@ class ValidOperationTest(unittest.TestCase):
 
     def test_arbitrarily_partitioned_header_and_payload_reads(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes(), chunk_size=3)
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -297,7 +326,7 @@ class ValidOperationTest(unittest.TestCase):
 
     def test_single_byte_partitioned_reads(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes(), chunk_size=1)
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -305,7 +334,7 @@ class ValidOperationTest(unittest.TestCase):
 
     def test_returned_object_identity_equals_assembler_output(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         sentinel = ValidatedHelperFrameInput(
             request_id=7,
@@ -330,7 +359,7 @@ class ValidOperationTest(unittest.TestCase):
     def test_exact_call_order(self) -> None:
         calls: list[str] = []
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         # A large chunk_size so each header/payload read completes in one
         # call: keeps the read_header/read_payload classification below exact.
         fd_fake = _FakeFrameFd(_valid_frame_bytes(), chunk_size=1024)
@@ -358,9 +387,9 @@ class ValidOperationTest(unittest.TestCase):
             calls.append("decode")
             return real_decode(header_bytes)
 
-        def assemble_spy(request, header, payload):
+        def assemble_spy(request, header, payload, checksum):
             calls.append("assemble")
-            return real_assemble(request, header, payload)
+            return real_assemble(request, header, payload, checksum)
 
         with (
             mock.patch.object(helper_frame_reader, "parse_helper_control_line", side_effect=parse_spy),
@@ -393,7 +422,7 @@ class ValidOperationTest(unittest.TestCase):
             _valid_request_line_bytes(request_id=9, frame_timestamp_ms=2000),
             b"\n",
         )
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(first_frame + second_frame)
 
         resolve_calls = []
@@ -425,7 +454,7 @@ class ValidOperationTest(unittest.TestCase):
             _valid_stop_line_bytes(),
             b"\n",
         )
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome_one = reader.read_next()
@@ -438,7 +467,7 @@ class ValidOperationTest(unittest.TestCase):
 
     def test_valid_stop_alone_reads_no_frame(self) -> None:
         stream = _stream_for_lines(_valid_stop_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with mock.patch.object(helper_frame_reader, "_detect_platform_kind") as detect_mock:
             outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.STOP)
@@ -460,7 +489,7 @@ class ControlFramingTest(unittest.TestCase):
         content = b"{" + b" " * padding_len + base[1:]
         self.assertEqual(len(content), _MAX_LINE_CONTENT_BYTES)
         stream = _stream_for_lines(content, b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="posix"):
             with mock.patch.object(helper_frame_reader, "_resolve_posix_frame_fd", return_value=-1):
                 outcome = reader.read_next()
@@ -470,38 +499,38 @@ class ControlFramingTest(unittest.TestCase):
     def test_2049th_byte_rejected_before_further_accumulation(self) -> None:
         content = b"{" + b"x" * 2100
         stream = _stream_for_lines(content, b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_LINE_TOO_LONG)
         self.assertLessEqual(stream.read_calls, _MAX_LINE_CONTENT_BYTES + 2)
 
     def test_empty_line_is_invalid(self) -> None:
         stream = _stream_for_lines(b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_INVALID)
 
     def test_clean_eof_before_any_byte(self) -> None:
         stream = _stream_for_lines(b"")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.EOF)
 
     def test_partial_eof_after_content(self) -> None:
         stream = _stream_for_lines(b'{"type":"stop"')
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_LINE_INCOMPLETE)
 
     def test_malformed_utf8_returns_decode_failed(self) -> None:
         stream = _stream_for_lines(b"\xff\xfe", b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_DECODE_FAILED)
 
     def test_crlf_leaves_cr_and_is_rejected(self) -> None:
         stream = _stream_for_lines(_valid_stop_line_bytes(), b"\r\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_INVALID)
 
@@ -509,43 +538,43 @@ class ControlFramingTest(unittest.TestCase):
         line = _valid_stop_line_bytes()
         embedded = line[:3] + b"\r" + line[3:]
         stream = _stream_for_lines(embedded, b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_INVALID)
 
     def test_ordinary_read_failure(self) -> None:
         stream = _FakeControlStream.raising(OSError("boom"))
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_READ_FAILED)
 
     def test_base_exception_from_control_read_not_swallowed(self) -> None:
         stream = _FakeControlStream.raising(KeyboardInterrupt())
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with self.assertRaises(KeyboardInterrupt):
             reader.read_next()
 
     def test_invalid_read_return_type(self) -> None:
         stream = _FakeControlStream.bad_return("not-bytes")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_READ_FAILED)
 
     def test_invalid_read_return_length(self) -> None:
         stream = _FakeControlStream.bad_return(b"ab")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_READ_FAILED)
 
     def test_parser_invalid_result_returns_control_invalid(self) -> None:
         stream = _stream_for_lines(_line_bytes(_request_obj(extra=1)), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.CONTROL_INVALID)
 
     def test_parser_called_exactly_once(self) -> None:
         stream = _stream_for_lines(_valid_stop_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with mock.patch.object(
             helper_frame_reader, "parse_helper_control_line", return_value=HelperStopRequest()
         ) as parse_mock:
@@ -554,7 +583,7 @@ class ControlFramingTest(unittest.TestCase):
 
     def test_stop_performs_no_endpoint_resolution_or_read(self) -> None:
         stream = _stream_for_lines(_valid_stop_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind") as detect_mock,
             mock.patch.object(helper_frame_reader, "_read_from_fd") as read_mock,
@@ -573,14 +602,14 @@ class ControlFramingTest(unittest.TestCase):
 class FrameFailuresTest(unittest.TestCase):
     def test_missing_endpoint_returns_frame_endpoint_invalid(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="unsupported"):
             outcome = reader.read_next()
         self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_ENDPOINT_INVALID)
 
     def test_invalid_negative_fd_returns_frame_endpoint_invalid(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="posix"),
             mock.patch.object(helper_frame_reader, "_resolve_posix_frame_fd", return_value=-1),
@@ -590,7 +619,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_zero_byte_header_eof(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(b"")
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -598,7 +627,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_partial_header_eof(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_header_bytes()[:10])
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -606,7 +635,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_header_read_exception(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             _posix(),
             mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=OSError("boom")),
@@ -616,7 +645,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_invalid_read_return_type_for_header(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             _posix(),
             mock.patch.object(helper_frame_reader, "_read_from_fd", return_value="not-bytes"),
@@ -626,7 +655,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_oversized_chunk_for_header_is_read_failure(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             _posix(),
             mock.patch.object(helper_frame_reader, "_read_from_fd", return_value=b"x" * 999),
@@ -636,7 +665,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_invalid_header_returns_frame_header_invalid(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         bad_header = _encode_header(magic=b"XXXX")
         fd_fake = _FakeFrameFd(bad_header)
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
@@ -645,7 +674,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_no_payload_read_after_invalid_header(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         bad_header = _encode_header(magic=b"XXXX")
 
         read_calls: list[int] = []
@@ -661,7 +690,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_partial_payload_eof(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         truncated = _valid_header_bytes() + _VALID_PAYLOAD[:-1]
         fd_fake = _FakeFrameFd(truncated)
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
@@ -670,7 +699,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_payload_read_exception(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         header = _valid_header_bytes()
         call_count = {"n": 0}
 
@@ -688,7 +717,7 @@ class FrameFailuresTest(unittest.TestCase):
         mismatched_request = _valid_request_line_bytes(request_id=7)
         header_for_different_id = _encode_header(sequence=9)
         stream = _stream_for_lines(mismatched_request, b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(header_for_different_id + _VALID_PAYLOAD)
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             outcome = reader.read_next()
@@ -696,7 +725,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_no_assembly_call_after_header_failure(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         bad_header = _encode_header(magic=b"XXXX")
         fd_fake = _FakeFrameFd(bad_header)
         with (
@@ -709,7 +738,7 @@ class FrameFailuresTest(unittest.TestCase):
 
     def test_no_assembly_call_after_payload_failure(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         truncated = _valid_header_bytes() + _VALID_PAYLOAD[:-1]
         fd_fake = _FakeFrameFd(truncated)
         with (
@@ -731,7 +760,7 @@ _MAX_INTERRUPTED_READ_RETRIES = helper_frame_reader._MAX_INTERRUPTED_READ_RETRIE
 class InterruptedReadBoundTest(unittest.TestCase):
     def test_one_interruption_then_valid_data_succeeds(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         side_effect = [InterruptedError(), _valid_header_bytes(), _VALID_PAYLOAD]
         with (
             _posix(),
@@ -744,7 +773,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
 
     def test_cap_plus_one_header_interruptions_fail_header_read(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         side_effect = [InterruptedError()] * (_MAX_INTERRUPTED_READ_RETRIES + 1)
         with (
             _posix(),
@@ -758,7 +787,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
 
     def test_header_exhaustion_closes_endpoint_once_and_next_read_is_closed(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n", _valid_stop_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         side_effect = [InterruptedError()] * (_MAX_INTERRUPTED_READ_RETRIES + 1)
         with (
             _posix(),
@@ -773,7 +802,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
 
     def test_valid_header_then_cap_plus_one_payload_interruptions_fails_payload_read(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         side_effect = [_valid_header_bytes()] + [InterruptedError()] * (
             _MAX_INTERRUPTED_READ_RETRIES + 1
         )
@@ -797,7 +826,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
             + [InterruptedError()] * (_MAX_INTERRUPTED_READ_RETRIES + 1)
         )
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             _posix(),
             mock.patch.object(
@@ -810,7 +839,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
 
     def test_keyboard_interrupt_remains_visible_during_exact_read(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             _posix(),
             mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=KeyboardInterrupt),
@@ -820,7 +849,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
 
     def test_system_exit_remains_visible_during_exact_read(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             _posix(),
             mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=SystemExit),
@@ -844,7 +873,7 @@ class InterruptedReadBoundTest(unittest.TestCase):
 class PlatformSeamsTest(unittest.TestCase):
     def test_posix_resolves_only_fd_3_and_does_not_inspect_windows_env(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="posix"),
@@ -857,7 +886,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_windows_accepts_valid_handle_representation(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
@@ -870,7 +899,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_windows_rejects_missing_value(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
             mock.patch.object(helper_frame_reader, "_get_env_value", return_value=None),
@@ -900,7 +929,7 @@ class PlatformSeamsTest(unittest.TestCase):
         for value in malformed_values:
             with self.subTest(value=repr(value)):
                 stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-                reader = HelperFrameInputReader(stream)
+                reader = HelperFrameInputReader(stream, _reference_fnv1a32)
                 with (
                     mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
                     mock.patch.object(helper_frame_reader, "_get_env_value", return_value=value),
@@ -914,7 +943,7 @@ class PlatformSeamsTest(unittest.TestCase):
         stream = _stream_for_lines(
             _valid_request_line_bytes(), b"\n", _valid_stop_line_bytes(), b"\n"
         )
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
@@ -932,7 +961,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_failed_pre_adoption_path_attempts_raw_handle_close_once(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
             mock.patch.object(helper_frame_reader, "_get_env_value", return_value="4321"),
@@ -949,7 +978,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_raw_handle_close_failure_is_swallowed(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
             mock.patch.object(helper_frame_reader, "_get_env_value", return_value="4321"),
@@ -965,7 +994,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_invalid_adopted_fd_attempts_raw_handle_close(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
             mock.patch.object(helper_frame_reader, "_get_env_value", return_value="4321"),
@@ -978,7 +1007,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_unsupported_platform_fails_closed(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="unsupported"),
             mock.patch.object(helper_frame_reader, "_get_env_value") as env_mock,
@@ -991,7 +1020,7 @@ class PlatformSeamsTest(unittest.TestCase):
 
     def test_base_exception_from_adopt_not_swallowed(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         with (
             mock.patch.object(helper_frame_reader, "_detect_platform_kind", return_value="windows"),
             mock.patch.object(helper_frame_reader, "_get_env_value", return_value="4321"),
@@ -1010,12 +1039,12 @@ class PlatformSeamsTest(unittest.TestCase):
 
 class CleanupAndPrivacyTest(unittest.TestCase):
     def test_close_before_endpoint_resolution_returns_true(self) -> None:
-        reader = HelperFrameInputReader(_FakeControlStream(b""))
+        reader = HelperFrameInputReader(_FakeControlStream(b""), _reference_fnv1a32)
         self.assertTrue(reader.close())
 
     def test_close_after_frame_success_closes_fd(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             reader.read_next()
@@ -1025,14 +1054,14 @@ class CleanupAndPrivacyTest(unittest.TestCase):
         self.assertEqual(fd_fake.closed_fds, [helper_frame_reader._POSIX_FRAME_FD])
 
     def test_automatic_close_on_control_eof(self) -> None:
-        reader = HelperFrameInputReader(_FakeControlStream(b""))
+        reader = HelperFrameInputReader(_FakeControlStream(b""), _reference_fnv1a32)
         reader.read_next()
         # No endpoint was opened, so close() should be a no-op success.
         self.assertTrue(reader.close())
 
     def test_automatic_close_on_frame_failure(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(b"")
         with (
             _posix(),
@@ -1047,7 +1076,7 @@ class CleanupAndPrivacyTest(unittest.TestCase):
 
     def test_idempotent_close(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
             reader.read_next()
@@ -1059,7 +1088,7 @@ class CleanupAndPrivacyTest(unittest.TestCase):
 
     def test_close_failure_returns_false_with_no_retry(self) -> None:
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         fd_fake.close_error = OSError("close failed")
         with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
@@ -1073,14 +1102,14 @@ class CleanupAndPrivacyTest(unittest.TestCase):
 
     def test_control_stream_never_closed(self) -> None:
         stream = _stream_for_lines(_valid_stop_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         reader.read_next()
         reader.close()
         self.assertFalse(stream.closed)
 
     def test_read_next_after_close_returns_closed_without_reading(self) -> None:
         stream = _stream_for_lines(_valid_stop_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         reader.close()
         calls_before = stream.read_calls
         outcome = reader.read_next()
@@ -1092,7 +1121,7 @@ class CleanupAndPrivacyTest(unittest.TestCase):
         import io
 
         stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(_valid_frame_bytes())
         out, err = io.StringIO(), io.StringIO()
         with (
@@ -1113,7 +1142,7 @@ class CleanupAndPrivacyTest(unittest.TestCase):
             _valid_request_line_bytes(request_id=9, frame_timestamp_ms=2000),
             b"\n",
         )
-        reader = HelperFrameInputReader(stream)
+        reader = HelperFrameInputReader(stream, _reference_fnv1a32)
         fd_fake = _FakeFrameFd(
             _valid_frame_bytes(7, 1000) + _valid_frame_bytes(9, 2000)
         )
@@ -1125,8 +1154,123 @@ class CleanupAndPrivacyTest(unittest.TestCase):
             reader.read_next()
 
     def test_close_returns_bool_type(self) -> None:
-        reader = HelperFrameInputReader(_FakeControlStream(b""))
+        reader = HelperFrameInputReader(_FakeControlStream(b""), _reference_fnv1a32)
         self.assertIs(type(reader.close()), bool)
+
+
+# =============================================================================
+# P2-C: session-owned checksum supplied to frame assembly
+# =============================================================================
+
+
+class ReaderChecksumDependencyTest(unittest.TestCase):
+    def _read_one(self, checksum, frame_bytes=None):
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream, checksum)
+        fd_fake = _FakeFrameFd(frame_bytes if frame_bytes is not None else _valid_frame_bytes(), chunk_size=1024)
+        with (
+            _posix(),
+            mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read),
+            mock.patch.object(helper_frame_reader, "_close_fd", side_effect=fd_fake.close),
+        ):
+            outcome = reader.read_next()
+            follow_up = reader.read_next()
+        return outcome, follow_up, fd_fake
+
+    def test_checksum_is_a_required_constructor_argument(self) -> None:
+        with self.assertRaises(TypeError):
+            HelperFrameInputReader(_stream_for_lines(b""))  # type: ignore[call-arg]
+
+    def test_non_callable_checksum_rejected_at_construction(self) -> None:
+        for value in (None, 0, b"", "fnv", object()):
+            with self.subTest(value=type(value).__name__):
+                with self.assertRaises(TypeError):
+                    HelperFrameInputReader(_stream_for_lines(b""), value)  # type: ignore[arg-type]
+
+    def test_supplied_checksum_invoked_once_per_accepted_frame_on_payload(self) -> None:
+        first_frame = _valid_frame_bytes(request_id=7, frame_timestamp_ms=1000)
+        second_frame = _valid_frame_bytes(request_id=9, frame_timestamp_ms=2000)
+        stream = _stream_for_lines(
+            _valid_request_line_bytes(request_id=7, frame_timestamp_ms=1000),
+            b"\n",
+            _valid_request_line_bytes(request_id=9, frame_timestamp_ms=2000),
+            b"\n",
+        )
+        checksum = _CountingChecksum()
+        reader = HelperFrameInputReader(stream, checksum)
+        fd_fake = _FakeFrameFd(first_frame + second_frame, chunk_size=1024)
+        with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
+            first = reader.read_next()
+            second = reader.read_next()
+        self.assertEqual(first.status, HelperFrameInputReadStatus.FRAME)
+        self.assertEqual(second.status, HelperFrameInputReadStatus.FRAME)
+        assert first.frame_input is not None and second.frame_input is not None
+        self.assertEqual(len(checksum.calls), 2)
+        self.assertIs(checksum.calls[0], first.frame_input.bgr24_bytes)
+        self.assertIs(checksum.calls[1], second.frame_input.bgr24_bytes)
+        self.assertEqual(first.frame_input.checksum, _reference_fnv1a32(_VALID_PAYLOAD))
+
+    def test_checksum_exception_fails_frame_closed_as_assembly_failed(self) -> None:
+        checksum = _CountingChecksum(error=RuntimeError("synthetic native checksum failure"))
+        outcome, follow_up, fd_fake = self._read_one(checksum)
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_ASSEMBLY_FAILED)
+        self.assertIsNone(outcome.frame_input)
+        self.assertEqual(len(checksum.calls), 1)
+        # Terminal: endpoint closed exactly once, nothing further is read.
+        self.assertEqual(fd_fake.closed_fds, [3])
+        self.assertEqual(follow_up.status, HelperFrameInputReadStatus.CLOSED)
+
+    def test_invalid_checksum_result_fails_frame_closed(self) -> None:
+        checksum = _CountingChecksum(result="not-an-int")
+        outcome, follow_up, _ = self._read_one(checksum)
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_ASSEMBLY_FAILED)
+        self.assertEqual(follow_up.status, HelperFrameInputReadStatus.CLOSED)
+
+    def test_keyboard_interrupt_from_checksum_not_swallowed(self) -> None:
+        checksum = _CountingChecksum(error=KeyboardInterrupt())
+        stream = _stream_for_lines(_valid_request_line_bytes(), b"\n")
+        reader = HelperFrameInputReader(stream, checksum)
+        fd_fake = _FakeFrameFd(_valid_frame_bytes(), chunk_size=1024)
+        with _posix(), mock.patch.object(helper_frame_reader, "_read_from_fd", side_effect=fd_fake.read):
+            with self.assertRaises(KeyboardInterrupt):
+                reader.read_next()
+
+    def test_invalid_header_never_invokes_checksum(self) -> None:
+        checksum = _CountingChecksum()
+        bad_header = b"XXXX" + _valid_frame_bytes()[4:]
+        outcome, _, _ = self._read_one(checksum, bad_header)
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_HEADER_INVALID)
+        self.assertEqual(checksum.calls, [])
+
+    def test_truncated_payload_never_invokes_checksum(self) -> None:
+        checksum = _CountingChecksum()
+        outcome, _, _ = self._read_one(checksum, _valid_frame_bytes()[:-1])
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_PAYLOAD_INCOMPLETE)
+        self.assertEqual(checksum.calls, [])
+
+    def test_correlation_mismatch_never_invokes_checksum(self) -> None:
+        checksum = _CountingChecksum()
+        outcome, _, _ = self._read_one(checksum, _valid_frame_bytes(request_id=8))
+        self.assertEqual(outcome.status, HelperFrameInputReadStatus.FRAME_ASSEMBLY_FAILED)
+        self.assertEqual(checksum.calls, [])
+
+    def test_stop_and_eof_never_invoke_checksum(self) -> None:
+        for chunks, expected in (
+            ((_valid_stop_line_bytes(), b"\n"), HelperFrameInputReadStatus.STOP),
+            ((), HelperFrameInputReadStatus.EOF),
+        ):
+            with self.subTest(expected=expected.name):
+                checksum = _CountingChecksum()
+                reader = HelperFrameInputReader(_stream_for_lines(*chunks), checksum)
+                self.assertEqual(reader.read_next().status, expected)
+                self.assertEqual(checksum.calls, [])
+
+    def test_reader_never_loads_or_discovers_a_checksum(self) -> None:
+        import inspect
+
+        source = inspect.getsource(helper_frame_reader)
+        for forbidden in ("helper_native_fnv", "load_native_fnv1a32", "_fnv1a32(", "16777619"):
+            self.assertNotIn(forbidden, source)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,12 @@ future runtime loop will drive:
      a decoded header, and an already-read bounded payload into one
      immutable, checksummed frame input.
 
+The FNV-1a32 checksum is never computed by this module itself (P2-C): the
+caller must supply the verified checksum callable explicitly (the helper
+session's native ``lvk-fnv1a32`` callable, loaded once per session). This
+module never loads a library, touches the filesystem, or discovers anything
+at runtime; there is no default and no fallback implementation.
+
 This module does not read stdin, a pipe, or a file, does not access a
 camera, does not touch the network, and does not print. It retains no frame
 history: only the caller-owned return value of
@@ -27,6 +33,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Callable
 
 # --- Private wire constants (mirror Native Core; not part of the public API) ---
 
@@ -53,11 +60,6 @@ _FRAME_MAX_PAYLOAD_BYTES = 32 * 1024 * 1024
 
 _REQUEST_KEYS = frozenset({"type", "schemaVersion", "requestId", "frameTimestampMs"})
 _STOP_KEYS = frozenset({"type", "schemaVersion"})
-
-# Mirrors the FNV-1a32 offset basis / prime used by fnv1a32() in
-# helper_frame_packet.cpp.
-_FNV_OFFSET_BASIS = 2166136261
-_FNV_PRIME = 16777619
 
 
 @dataclass(frozen=True)
@@ -243,27 +245,28 @@ def decode_helper_frame_packet_header(
     )
 
 
-def _fnv1a32(data: bytes) -> int:
-    hash_value = _FNV_OFFSET_BASIS
-    for byte in data:
-        hash_value ^= byte
-        hash_value = (hash_value * _FNV_PRIME) & 0xFFFFFFFF
-    return hash_value
-
-
 def assemble_validated_helper_frame_input(
     request: HelperFrameRequest,
     header: HelperFramePacketHeader,
     payload: bytes,
+    checksum: Callable[[bytes], int],
 ) -> ValidatedHelperFrameInput | None:
     """Correlates a request, header, and payload into one immutable input.
 
     Because the public frozen dataclasses can be manually constructed with
     inconsistent values, every request/header field is revalidated here
     rather than trusted. All type, range, correlation, and exact-length
-    checks run before the checksum is computed, so an invalid, mismatched,
+    checks run before `checksum` is invoked, so an invalid, mismatched,
     truncated, or overlong payload is never scanned.
+
+    `checksum` is the caller-owned FNV-1a32 callable (required, no default).
+    It is invoked exactly once, on `payload` itself, only after every check
+    succeeds. A non-callable `checksum` or a result that is not an exact
+    `int` in the uint32 range returns None; an exception raised by
+    `checksum` propagates unchanged to the caller (never a success).
     """
+    if not callable(checksum):
+        return None
     if type(request) is not HelperFrameRequest:
         return None
     if type(header) is not HelperFramePacketHeader:
@@ -329,7 +332,11 @@ def assemble_validated_helper_frame_input(
     if len(payload) != payload_bytes:
         return None
 
-    checksum = _fnv1a32(payload)
+    computed_checksum = checksum(payload)
+    if type(computed_checksum) is not int:
+        return None
+    if not (0 <= computed_checksum <= _UINT32_MAX):
+        return None
 
     return ValidatedHelperFrameInput(
         request_id=request_id,
@@ -339,5 +346,5 @@ def assemble_validated_helper_frame_input(
         row_stride_bytes=row_stride_bytes,
         payload_bytes=payload_bytes,
         bgr24_bytes=payload,
-        checksum=checksum,
+        checksum=computed_checksum,
     )

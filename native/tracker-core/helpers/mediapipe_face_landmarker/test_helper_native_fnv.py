@@ -664,11 +664,6 @@ class NativeLibraryTests(unittest.TestCase):
             with self.subTest(vector=label):
                 expected = _reference_fnv1a32(data)
                 self.assertEqual(self.checksum(data), expected)
-                # Three-way parity with the unchanged production Python
-                # implementations, on vectors where their cost is bounded.
-                if len(data) <= 640 * 480 * 3:
-                    self.assertEqual(helper_frame_input._fnv1a32(data), expected)
-                    self.assertEqual(helper_frame_rgb._fnv1a32(data), expected)
             del data
         self.assertEqual(count, 314)
 
@@ -819,12 +814,15 @@ sys.stdout.write(json.dumps({"events": events, "allowed": allowed}))
             with self.assertRaises(NativeFnv1a32LoadError):
                 load_native_fnv1a32(missing)
 
-    def test_existing_production_checksums_untouched_and_independent(self):
+    def test_production_stages_hold_no_checksum_and_never_load_the_library(self):
+        # P2-C: both pure validation stages receive the session-owned native
+        # callable explicitly; neither keeps a pure-Python implementation
+        # (no fallback) nor imports the loader itself.
         for module in (helper_frame_input, helper_frame_rgb):
             with self.subTest(module=module.__name__):
-                self.assertTrue(callable(module._fnv1a32))
+                self.assertFalse(hasattr(module, "_fnv1a32"))
                 self.assertNotIn("helper_native_fnv", vars(module))
-                self.assertEqual(module._fnv1a32(b"foobar"), 0xBF9CF968)
+                self.assertNotIn("load_native_fnv1a32", vars(module))
 
 
 # --- Bounded synthetic benchmark ----------------------------------------------

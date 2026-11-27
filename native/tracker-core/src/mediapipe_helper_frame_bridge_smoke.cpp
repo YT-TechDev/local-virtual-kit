@@ -12,6 +12,16 @@
 // HelperProcessSession public API only. Single-threaded, sequential; creates
 // no second process, pipe, protocol parser, or transport of its own.
 //
+// P2-C: the session configuration now also carries the native FNV-1a32
+// library path, resolved exactly the way lvk-tracker-core resolves it
+// (resolveMediaPipeHelperNativeFnvLibraryPath(), from THIS smoke's own
+// executable directory, where the build places lvk-fnv1a32 next to it). The
+// fixture's production session therefore loads the actually compiled
+// library and runs BOTH Python checksum stages -- frame assembly and RGB
+// conversion -- through it, never a fake; Native Core then verifies the
+// returned frameAck checksum against its own fnv1a32(). Only NumPy/MediaPipe
+// are mocked in the fixture.
+//
 // Never prints any argument, path, argv, protocol line, frame byte,
 // checksum, fd/HANDLE, or diagnostic label. On success, stdout is exactly
 // "mediapipe-helper-frame-bridge smoke OK\n" with empty stderr; on any
@@ -50,6 +60,7 @@ using lvk::tracker::HelperTrackOutcome;
 using lvk::tracker::kMediaPipeFaceLandmarkerReadySource;
 using lvk::tracker::kSyntheticHelperReadySource;
 using lvk::tracker::MediaPipeHelperRouteConfigInput;
+using lvk::tracker::resolveMediaPipeHelperNativeFnvLibraryPath;
 
 // Aggregate-only assertion mechanism: no per-case text or private value is
 // ever emitted, only this single failure counter.
@@ -102,12 +113,14 @@ void caseNormalSuccess(const MediaPipeHelperRouteConfigInput& baseInput) {
   const HelperSessionConfig& config = *configOpt;
 
   expect(config.invocationMode == HelperInvocationMode::ExactArguments);
-  expect(config.exactArguments.size() == 4);
-  if (config.exactArguments.size() == 4) {
+  expect(config.exactArguments.size() == 6);
+  if (config.exactArguments.size() == 6) {
     expect(config.exactArguments[0] == "-B");
     expect(config.exactArguments[1] == baseInput.helperScriptPath);
     expect(config.exactArguments[2] == "--model-asset-path");
     expect(config.exactArguments[3] == baseInput.modelAssetPath);
+    expect(config.exactArguments[4] == "--native-fnv-library-path");
+    expect(config.exactArguments[5] == baseInput.nativeFnvLibraryPath);
   }
   expect(config.extraArgs.empty());
   expect(config.expectedReadySource == kMediaPipeFaceLandmarkerReadySource);
@@ -265,6 +278,47 @@ void caseEarlyExitBeforeStop(const MediaPipeHelperRouteConfigInput& baseInput) {
   expect(session.shutdownDiagnostic() == HelperDiagnosticCategory::ChildExit);
 }
 
+// Case 7 (P2-C): a correctly shaped library path that names no existing
+// file. The production helper's loader must fail before ready: no READY, no
+// result, no fallback -- so start() fails closed and no frame is ever sent.
+void caseMissingNativeLibrary(const MediaPipeHelperRouteConfigInput& baseInput,
+                              const std::string& missingLibraryPath) {
+  MediaPipeHelperRouteConfigInput input = baseInput;
+  input.nativeFnvLibraryPath = missingLibraryPath;
+
+  const std::optional<HelperSessionConfig> configOpt =
+      createMediaPipeHelperRouteConfig(input);
+  expect(configOpt.has_value());
+  if (!configOpt.has_value()) {
+    return;
+  }
+  HelperSessionConfig config = *configOpt;
+  // Kept small so this bounded failure case stays fast.
+  config.stopTimeoutMs = 200;
+
+  HelperProcessSession session(config);
+  expect(!session.start());
+  expect(session.state() == HelperSessionState::Failed);
+  expect(session.lastDiagnostic() == HelperDiagnosticCategory::ChildExit);
+  session.stop();
+}
+
+// Derives "<dir of path>/<platform library filename>" for a path that is
+// known to live in a directory without the library (the fixtures dir).
+std::optional<std::string> siblingLibraryPath(const std::string& path) {
+#ifdef _WIN32
+  const char separator = '\\';
+#else
+  const char separator = '/';
+#endif
+  const std::size_t index = path.find_last_of(separator);
+  if (index == std::string::npos) {
+    return std::nullopt;
+  }
+  return path.substr(0, index + 1) +
+         lvk::tracker::kMediaPipeHelperNativeFnvLibraryFileName;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -292,6 +346,16 @@ int main(int argc, char** argv) {
   baseInput.helperScriptPath = fixtureScriptPath;
   baseInput.modelAssetPath = modelMarkerPath;
 
+  const std::optional<std::string> nativeFnvLibraryPath =
+      resolveMediaPipeHelperNativeFnvLibraryPath();
+  expect(nativeFnvLibraryPath.has_value());
+  if (nativeFnvLibraryPath.has_value()) {
+    baseInput.nativeFnvLibraryPath = *nativeFnvLibraryPath;
+  }
+  const std::optional<std::string> missingLibraryPath =
+      siblingLibraryPath(missingExecutablePath);
+  expect(missingLibraryPath.has_value());
+
   if (gFailures == 0) {
     caseNormalSuccess(baseInput);
     caseLaunchFailure(baseInput, missingExecutablePath);
@@ -299,6 +363,7 @@ int main(int argc, char** argv) {
     caseRequestCorrelationMismatch(baseInput);
     caseFrameAckMismatch(baseInput);
     caseEarlyExitBeforeStop(baseInput);
+    caseMissingNativeLibrary(baseInput, *missingLibraryPath);
   }
 
   if (gFailures != 0) {

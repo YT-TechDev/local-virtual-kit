@@ -13,11 +13,19 @@ Because the frozen input dataclass can be manually constructed with
 inconsistent values, every field is revalidated here rather than trusted, and
 all type, bounds, stride, length, and checksum checks finish before the
 full-frame channel conversion/allocation runs.
+
+The checksum is recomputed independently from the actual BGR24 bytes through
+a caller-supplied FNV-1a32 callable (P2-C: the helper session's native
+``lvk-fnv1a32`` callable). This module never loads a library, touches the
+filesystem, or discovers anything at runtime; there is no default and no
+fallback implementation, and the stored checksum is never trusted or reused
+in place of the recomputation.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from helper_frame_input import ValidatedHelperFrameInput
 
@@ -30,11 +38,6 @@ _FRAME_MAX_WIDTH = 7680
 _FRAME_MIN_HEIGHT = 1
 _FRAME_MAX_HEIGHT = 4320
 _FRAME_MAX_PAYLOAD_BYTES = 32 * 1024 * 1024
-
-# Mirrors the FNV-1a32 offset basis / prime used in helper_frame_input.py and
-# by fnv1a32() in helper_frame_packet.cpp.
-_FNV_OFFSET_BASIS = 2166136261
-_FNV_PRIME = 16777619
 
 
 @dataclass(frozen=True)
@@ -49,14 +52,6 @@ class ValidatedHelperRgb24Frame:
     source_checksum: int
 
 
-def _fnv1a32(data: bytes) -> int:
-    hash_value = _FNV_OFFSET_BASIS
-    for byte in data:
-        hash_value ^= byte
-        hash_value = (hash_value * _FNV_PRIME) & 0xFFFFFFFF
-    return hash_value
-
-
 def _bgr24_to_rgb24(bgr24_bytes: bytes) -> bytes:
     converted = bytearray(bgr24_bytes)
     converted[0::3], converted[2::3] = converted[2::3], converted[0::3]
@@ -65,15 +60,22 @@ def _bgr24_to_rgb24(bgr24_bytes: bytes) -> bytes:
 
 def convert_validated_helper_frame_input_to_rgb24(
     frame: ValidatedHelperFrameInput,
+    checksum: Callable[[bytes], int],
 ) -> ValidatedHelperRgb24Frame | None:
     """Revalidates and converts one BGR24 frame input into an RGB24 frame.
 
     `frame` must be exactly `type(frame) is ValidatedHelperFrameInput`
     (subclasses rejected). Every field is revalidated -- including
-    recomputing the FNV-1a32 checksum of `bgr24_bytes` -- before the
-    conversion/allocation runs. Ordinary invalid input returns `None`;
-    unexpected programming failures remain visible.
+    recomputing the FNV-1a32 checksum of `bgr24_bytes` through the required
+    caller-owned `checksum` callable, invoked exactly once and only after
+    every other check succeeds -- before the conversion/allocation runs.
+    Ordinary invalid input (including a non-callable `checksum`, a
+    non-`int` result, or a checksum mismatch) returns `None`; unexpected
+    programming failures, including an exception raised by `checksum`,
+    remain visible.
     """
+    if not callable(checksum):
+        return None
     if type(frame) is not ValidatedHelperFrameInput:
         return None
 
@@ -121,12 +123,15 @@ def convert_validated_helper_frame_input_to_rgb24(
     if len(bgr24_bytes) != payload_bytes:
         return None
 
-    checksum = frame.checksum
-    if type(checksum) is not int:
+    source_checksum = frame.checksum
+    if type(source_checksum) is not int:
         return None
-    if not (0 <= checksum <= _UINT32_MAX):
+    if not (0 <= source_checksum <= _UINT32_MAX):
         return None
-    if _fnv1a32(bgr24_bytes) != checksum:
+    recomputed_checksum = checksum(bgr24_bytes)
+    if type(recomputed_checksum) is not int:
+        return None
+    if recomputed_checksum != source_checksum:
         return None
 
     rgb24_bytes = _bgr24_to_rgb24(bgr24_bytes)
@@ -139,5 +144,5 @@ def convert_validated_helper_frame_input_to_rgb24(
         row_stride_bytes=row_stride_bytes,
         payload_bytes=payload_bytes,
         rgb24_bytes=rgb24_bytes,
-        source_checksum=checksum,
+        source_checksum=source_checksum,
     )

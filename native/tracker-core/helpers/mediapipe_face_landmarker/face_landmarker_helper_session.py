@@ -13,6 +13,20 @@ candidate selection/mapping, canonical LOST composition, or result JSON
 validation. Native Core remains the sole camera owner and owns process
 supervision, timeouts, forced termination, fallback, and public MotionFrame
 output; none of that is implemented here.
+
+P2-C native checksum ownership: the private startup contract is exactly
+
+    --model-asset-path <abs-model> --native-fnv-library-path <abs-library>
+
+where the library path is derived by Native Core from its own executable
+location. The session loads and validates that one library exactly once,
+before importing MediaPipe and before READY, and holds the resulting verified
+checksum callable for its whole lifetime. It supplies that callable
+explicitly to both independent validation stages: frame assembly (through
+the reader) and RGB conversion. Any load/ABI/self-test failure is a
+sanitized STARTUP_FAILED with no READY and no result; there is no pure-Python
+fallback. A checksum failure in either stage is a sanitized terminal failure
+that never produces a result.
 """
 
 from __future__ import annotations
@@ -48,6 +62,7 @@ from helper_frame_rgb import (
     ValidatedHelperRgb24Frame,
     convert_validated_helper_frame_input_to_rgb24,
 )
+from helper_native_fnv import load_native_fnv1a32
 from helper_result_json import serialize_helper_result_line
 
 # Mirrors kHelperMaxLineBytes in helper_message.h / helper_frame_input.py.
@@ -84,36 +99,62 @@ _SUCCESS_STATUSES = (
 )
 
 
-def _is_valid_model_asset_path(model_asset_path: object) -> bool:
-    if type(model_asset_path) is not str:
+_MODEL_ASSET_PATH_FLAG = "--model-asset-path"
+_NATIVE_FNV_LIBRARY_PATH_FLAG = "--native-fnv-library-path"
+
+
+def _is_valid_startup_path(value: object) -> bool:
+    if type(value) is not str:
         return False
-    if len(model_asset_path) == 0:
+    if len(value) == 0:
         return False
-    if "\0" in model_asset_path:
+    if "\0" in value:
         return False
-    if "\r" in model_asset_path:
+    if "\r" in value:
         return False
-    if "\n" in model_asset_path:
+    if "\n" in value:
         return False
     return True
 
 
-def _parse_startup_arguments(argv: object) -> str | None:
-    """Strictly parses the exact `--model-asset-path <path>` CLI contract."""
+def _is_valid_model_asset_path(model_asset_path: object) -> bool:
+    return _is_valid_startup_path(model_asset_path)
+
+
+def _is_valid_native_fnv_library_path(native_fnv_library_path: object) -> bool:
+    return _is_valid_startup_path(native_fnv_library_path)
+
+
+def _parse_startup_arguments(argv: object) -> tuple[str, str] | None:
+    """Strictly parses the exact private startup CLI contract.
+
+    Accepts exactly ``--model-asset-path <abs> --native-fnv-library-path
+    <abs>``, in that order and nothing else, and returns
+    ``(model_asset_path, native_fnv_library_path)``. Missing, duplicate,
+    reordered, unexpected, malformed, or relative values return None.
+    """
     if type(argv) is not list:
         return None
-    if len(argv) != 2:
+    if len(argv) != 4:
         return None
-    if argv[0] != "--model-asset-path":
+    if argv[0] != _MODEL_ASSET_PATH_FLAG:
         return None
-
-    value = argv[1]
-    if not _is_valid_model_asset_path(value):
-        return None
-    if not os.path.isabs(value):
+    if argv[2] != _NATIVE_FNV_LIBRARY_PATH_FLAG:
         return None
 
-    return value
+    model_asset_path = argv[1]
+    if not _is_valid_model_asset_path(model_asset_path):
+        return None
+    if not os.path.isabs(model_asset_path):
+        return None
+
+    native_fnv_library_path = argv[3]
+    if not _is_valid_native_fnv_library_path(native_fnv_library_path):
+        return None
+    if not os.path.isabs(native_fnv_library_path):
+        return None
+
+    return model_asset_path, native_fnv_library_path
 
 
 def _is_valid_protocol_line(line: object) -> bool:
@@ -207,13 +248,16 @@ class _SessionCleanup:
 
 def _run_one_frame(
     frame_input: object,
+    checksum: Callable[[bytes], int],
     lifecycle: FaceLandmarkerRuntimeLifecycle,
     inference_api: FaceLandmarkerInferenceApi,
     output_stream: object,
 ) -> FaceLandmarkerHelperSessionStatus | None:
     """Runs exactly one current-frame operation. Returns None on success."""
     try:
-        rgb_frame = convert_validated_helper_frame_input_to_rgb24(frame_input)
+        rgb_frame = convert_validated_helper_frame_input_to_rgb24(
+            frame_input, checksum
+        )
     except Exception:
         return FaceLandmarkerHelperSessionStatus.FRAME_CONVERSION_FAILED
     if type(rgb_frame) is not ValidatedHelperRgb24Frame:
@@ -303,13 +347,20 @@ def _finish_eof(
 
 def run_face_landmarker_helper_session(
     model_asset_path: str,
+    native_fnv_library_path: str,
     control_stream: object,
     output_stream: object,
     error_stream: object,
     *,
     module_importer: Callable[[str], object] = import_module,
+    native_fnv_loader: Callable[[str], Callable[[bytes], int]] = load_native_fnv1a32,
 ) -> FaceLandmarkerHelperSessionStatus:
-    """Runs one bounded MediaPipe Face Landmarker helper session to completion."""
+    """Runs one bounded MediaPipe Face Landmarker helper session to completion.
+
+    `native_fnv_loader` is called exactly once, with exactly
+    `native_fnv_library_path`, before MediaPipe is imported and before READY;
+    the callable it returns is the session's only checksum implementation.
+    """
     cleanup = _SessionCleanup()
 
     def _fail(
@@ -325,7 +376,21 @@ def run_face_landmarker_helper_session(
     def _body() -> FaceLandmarkerHelperSessionStatus:
         if not _is_valid_model_asset_path(model_asset_path):
             return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+        if not _is_valid_native_fnv_library_path(native_fnv_library_path):
+            return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
         if not callable(module_importer):
+            return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+        if not callable(native_fnv_loader):
+            return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+
+        # Exactly one load + ABI/self-test validation per session. Every
+        # failure is the same sanitized startup failure: the path and the
+        # exception are never written anywhere, and nothing falls back.
+        try:
+            checksum = native_fnv_loader(native_fnv_library_path)
+        except Exception:
+            return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+        if not callable(checksum):
             return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
 
         try:
@@ -399,7 +464,7 @@ def run_face_landmarker_helper_session(
         )
 
         try:
-            reader = HelperFrameInputReader(control_stream)
+            reader = HelperFrameInputReader(control_stream, checksum)
         except Exception:
             return _fail(FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
 
@@ -425,7 +490,11 @@ def run_face_landmarker_helper_session(
 
             if read_status is HelperFrameInputReadStatus.FRAME:
                 frame_failure = _run_one_frame(
-                    outcome.frame_input, lifecycle, inference_api, output_stream
+                    outcome.frame_input,
+                    checksum,
+                    lifecycle,
+                    inference_api,
+                    output_stream,
                 )
                 if frame_failure is not None:
                     return _fail(frame_failure)
@@ -451,15 +520,20 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
-    model_asset_path = _parse_startup_arguments(argv)
-    if model_asset_path is None:
+    startup_arguments = _parse_startup_arguments(argv)
+    if startup_arguments is None:
         _write_stderr_diagnostic(
             sys.stderr, FaceLandmarkerHelperSessionStatus.STARTUP_FAILED
         )
         return 1
+    model_asset_path, native_fnv_library_path = startup_arguments
 
     status = run_face_landmarker_helper_session(
-        model_asset_path, sys.stdin.buffer, sys.stdout, sys.stderr
+        model_asset_path,
+        native_fnv_library_path,
+        sys.stdin.buffer,
+        sys.stdout,
+        sys.stderr,
     )
 
     if status in _SUCCESS_STATUSES:

@@ -7,7 +7,15 @@ runtime/backend selection, and is never packaged. It exists only so the
 dedicated native smoke (mediapipe_helper_frame_bridge_smoke.cpp) can launch a
 real Python child through HelperProcessSession's merged exact-invocation
 route and observe the real production session/reader/RGB/inference/
-composition/serializer chain end to end, with only NumPy/MediaPipe faked.
+composition/serializer chain end to end, with only NumPy/MediaPipe faked
+(MOCKED inference: no real MediaPipe, model, or camera is ever used).
+
+P2-C: the native FNV-1a32 checksum is NOT faked. The production entry point
+receives Native Core's derived ``--native-fnv-library-path`` and the
+production session loads that actually compiled lvk-fnv1a32 library through
+its default loader, so both checksum stages (frame assembly in the reader and
+RGB conversion) run on the real native callable. This fixture never passes a
+replacement loader or checksum.
 
 It adds the existing production helper directory to sys.path lexically (from
 __file__, never cwd or a resolved/existence-checked path), then imports and
@@ -295,16 +303,18 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
-    model_asset_path = _parse_startup_arguments(argv)
-    if model_asset_path is None:
+    startup_arguments = _parse_startup_arguments(argv)
+    if startup_arguments is None:
         sys.stderr.write(_STARTUP_FAILED_DIAGNOSTIC_LINE)
         sys.stderr.flush()
         return 1
+    model_asset_path, native_fnv_library_path = startup_arguments
 
     output_stream = _ResultFaultInjectionStream(sys.stdout)
 
     status = run_face_landmarker_helper_session(
         model_asset_path,
+        native_fnv_library_path,
         sys.stdin.buffer,
         output_stream,
         sys.stderr,

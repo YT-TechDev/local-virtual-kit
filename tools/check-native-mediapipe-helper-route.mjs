@@ -646,4 +646,46 @@ if (!routeSupportEnabled) {
   );
 }
 
+// P2-C. The helper's native FNV-1a32 library location is derived by Native
+// Core from its own executable directory only. The private helper argument
+// must never be accepted as a Native Core CLI flag (no override, no
+// Electron-facing surface), with or without a route selection or a
+// capability query.
+const fixtureNativeFnvLibraryPath = fakeAbsolutePath(
+  isWindows ? "lvk-fnv1a32.dll" : "liblvk-fnv1a32.so",
+);
+privateMarkers.push(fixtureNativeFnvLibraryPath);
+for (const args of [
+  ["--native-fnv-library-path", fixtureNativeFnvLibraryPath],
+  [
+    "--print-runtime-capabilities",
+    "--native-fnv-library-path",
+    fixtureNativeFnvLibraryPath,
+  ],
+  [
+    "--print-runtime-capabilities",
+    ...validFullArgs,
+    "--native-fnv-library-path",
+    fixtureNativeFnvLibraryPath,
+  ],
+  [...validFullArgs, "--native-fnv-library-path", fixtureNativeFnvLibraryPath],
+]) {
+  const result = run(args);
+  assertRunCompleted(result);
+  if (result.status === 0) {
+    fail();
+  }
+  if (
+    !(result.stderr ?? "").includes(
+      "Unknown argument: --native-fnv-library-path",
+    )
+  ) {
+    fail();
+  }
+  assertNoMotionFrameLines(result.stdout);
+  assertNoCapabilityOutput(result.stdout);
+  assertNoCameraDiagnostics(result.stderr);
+  assertNoPrivateMarkers(result);
+}
+
 console.log("Native MediaPipe helper route check passed.");

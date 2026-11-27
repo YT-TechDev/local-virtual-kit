@@ -208,6 +208,23 @@ def _python_version_string() -> str | None:
     return _sanitize_version(candidate)
 
 
+def _validation_only_reference_fnv1a32(data: bytes) -> int:
+    """Validation-only FNV-1a32 oracle for this opt-in smoke's synthetic frame.
+
+    P2-C made the checksum an explicit, required dependency of frame assembly
+    and RGB conversion. The production helper session always supplies the
+    verified native ``lvk-fnv1a32`` callable; this local smoke exercises real
+    MediaPipe inference, not the checksum, so it supplies this pure-Python
+    reference explicitly instead. It is never reachable from, or a fallback
+    for, the production helper runtime.
+    """
+    hash_value = 2166136261
+    for byte in data:
+        hash_value ^= byte
+        hash_value = (hash_value * 16777619) & 0xFFFFFFFF
+    return hash_value
+
+
 def _prepare_synthetic_frame() -> object | None:
     """Builds one deterministic in-memory synthetic BGR24 frame and converts it.
 
@@ -229,11 +246,15 @@ def _prepare_synthetic_frame() -> object | None:
         )
         payload = bytes([_FRAME_SOLID_BYTE_VALUE]) * _FRAME_PAYLOAD_BYTES
 
-        validated_input = assemble_validated_helper_frame_input(request, header, payload)
+        validated_input = assemble_validated_helper_frame_input(
+            request, header, payload, _validation_only_reference_fnv1a32
+        )
         if validated_input is None:
             return None
 
-        return convert_validated_helper_frame_input_to_rgb24(validated_input)
+        return convert_validated_helper_frame_input_to_rgb24(
+            validated_input, _validation_only_reference_fnv1a32
+        )
     except Exception:
         return None
 
