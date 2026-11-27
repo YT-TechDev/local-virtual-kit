@@ -587,6 +587,21 @@ set_target_properties(lvk-fnv1a32 PROPERTIES
   MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
 )
 
+# Hidden visibility alone is not sufficient on Linux: libstdc++ declares
+# namespace std with default visibility, so out-of-line std template
+# instantiations pulled in by helper_frame_packet.cpp (for example
+# std::vector<uint8_t>::_M_fill_assign) would still be exported. An anonymous
+# linker version script, generated only in the ignored build tree, makes the
+# three lvk_fnv1a32_* functions the sole global dynamic symbols. No symbol
+# versioning is applied, so the exported names stay unversioned.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(LVK_FNV1A32_VERSION_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/lvk-fnv1a32.exports.map")
+  file(WRITE "${LVK_FNV1A32_VERSION_SCRIPT}"
+    "{\n  global:\n    lvk_fnv1a32_abi_version;\n    lvk_fnv1a32_max_len;\n    lvk_fnv1a32_v1;\n  local:\n    *;\n};\n")
+  target_link_options(lvk-fnv1a32 PRIVATE "LINKER:--version-script=${LVK_FNV1A32_VERSION_SCRIPT}")
+  set_property(TARGET lvk-fnv1a32 APPEND PROPERTY LINK_DEPENDS "${LVK_FNV1A32_VERSION_SCRIPT}")
+endif()
+
 if(MSVC)
   target_compile_options(lvk-fnv1a32 PRIVATE /W4)
 else()
