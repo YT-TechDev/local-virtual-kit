@@ -9,6 +9,13 @@ header bounds, and request/frame correlation/checksum -- is delegated to the
 existing pure functions in ``helper_frame_input``; this module never
 duplicates that logic.
 
+P2-C: the reader holds the caller-owned FNV-1a32 checksum callable (the
+helper session's verified native ``lvk-fnv1a32`` callable) for its lifetime
+and supplies it to frame assembly for every frame. It never loads a library
+or discovers a checksum implementation itself; there is no default and no
+fallback. Any exception the checksum raises fails the frame closed as
+``FRAME_ASSEMBLY_FAILED``, exactly like a rejected assembly.
+
 Standard library only (plus a lazy, platform-gated ``msvcrt``/``ctypes`` use
 on Windows). No MediaPipe, NumPy, camera, socket, file, or persistence use.
 """
@@ -19,6 +26,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Callable
 
 from helper_frame_input import (
     HelperFramePacketHeader,
@@ -208,10 +216,18 @@ class HelperFrameInputReader:
     terminal outcome other than FRAME closes the endpoint (if any) exactly
     once and makes the reader terminal: subsequent `read_next()` calls
     return CLOSED without reading anything.
+
+    `checksum` (required) is the caller-owned FNV-1a32 callable supplied to
+    frame assembly; a non-callable value raises TypeError at construction.
     """
 
-    def __init__(self, control_stream: object) -> None:
+    def __init__(
+        self, control_stream: object, checksum: Callable[[bytes], int]
+    ) -> None:
+        if not callable(checksum):
+            raise TypeError("HelperFrameInputReader requires a checksum callable")
         self._control_stream = control_stream
+        self._checksum = checksum
         self._frame_fd: int | None = None
         self._closed = False
         self._close_result = True
@@ -298,7 +314,14 @@ class HelperFrameInputReader:
         if kind == "failed":
             return self._terminal(HelperFrameInputReadStatus.FRAME_PAYLOAD_READ_FAILED)
 
-        frame_input = assemble_validated_helper_frame_input(request, header, payload)
+        try:
+            frame_input = assemble_validated_helper_frame_input(
+                request, header, payload, self._checksum
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return self._terminal(HelperFrameInputReadStatus.FRAME_ASSEMBLY_FAILED)
         if type(frame_input) is not ValidatedHelperFrameInput:
             return self._terminal(HelperFrameInputReadStatus.FRAME_ASSEMBLY_FAILED)
 

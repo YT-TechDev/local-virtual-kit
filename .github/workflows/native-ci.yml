@@ -44,6 +44,23 @@ jobs:
       # shared library. The absolute library path is passed explicitly; the
       # tests fail (never skip) if the artifact is missing or unloadable.
       - run: python3 -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_native_fnv.py --native-library "$GITHUB_WORKSPACE/native/tracker-core/build/liblvk-fnv1a32.so"
+      # P2-C: the actual compiled library through BOTH Python validation
+      # stages (frame assembly + RGB conversion). Passing --native-library is
+      # what enables these cases; this step must never run without it. The
+      # Native-Core-to-Python end-to-end path through the real library is the
+      # frame-bridge check above (its smoke resolves the library next to
+      # itself exactly like lvk-tracker-core does).
+      - run: python3 -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_frame_rgb.py --native-library "$GITHUB_WORKSPACE/native/tracker-core/build/liblvk-fnv1a32.so"
+      # P2-C: building only lvk-tracker-core in a fresh tree must also produce
+      # liblvk-fnv1a32.so next to it (build-order dependency, never a link).
+      - run: |
+          set -euo pipefail
+          cmake -S native/tracker-core -B native/tracker-core/build-fnv-adjacency
+          cmake --build native/tracker-core/build-fnv-adjacency --target lvk-tracker-core
+          test -x native/tracker-core/build-fnv-adjacency/lvk-tracker-core
+          test -f native/tracker-core/build-fnv-adjacency/liblvk-fnv1a32.so
+          if readelf -d native/tracker-core/build-fnv-adjacency/lvk-tracker-core | grep -q 'lvk-fnv1a32'; then echo "lvk-tracker-core must not link lvk-fnv1a32"; exit 1; fi
+          echo "lvk-fnv1a32 adjacency check passed"
       # v0.13.0 (#589): bounded helper result-timeout recovery smoke. The
       # OpenCV-linked recovery smoke drives the real FrameHelperTrackingBackend
       # owner path, which is only compiled with OpenCV enabled. The baseline

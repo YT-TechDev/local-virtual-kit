@@ -81,6 +81,9 @@ function runStaticSourceGuard() {
     "_parse_startup_arguments(",
     "sys.stdin.buffer",
     "module_importer=",
+    // P2-C: the fixture forwards Native Core's derived library path to the
+    // production session, which loads the real compiled library itself.
+    "native_fnv_library_path",
     "571001",
     "571002",
     "571003",
@@ -127,6 +130,13 @@ function runStaticSourceGuard() {
     /os\.path\.isdir\s*\(/,
     /os\.listdir\s*\(/,
     /os\.scandir\s*\(/,
+    // P2-C: never replace the production loader or checksum with a fake.
+    /native_fnv_loader/,
+    /load_native_fnv1a32/,
+    /\bctypes\b/,
+    /_fnv1a32\b/,
+    /16777619/,
+    /2166136261/,
   ];
   for (const pattern of forbiddenFixturePatterns) {
     if (pattern.test(fixtureText)) {
@@ -146,6 +156,12 @@ function runStaticSourceGuard() {
     "shutdownDiagnostic",
     "mediapipe-helper-frame-bridge smoke OK",
     "mediapipe-helper-frame-bridge smoke failed.",
+    // P2-C: resolved exactly like lvk-tracker-core, plus the fail-closed
+    // missing-library startup case.
+    "resolveMediaPipeHelperNativeFnvLibraryPath",
+    "nativeFnvLibraryPath",
+    '"--native-fnv-library-path"',
+    "caseMissingNativeLibrary",
   ];
   for (const marker of requiredInSmoke) {
     if (!smokeStripped.includes(marker)) {
@@ -207,6 +223,16 @@ function runStaticSourceGuard() {
   if (
     linkedLibraries.length !== 1 ||
     linkedLibraries[0] !== "Threads::Threads"
+  ) {
+    fail();
+  }
+
+  // P2-C: building the smoke also builds lvk-fnv1a32 next to it (build-order
+  // dependency only; the smoke never links the library).
+  if (
+    !/add_dependencies\(\s*lvk-mediapipe-helper-frame-bridge-smoke\s+lvk-fnv1a32\s*\)/.test(
+      cmakeText,
+    )
   ) {
     fail();
   }
@@ -377,6 +403,8 @@ function runBridgeCheck(executablePath, pythonInterpreter) {
     missingExecutableMarkerPath,
     "mediapipe_helper_frame_bridge_fixture.py",
     "--model-asset-path",
+    "--native-fnv-library-path",
+    "lvk-fnv1a32",
     "--session",
     "--session-frame-mode",
     "LVK_FRAME_PIPE_HANDLE",

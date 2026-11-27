@@ -105,6 +105,14 @@ const requiredInHeader = [
   // v0.13.0 (#582): the route-owned fixed, bounded startup ready-timeout.
   "kMediaPipeHelperRouteReadyTimeoutMs",
   "10000",
+  // P2-C: platform-fixed library filenames and the Native Core-owned path
+  // derivation/resolution boundary.
+  "nativeFnvLibraryPath",
+  "kMediaPipeHelperNativeFnvLibraryFileName",
+  '"lvk-fnv1a32.dll"',
+  '"liblvk-fnv1a32.so"',
+  "deriveMediaPipeHelperNativeFnvLibraryPath",
+  "resolveMediaPipeHelperNativeFnvLibraryPath",
 ];
 for (const marker of requiredInHeader) {
   if (!headerStripped.includes(marker)) {
@@ -125,6 +133,15 @@ const requiredInSource = [
   // v0.13.0 (#582): the MediaPipe route is the sole selector of the fixed,
   // bounded ready timeout.
   "readyTimeoutMs = kMediaPipeHelperRouteReadyTimeoutMs",
+  // P2-C: private startup argument, executable-relative resolution only
+  // (never argv[0]/cwd/PATH/environment), lossless ANSI-code-page handoff
+  // for the existing CreateProcessA launch path.
+  '"--native-fnv-library-path"',
+  "input.nativeFnvLibraryPath",
+  "GetModuleFileNameW(nullptr",
+  '"/proc/self/exe"',
+  "WC_NO_BEST_FIT_CHARS",
+  "MB_ERR_INVALID_CHARS",
 ];
 for (const marker of requiredInSource) {
   if (!sourceStripped.includes(marker)) {
@@ -251,6 +268,16 @@ const forbiddenPatterns = [
   /\bWinsock\w*/,
   /\bcurl_easy_\w*/,
   /\bCURL\b/,
+  // P2-C: the route boundary derives the library path but never loads,
+  // probes, or searches for it, and never trusts untrusted path sources.
+  /\bLoadLibrary\w*\s*\(/,
+  /\bdlopen\s*\(/,
+  /\bGetCommandLine\w*\s*\(/,
+  /\bGetCurrentDirectory\w*\s*\(/,
+  /\bSearchPath\w*\s*\(/,
+  /\bGetEnvironmentVariable\w*\s*\(/,
+  /\brealpath\s*\(/,
+  /\bgetcwd\s*\(/,
 ];
 
 function assertNoForbiddenOperations(strippedText) {
@@ -270,6 +297,22 @@ assertNoForbiddenOperations(smokeStripped);
 // would also match the forbidden filesystem::absolute()).
 if (!sourceStripped.includes(".is_absolute()")) {
   fail("missing required lexical is_absolute() usage");
+}
+
+// P2-C: --native-fnv-library-path is a private helper argument only -- never
+// a Native Core CLI flag -- and main.cpp obtains the path solely from the
+// route's executable-relative resolver.
+{
+  const mainStripped = stripCppComments(readRequired(mainPath));
+  if (mainStripped.includes("--native-fnv-library-path")) {
+    fail("native FNV library path exposed as a Native Core CLI flag");
+  }
+  if (!mainStripped.includes("resolveMediaPipeHelperNativeFnvLibraryPath()")) {
+    fail("main.cpp does not use the executable-relative library resolver");
+  }
+  if (!mainStripped.includes("nativeFnvLibraryPath")) {
+    fail("main.cpp does not supply the derived library path to the route");
+  }
 }
 
 // --- A3: CMake wiring --------------------------------------------------
@@ -314,6 +357,21 @@ if (
   ).test(cmakeText)
 ) {
   fail("missing cxx_std_17 requirement on the dedicated smoke target");
+}
+
+// P2-C: building lvk-tracker-core builds lvk-fnv1a32 next to it, as a
+// build-order dependency only -- the tracker never links the library.
+if (
+  !/add_dependencies\(\s*lvk-tracker-core\s+lvk-fnv1a32\s*\)/.test(cmakeText)
+) {
+  fail("lvk-tracker-core does not build lvk-fnv1a32");
+}
+for (const match of cmakeText.matchAll(
+  /target_link_libraries\(\s*lvk-tracker-core\b([^)]*)\)/g,
+)) {
+  if (match[1].includes("lvk-fnv1a32")) {
+    fail("lvk-tracker-core must not link lvk-fnv1a32");
+  }
 }
 
 // --- B: runtime smoke --------------------------------------------------

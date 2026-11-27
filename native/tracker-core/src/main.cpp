@@ -207,7 +207,7 @@ void printUsage(std::ostream &output) {
   output << "--tracking-backend selects the Native Core tracking backend; supported values are 'face-pipeline', 'synthetic-helper', 'synthetic-frame-helper', and 'mediapipe-face-landmarker'. "
             "The synthetic-helper backend is an opt-in, development-only backend that drives the local synthetic helper session and requires --helper-executable PATH; it sends no camera frames to the helper. "
             "The synthetic-frame-helper backend (v0.13.0, #534) additionally sends one bounded BGR24 frame per request over a private frame pipe; it requires --helper-executable PATH and --camera-source opencv, and is only available when this build has OpenCV camera support (see --print-runtime-capabilities). "
-            "The mediapipe-face-landmarker backend (v0.13.0, #572) is an opt-in, development-only route that drives the external Python MediaPipe Face Landmarker helper over the same private frame transport; it requires --camera-source opencv, --mediapipe-python PATH, --mediapipe-helper-script PATH, and --mediapipe-model-asset PATH together, and is only available when this build has OpenCV camera support (see --print-runtime-capabilities).\n";
+            "The mediapipe-face-landmarker backend (v0.13.0, #572) is an opt-in, development-only route that drives the external Python MediaPipe Face Landmarker helper over the same private frame transport; it requires --camera-source opencv, --mediapipe-python PATH, --mediapipe-helper-script PATH, and --mediapipe-model-asset PATH together, and is only available when this build has OpenCV camera support (see --print-runtime-capabilities). The route also requires the lvk-fnv1a32 native checksum library built next to this executable (Windows: lvk-fnv1a32.dll; Linux: liblvk-fnv1a32.so); Native Core derives that location internally and it cannot be overridden.\n";
   output << "--helper-executable PATH provides the local synthetic helper executable used by --tracking-backend synthetic-helper or synthetic-frame-helper; it is only valid with those backends.\n";
   output << "--helper-arg VALUE (repeatable) appends a development-only argument after the helper's '--session' flag; it is only valid with --tracking-backend synthetic-helper or synthetic-frame-helper and is used to exercise deterministic synthetic helper session fault modes in tests.\n";
   output << "--mediapipe-python PATH provides the local Python interpreter used by --tracking-backend mediapipe-face-landmarker; only valid with that backend and required together with --mediapipe-helper-script and --mediapipe-model-asset. The supplied value is never echoed.\n";
@@ -962,7 +962,26 @@ int main(int argc, char *argv[]) {
       options.mediapipeModelAssetPath.has_value();
   std::optional<lvk::tracker::HelperSessionConfig> mediaPipeHelperRouteConfig;
   if (mediaPipeHelperRouteBackend && mediaPipeHelperRouteFlagsFullySupplied) {
+    // P2-C: the helper's native FNV-1a32 library path is derived by Native
+    // Core alone, from its own running executable location (never argv[0],
+    // the working directory, PATH, an environment variable, or any CLI/
+    // Electron value). This is a path derivation only: the library is not
+    // loaded or existence-checked here, so a configured capability query
+    // stays side-effect free. An unsupported platform or an underivable
+    // location fails the route closed, with a fixed path-free diagnostic,
+    // without affecting any other backend.
+    std::optional<std::string> nativeFnvLibraryPath =
+        lvk::tracker::resolveMediaPipeHelperNativeFnvLibraryPath();
+    if (!nativeFnvLibraryPath.has_value()) {
+      std::cerr << "--tracking-backend mediapipe-face-landmarker could not "
+                   "derive its native checksum library location next to the "
+                   "running Native Core executable on this platform.\n";
+      return 1;
+    }
+
     lvk::tracker::MediaPipeHelperRouteConfigInput mediaPipeRouteInput;
+    mediaPipeRouteInput.nativeFnvLibraryPath =
+        std::move(*nativeFnvLibraryPath);
     mediaPipeRouteInput.pythonInterpreterPath =
         std::move(*options.mediapipePythonPath);
     mediaPipeRouteInput.helperScriptPath =

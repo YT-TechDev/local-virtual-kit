@@ -559,8 +559,19 @@ endif()
 # (helper_frame_packet.cpp, reused unchanged) through the minimal, versioned C
 # ABI in src/fnv1a32_abi.h: lvk_fnv1a32_abi_version, lvk_fnv1a32_max_len, and
 # lvk_fnv1a32_v1. Standard library only: no OpenCV, no camera, no network. It
-# is NOT linked into or loaded by lvk-tracker-core, any helper, Electron, or
-# Web Preview; no install, packaging, or runtime discovery rule exists.
+# is NOT linked into lvk-tracker-core, Electron, or Web Preview, and no
+# install or packaging rule exists.
+#
+# P2-C runtime use: the mediapipe-face-landmarker route's Python helper loads
+# this library (helper_native_fnv.py) for both mandatory frame checksums.
+# lvk-tracker-core derives its path from its own executable directory
+# (resolveMediaPipeHelperNativeFnvLibraryPath() in
+# mediapipe_helper_route_config.cpp) and passes it to the helper, so the
+# library must be produced next to lvk-tracker-core in every configuration.
+# Both targets use the default per-configuration output directory of this
+# build tree, and the add_dependencies() calls below make building
+# lvk-tracker-core (or the frame-bridge smoke that loads it the same way)
+# also build the library -- a build-order dependency only, never a link.
 #
 # Export boundary: only the three LVK_FNV1A32_API functions are exported.
 # Windows exports nothing without __declspec(dllexport) (no
@@ -607,6 +618,9 @@ if(MSVC)
 else()
   target_compile_options(lvk-fnv1a32 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+add_dependencies(lvk-tracker-core lvk-fnv1a32)
+add_dependencies(lvk-mediapipe-helper-frame-bridge-smoke lvk-fnv1a32)
 
 # Deterministic ABI behavioral smoke (P2-A). Calls lvk-fnv1a32 through its
 # exported C ABI only and compiles helper_frame_packet.cpp separately so

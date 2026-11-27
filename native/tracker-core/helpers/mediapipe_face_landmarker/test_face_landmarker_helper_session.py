@@ -6,6 +6,14 @@ These tests use fake streams, fake modules, fake reader outcomes, and a fake
 closeable runtime only. They never require real NumPy, MediaPipe, a model, a
 real frame endpoint, a subprocess, a camera, a file, or a network resource.
 
+P2-C: the session's native FNV-1a32 loader is injected with a test-only fake
+(`_fake_native_fnv_loader`) that returns a pure-Python reference oracle. A
+few startup tests use the REAL loader against deliberately missing/invalid
+temporary files to prove fail-closed startup; the actual compiled library is
+exercised through both validation stages by test_helper_frame_rgb.py
+--native-library and, end to end through Native Core, by the
+mediapipe-helper-frame-bridge smoke.
+
 Also supports one test-only CLI fixture mode used by
 tools/check-mediapipe-face-landmarker-helper-session.mjs to exercise the real
 production main()/session function end to end at the process level:
@@ -48,13 +56,64 @@ from helper_frame_input import (
     ValidatedHelperFrameInput,
     assemble_validated_helper_frame_input,
 )
-from helper_frame_reader import HelperFrameInputReadOutcome, HelperFrameInputReadStatus
+from helper_frame_reader import (
+    HelperFrameInputReader,
+    HelperFrameInputReadOutcome,
+    HelperFrameInputReadStatus,
+)
 from helper_frame_rgb import ValidatedHelperRgb24Frame
+from helper_native_fnv import NativeFnv1a32LoadError, load_native_fnv1a32
 
 _SECRET_MODEL_PATH_MARKER = "very-secret-model-marker-9f31c2"
 _SECRET_EXCEPTION_TEXT = "very-secret-exception-text-4b7a1"
 
 _ABS_MODEL_PATH = os.path.join(tempfile.gettempdir(), "lvk-fixture-model.task")
+_ABS_LIBRARY_PATH = os.path.join(
+    tempfile.gettempdir(),
+    "lvk-fnv1a32.dll" if sys.platform == "win32" else "liblvk-fnv1a32.so",
+)
+_SECRET_LIBRARY_PATH_MARKER = "very-secret-library-marker-c41d07"
+
+
+def _reference_fnv1a32(data: bytes) -> int:
+    """Test-only deterministic FNV-1a32 oracle (never a production fallback)."""
+    hash_value = 2166136261
+    for byte in data:
+        hash_value ^= byte
+        hash_value = (hash_value * 16777619) & 0xFFFFFFFF
+    return hash_value
+
+
+def _fake_native_fnv_loader(library_path: str):
+    """Test-only stand-in for load_native_fnv1a32: returns the oracle."""
+    return _reference_fnv1a32
+
+
+class _RecordingNativeLoader:
+    """Records loader calls and every checksum invocation of the result."""
+
+    def __init__(self, *, error: BaseException | None = None, result: object = None,
+                 checksum_error_on_call: int | None = None):
+        self.load_calls: list = []
+        self.checksum_calls: list = []
+        self._error = error
+        self._result = result
+        self._checksum_error_on_call = checksum_error_on_call
+
+    def __call__(self, library_path: str):
+        self.load_calls.append(library_path)
+        if self._error is not None:
+            raise self._error
+        if self._result is not None:
+            return self._result
+
+        def checksum(data: bytes) -> int:
+            self.checksum_calls.append(data)
+            if self._checksum_error_on_call == len(self.checksum_calls):
+                raise RuntimeError(_SECRET_EXCEPTION_TEXT)
+            return _reference_fnv1a32(data)
+
+        return checksum
 
 
 # =============================================================================
@@ -207,7 +266,7 @@ def _make_valid_frame_input(request_id: int = 7, frame_timestamp_ms: int = 1000)
         row_stride_bytes=6,
         payload_bytes=12,
     )
-    frame_input = assemble_validated_helper_frame_input(request, header, payload)
+    frame_input = assemble_validated_helper_frame_input(request, header, payload, _reference_fnv1a32)
     assert frame_input is not None
     return frame_input
 
@@ -233,8 +292,10 @@ _CONTROL_INVALID_OUTCOME = HelperFrameInputReadOutcome(
 def _run_session(
     *,
     model_asset_path: str = _ABS_MODEL_PATH,
+    native_fnv_library_path: str = _ABS_LIBRARY_PATH,
     reader: _FakeReader | None = None,
     importer=None,
+    native_fnv_loader=_fake_native_fnv_loader,
     output_stream: io.StringIO | None = None,
     error_stream: io.StringIO | None = None,
 ):
@@ -245,7 +306,13 @@ def _run_session(
 
     with mock.patch.object(session, "HelperFrameInputReader", return_value=reader) as reader_ctor:
         status = run_face_landmarker_helper_session(
-            model_asset_path, object(), output_stream, error_stream, module_importer=importer
+            model_asset_path,
+            native_fnv_library_path,
+            object(),
+            output_stream,
+            error_stream,
+            module_importer=importer,
+            native_fnv_loader=native_fnv_loader,
         )
 
     return status, output_stream.getvalue(), error_stream.getvalue(), reader, reader_ctor
@@ -280,49 +347,105 @@ class PublicContractTests(unittest.TestCase):
         self.assertEqual({member.name for member in FaceLandmarkerHelperSessionStatus}, expected)
 
 
+def _argv(model: object = _ABS_MODEL_PATH, library: object = _ABS_LIBRARY_PATH) -> list:
+    return ["--model-asset-path", model, "--native-fnv-library-path", library]
+
+
 class CliContractTests(unittest.TestCase):
     def test_valid_cli_accepted(self) -> None:
         self.assertEqual(
-            session._parse_startup_arguments(["--model-asset-path", _ABS_MODEL_PATH]),
-            _ABS_MODEL_PATH,
+            session._parse_startup_arguments(_argv()),
+            (_ABS_MODEL_PATH, _ABS_LIBRARY_PATH),
         )
 
     def test_missing_value(self) -> None:
         self.assertIsNone(session._parse_startup_arguments(["--model-asset-path"]))
 
     def test_extra_arguments(self) -> None:
-        self.assertIsNone(
-            session._parse_startup_arguments(["--model-asset-path", _ABS_MODEL_PATH, "extra"])
-        )
+        self.assertIsNone(session._parse_startup_arguments(_argv() + ["extra"]))
 
     def test_wrong_flag(self) -> None:
-        self.assertIsNone(session._parse_startup_arguments(["--bad-flag", _ABS_MODEL_PATH]))
+        self.assertIsNone(
+            session._parse_startup_arguments(
+                ["--bad-flag", _ABS_MODEL_PATH, "--native-fnv-library-path", _ABS_LIBRARY_PATH]
+            )
+        )
 
     def test_empty_value(self) -> None:
-        self.assertIsNone(session._parse_startup_arguments(["--model-asset-path", ""]))
+        self.assertIsNone(session._parse_startup_arguments(_argv(model="")))
 
     def test_relative_path_rejected(self) -> None:
-        self.assertIsNone(
-            session._parse_startup_arguments(["--model-asset-path", "relative/model.task"])
-        )
+        self.assertIsNone(session._parse_startup_arguments(_argv(model="relative/model.task")))
 
     def test_nul_rejected(self) -> None:
-        self.assertIsNone(
-            session._parse_startup_arguments(["--model-asset-path", _ABS_MODEL_PATH + "\0x"])
-        )
+        self.assertIsNone(session._parse_startup_arguments(_argv(model=_ABS_MODEL_PATH + "\0x")))
 
     def test_cr_rejected(self) -> None:
-        self.assertIsNone(
-            session._parse_startup_arguments(["--model-asset-path", _ABS_MODEL_PATH + "\r"])
-        )
+        self.assertIsNone(session._parse_startup_arguments(_argv(model=_ABS_MODEL_PATH + "\r")))
 
     def test_lf_rejected(self) -> None:
-        self.assertIsNone(
-            session._parse_startup_arguments(["--model-asset-path", _ABS_MODEL_PATH + "\n"])
-        )
+        self.assertIsNone(session._parse_startup_arguments(_argv(model=_ABS_MODEL_PATH + "\n")))
 
     def test_non_string_value_rejected(self) -> None:
-        self.assertIsNone(session._parse_startup_arguments(["--model-asset-path", 123]))
+        self.assertIsNone(session._parse_startup_arguments(_argv(model=123)))
+
+    # --- P2-C: --native-fnv-library-path -------------------------------------
+
+    def test_model_only_legacy_cli_rejected(self) -> None:
+        self.assertIsNone(
+            session._parse_startup_arguments(["--model-asset-path", _ABS_MODEL_PATH])
+        )
+
+    def test_missing_library_flag_or_value_rejected(self) -> None:
+        self.assertIsNone(
+            session._parse_startup_arguments(
+                ["--model-asset-path", _ABS_MODEL_PATH, "--native-fnv-library-path"]
+            )
+        )
+        self.assertIsNone(
+            session._parse_startup_arguments(["--native-fnv-library-path", _ABS_LIBRARY_PATH])
+        )
+
+    def test_reordered_arguments_rejected(self) -> None:
+        self.assertIsNone(
+            session._parse_startup_arguments(
+                ["--native-fnv-library-path", _ABS_LIBRARY_PATH, "--model-asset-path", _ABS_MODEL_PATH]
+            )
+        )
+
+    def test_duplicate_flags_rejected(self) -> None:
+        self.assertIsNone(
+            session._parse_startup_arguments(
+                ["--model-asset-path", _ABS_MODEL_PATH, "--model-asset-path", _ABS_MODEL_PATH]
+            )
+        )
+        self.assertIsNone(
+            session._parse_startup_arguments(
+                ["--native-fnv-library-path", _ABS_LIBRARY_PATH, "--native-fnv-library-path", _ABS_LIBRARY_PATH]
+            )
+        )
+        self.assertIsNone(session._parse_startup_arguments(_argv() + _argv()[2:]))
+
+    def test_unexpected_flag_spelling_rejected(self) -> None:
+        for flag in ("--native-fnv-library", "--native_fnv_library_path", "--NATIVE-FNV-LIBRARY-PATH", "--native-fnv-library-path="):
+            with self.subTest(flag=flag):
+                self.assertIsNone(
+                    session._parse_startup_arguments(
+                        ["--model-asset-path", _ABS_MODEL_PATH, flag, _ABS_LIBRARY_PATH]
+                    )
+                )
+
+    def test_invalid_library_values_rejected(self) -> None:
+        for value in ("", "relative/lvk-fnv1a32.dll", _ABS_LIBRARY_PATH + "\0x",
+                      _ABS_LIBRARY_PATH + "\r", _ABS_LIBRARY_PATH + "\n", 123, None, b"/x.so"):
+            with self.subTest(value=repr(value)[:24]):
+                self.assertIsNone(session._parse_startup_arguments(_argv(library=value)))
+
+    def test_unicode_and_space_library_path_accepted_verbatim(self) -> None:
+        library = os.path.join(tempfile.gettempdir(), "lvk \u30bd build", os.path.basename(_ABS_LIBRARY_PATH))
+        self.assertEqual(
+            session._parse_startup_arguments(_argv(library=library)), (_ABS_MODEL_PATH, library)
+        )
 
     def test_no_environment_fallback_source_check(self) -> None:
         source = inspect.getsource(session)
@@ -330,13 +453,20 @@ class CliContractTests(unittest.TestCase):
         self.assertNotIn("getenv", source)
 
     def test_invalid_config_emits_no_ready_and_hides_supplied_text(self) -> None:
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = main(["--model-asset-path", _SECRET_MODEL_PATH_MARKER])
-        self.assertEqual(code, 1)
-        self.assertEqual(out.getvalue(), "")
-        self.assertNotIn(_SECRET_MODEL_PATH_MARKER, err.getvalue())
-        self.assertEqual(err.getvalue(), "[helper] session: failed (code=startup_failed)\n")
+        for argv in (
+            ["--model-asset-path", _SECRET_MODEL_PATH_MARKER],
+            _argv(model=_SECRET_MODEL_PATH_MARKER),
+            _argv(library=_SECRET_LIBRARY_PATH_MARKER),
+        ):
+            with self.subTest(arguments=len(argv)):
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    code = main(argv)
+                self.assertEqual(code, 1)
+                self.assertEqual(out.getvalue(), "")
+                self.assertNotIn(_SECRET_MODEL_PATH_MARKER, err.getvalue())
+                self.assertNotIn(_SECRET_LIBRARY_PATH_MARKER, err.getvalue())
+                self.assertEqual(err.getvalue(), "[helper] session: failed (code=startup_failed)\n")
 
 
 class MainDispatchTests(unittest.TestCase):
@@ -347,7 +477,7 @@ class MainDispatchTests(unittest.TestCase):
             return_value=FaceLandmarkerHelperSessionStatus.STOPPED,
         ):
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                code = main(["--model-asset-path", _ABS_MODEL_PATH])
+                code = main(_argv())
         self.assertEqual(code, 0)
 
     def test_maps_eof_stopped_to_exit_zero(self) -> None:
@@ -357,7 +487,7 @@ class MainDispatchTests(unittest.TestCase):
             return_value=FaceLandmarkerHelperSessionStatus.EOF_STOPPED,
         ):
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                code = main(["--model-asset-path", _ABS_MODEL_PATH])
+                code = main(_argv())
         self.assertEqual(code, 0)
 
     def test_maps_failure_status_to_exit_one(self) -> None:
@@ -367,14 +497,17 @@ class MainDispatchTests(unittest.TestCase):
             return_value=FaceLandmarkerHelperSessionStatus.INTERNAL_FAILURE,
         ):
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                code = main(["--model-asset-path", _ABS_MODEL_PATH])
+                code = main(_argv())
         self.assertEqual(code, 1)
 
     def test_passes_stdin_buffer_stdout_stderr(self) -> None:
         captured = {}
 
-        def fake_run(model_asset_path, control_stream, output_stream, error_stream, *, module_importer=None):
+        def fake_run(model_asset_path, native_fnv_library_path, control_stream, output_stream,
+                     error_stream, *, module_importer=None, native_fnv_loader=None):
             captured["model_asset_path"] = model_asset_path
+            captured["native_fnv_library_path"] = native_fnv_library_path
+            captured["kwargs"] = (module_importer, native_fnv_loader)
             captured["control_stream"] = control_stream
             captured["output_stream"] = output_stream
             captured["error_stream"] = error_stream
@@ -387,9 +520,12 @@ class MainDispatchTests(unittest.TestCase):
             expected_stdout = sys.stdout
             expected_stderr = sys.stderr
             expected_stdin_buffer = sys.stdin.buffer
-            main(["--model-asset-path", _ABS_MODEL_PATH])
+            main(_argv())
 
         self.assertEqual(captured["model_asset_path"], _ABS_MODEL_PATH)
+        self.assertEqual(captured["native_fnv_library_path"], _ABS_LIBRARY_PATH)
+        # Production main() never overrides the real importer or loader.
+        self.assertEqual(captured["kwargs"], (None, None))
         self.assertIs(captured["output_stream"], expected_stdout)
         self.assertIs(captured["error_stream"], expected_stderr)
         self.assertIs(captured["control_stream"], expected_stdin_buffer)
@@ -414,9 +550,13 @@ class StartupTests(unittest.TestCase):
 
         real_reader_cls = session.HelperFrameInputReader
 
-        def reader_spy(control_stream):
+        def reader_spy(control_stream, checksum):
             order.append("reader_construction")
-            return real_reader_cls(control_stream)
+            return real_reader_cls(control_stream, checksum)
+
+        def loader_spy(library_path):
+            order.append("native_fnv_load")
+            return _fake_native_fnv_loader(library_path)
 
         class _OrderedStream(io.StringIO):
             def write(self_inner, s):
@@ -434,11 +574,11 @@ class StartupTests(unittest.TestCase):
             session, "create_face_landmarker_runtime", side_effect=create_spy
         ), mock.patch.object(session, "HelperFrameInputReader", side_effect=reader_spy):
             status = run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, control_stream, output_stream, io.StringIO(), module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, control_stream, output_stream, io.StringIO(), module_importer=importer, native_fnv_loader=loader_spy
             )
 
         self.assertEqual(importer.calls[:2], ["numpy", "mediapipe"])
-        self.assertEqual(order[:2], ["runtime_creation", "reader_construction"])
+        self.assertEqual(order[:3], ["native_fnv_load", "runtime_creation", "reader_construction"])
         self.assertIn("write", order)
         self.assertIn("flush", order)
         self.assertLess(order.index("reader_construction"), order.index("write"))
@@ -546,7 +686,7 @@ class StartupTests(unittest.TestCase):
             session, "HelperFrameInputReader", side_effect=RuntimeError(_SECRET_EXCEPTION_TEXT)
         ):
             status = run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, object(), io.StringIO(), io.StringIO(), module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), io.StringIO(), io.StringIO(), module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
         self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
         self.assertEqual(runtime.close_calls, 1)
@@ -560,7 +700,7 @@ class StartupTests(unittest.TestCase):
         reader = _FakeReader([_EOF_OUTCOME])
         with mock.patch.object(session, "HelperFrameInputReader", return_value=reader):
             status = run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, object(), _FailingStream(), io.StringIO(), module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), _FailingStream(), io.StringIO(), module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
         self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
         self.assertEqual(reader.read_calls, 0)
@@ -575,7 +715,7 @@ class StartupTests(unittest.TestCase):
         reader = _FakeReader([_EOF_OUTCOME])
         with mock.patch.object(session, "HelperFrameInputReader", return_value=reader):
             run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, object(), _FailingStream(), io.StringIO(), module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), _FailingStream(), io.StringIO(), module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
         self.assertEqual(runtime.close_calls, 1)
         self.assertEqual(reader.close_calls, 1)
@@ -846,7 +986,7 @@ class StageFailureTests(unittest.TestCase):
         error_stream = io.StringIO()
         with mock.patch.object(session, "HelperFrameInputReader", return_value=reader):
             status = run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, object(), output_stream, error_stream, module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), output_stream, error_stream, module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
         self.assertEqual(status, FaceLandmarkerHelperSessionStatus.OUTPUT_FAILED)
         self.assertEqual(error_stream.getvalue(), "[helper] session: failed (code=output_failed)\n")
@@ -869,7 +1009,7 @@ class StageFailureTests(unittest.TestCase):
         output_stream = _FlushFailsAfterReady()
         with mock.patch.object(session, "HelperFrameInputReader", return_value=reader):
             status = run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, object(), output_stream, io.StringIO(), module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), output_stream, io.StringIO(), module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
         self.assertEqual(status, FaceLandmarkerHelperSessionStatus.OUTPUT_FAILED)
 
@@ -1061,14 +1201,14 @@ class PrivacyAndBoundsTests(unittest.TestCase):
         with mock.patch.object(session, "HelperFrameInputReader", return_value=reader):
             with self.assertRaises(KeyboardInterrupt):
                 run_face_landmarker_helper_session(
-                    _ABS_MODEL_PATH, object(), io.StringIO(), io.StringIO(), module_importer=importer
+                    _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), io.StringIO(), io.StringIO(), module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
                 )
 
     def test_system_exit_from_mediapipe_import_not_swallowed(self) -> None:
         importer = _make_importer(mediapipe_error=SystemExit())
         with self.assertRaises(SystemExit):
             run_face_landmarker_helper_session(
-                _ABS_MODEL_PATH, object(), io.StringIO(), io.StringIO(), module_importer=importer
+                _ABS_MODEL_PATH, _ABS_LIBRARY_PATH, object(), io.StringIO(), io.StringIO(), module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
 
     def test_internal_failure_on_unexpected_exception(self) -> None:
@@ -1078,6 +1218,305 @@ class PrivacyAndBoundsTests(unittest.TestCase):
             status, out, err, _, _ = _run_session()
         self.assertEqual(status, FaceLandmarkerHelperSessionStatus.INTERNAL_FAILURE)
         self.assertNotIn(_SECRET_EXCEPTION_TEXT, err)
+
+
+# =============================================================================
+# P2-C: session-owned native FNV-1a32 startup and checksum flow
+# =============================================================================
+
+
+class NativeFnvStartupTests(unittest.TestCase):
+    def _assert_startup_failed_without_ready(self, status, out, err) -> None:
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "[helper] session: failed (code=startup_failed)\n")
+
+    def test_loader_called_exactly_once_with_exact_path_before_imports(self) -> None:
+        importer = _make_importer()
+        loader = _RecordingNativeLoader()
+        reader = _FakeReader([_frame_outcome(), _frame_outcome(request_id=9), _STOP_OUTCOME])
+        status, out, _, _, reader_ctor = _run_session(
+            importer=importer, native_fnv_loader=loader, reader=reader
+        )
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STOPPED)
+        self.assertEqual(loader.load_calls, [_ABS_LIBRARY_PATH])
+        self.assertEqual(len(_lines(out)), 5)
+        # The session hands its one verified callable to the reader.
+        self.assertEqual(reader_ctor.call_count, 1)
+        supplied = reader_ctor.call_args.args[1]
+        self.assertTrue(callable(supplied))
+
+    def test_loader_failure_prevents_ready_and_imports(self) -> None:
+        for error in (
+            NativeFnv1a32LoadError("native FNV ABI version 2 != 1"),
+            NativeFnv1a32LoadError("native FNV startup self-test produced a wrong checksum"),
+            NativeFnv1a32LoadError("native FNV library path does not name an existing regular file"),
+            TypeError("native FNV library path must be an exact str"),
+            OSError(_SECRET_EXCEPTION_TEXT),
+        ):
+            with self.subTest(error=type(error).__name__):
+                importer = _make_importer()
+                loader = _RecordingNativeLoader(error=error)
+                reader = _FakeReader([_frame_outcome(), _STOP_OUTCOME])
+                status, out, err, reader, reader_ctor = _run_session(
+                    importer=importer, native_fnv_loader=loader, reader=reader
+                )
+                self._assert_startup_failed_without_ready(status, out, err)
+                self.assertNotIn(_SECRET_EXCEPTION_TEXT, err)
+                self.assertNotIn(str(error), err)
+                self.assertEqual(importer.calls, [])
+                reader_ctor.assert_not_called()
+                self.assertEqual(reader.read_calls, 0)
+
+    def test_loader_returning_non_callable_prevents_ready(self) -> None:
+        for value in (0, "checksum", b"", object()):
+            with self.subTest(value=type(value).__name__):
+                loader = _RecordingNativeLoader(result=value)
+                status, out, err, _, reader_ctor = _run_session(native_fnv_loader=loader)
+                self._assert_startup_failed_without_ready(status, out, err)
+                reader_ctor.assert_not_called()
+
+    def test_non_callable_loader_prevents_ready(self) -> None:
+        status, out, err, _, _ = _run_session(native_fnv_loader="not-callable")
+        self._assert_startup_failed_without_ready(status, out, err)
+
+    def test_invalid_library_path_never_reaches_loader(self) -> None:
+        for value in ("", _ABS_LIBRARY_PATH + "\0", _ABS_LIBRARY_PATH + "\n", None, 7):
+            with self.subTest(value=repr(value)[:16]):
+                loader = _RecordingNativeLoader()
+                status, out, err, _, _ = _run_session(
+                    native_fnv_library_path=value, native_fnv_loader=loader
+                )
+                self._assert_startup_failed_without_ready(status, out, err)
+                self.assertEqual(loader.load_calls, [])
+
+    def test_library_path_never_appears_in_output(self) -> None:
+        loader = _RecordingNativeLoader(error=NativeFnv1a32LoadError(_SECRET_LIBRARY_PATH_MARKER))
+        status, out, err, _, _ = _run_session(
+            native_fnv_library_path=os.path.join(tempfile.gettempdir(), _SECRET_LIBRARY_PATH_MARKER),
+            native_fnv_loader=loader,
+        )
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+        self.assertNotIn(_SECRET_LIBRARY_PATH_MARKER, out)
+        self.assertNotIn(_SECRET_LIBRARY_PATH_MARKER, err)
+
+    def test_real_loader_missing_library_prevents_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = os.path.join(directory, os.path.basename(_ABS_LIBRARY_PATH))
+            importer = _make_importer()
+            status, out, err, _, reader_ctor = _run_session(
+                native_fnv_library_path=missing,
+                native_fnv_loader=load_native_fnv1a32,
+                importer=importer,
+            )
+        self._assert_startup_failed_without_ready(status, out, err)
+        self.assertNotIn(directory, err)
+        self.assertEqual(importer.calls, [])
+        reader_ctor.assert_not_called()
+
+    def test_real_loader_invalid_library_file_prevents_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            invalid = os.path.join(directory, os.path.basename(_ABS_LIBRARY_PATH))
+            with open(invalid, "wb") as handle:
+                handle.write(b"not a shared library\n" * 16)
+            importer = _make_importer()
+            status, out, err, _, reader_ctor = _run_session(
+                native_fnv_library_path=invalid,
+                native_fnv_loader=load_native_fnv1a32,
+                importer=importer,
+            )
+        self._assert_startup_failed_without_ready(status, out, err)
+        self.assertNotIn(directory, err)
+        self.assertEqual(importer.calls, [])
+        reader_ctor.assert_not_called()
+
+    def test_real_loader_relative_library_path_prevents_ready(self) -> None:
+        status, out, err, _, _ = _run_session(
+            native_fnv_library_path=os.path.basename(_ABS_LIBRARY_PATH),
+            native_fnv_loader=load_native_fnv1a32,
+        )
+        self._assert_startup_failed_without_ready(status, out, err)
+
+    def test_loader_failure_closes_nothing_twice_and_creates_no_runtime(self) -> None:
+        runtime = _FakeRuntime()
+        importer = _make_importer(mediapipe_module=_make_fake_mediapipe_module(runtime=runtime))
+        loader = _RecordingNativeLoader(error=NativeFnv1a32LoadError("x"))
+        with mock.patch.object(session, "create_face_landmarker_runtime") as create:
+            status, _, _, _, _ = _run_session(importer=importer, native_fnv_loader=loader)
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STARTUP_FAILED)
+        create.assert_not_called()
+        self.assertEqual(runtime.close_calls, 0)
+
+    def test_session_module_holds_no_checksum_implementation(self) -> None:
+        source = inspect.getsource(session)
+        for forbidden in ("def _fnv1a32", "16777619", "2166136261", "ctypes", "os.environ"):
+            self.assertNotIn(forbidden, source)
+
+
+class _PipeFrameEndpoint:
+    """A real OS pipe used as the reader's frame endpoint (test seam only)."""
+
+    def __init__(self, frame_bytes: bytes) -> None:
+        read_fd, write_fd = os.pipe()
+        try:
+            os.write(write_fd, frame_bytes)
+        finally:
+            os.close(write_fd)
+        self.read_fd = read_fd
+
+    def close_if_still_open(self) -> None:
+        # The reader closes the endpoint on every terminal outcome once it has
+        # resolved it; a session that never reads a frame never resolves it.
+        try:
+            os.close(self.read_fd)
+        except OSError:
+            pass
+
+    def patches(self):
+        return (
+            mock.patch("helper_frame_reader._detect_platform_kind", return_value="posix"),
+            mock.patch("helper_frame_reader._resolve_posix_frame_fd", return_value=self.read_fd),
+        )
+
+
+def _frame_packet_bytes(request_id: int, frame_timestamp_ms: int, payload: bytes) -> bytes:
+    header = (
+        b"LVKF"
+        + (1).to_bytes(2, "little")
+        + (48).to_bytes(2, "little")
+        + request_id.to_bytes(8, "little")
+        + frame_timestamp_ms.to_bytes(8, "little", signed=True)
+        + (2).to_bytes(4, "little")
+        + (2).to_bytes(4, "little")
+        + (6).to_bytes(4, "little")
+        + (1).to_bytes(4, "little")
+        + len(payload).to_bytes(8, "little")
+    )
+    return header + payload
+
+
+def _control_bytes(*lines: dict) -> io.BytesIO:
+    return io.BytesIO(b"".join(json.dumps(line, separators=(",", ":")).encode() + b"\n" for line in lines))
+
+
+class NativeChecksumFlowTests(unittest.TestCase):
+    """Real reader + real RGB stage; only the checksum callable is recorded."""
+
+    def _run_real_reader_session(self, loader, frames, *, stop: bool = True):
+        payloads = b"".join(_frame_packet_bytes(rid, ts, payload) for rid, ts, payload in frames)
+        endpoint = _PipeFrameEndpoint(payloads)
+        lines = [
+            {"type": "request", "schemaVersion": 1, "requestId": rid, "frameTimestampMs": ts}
+            for rid, ts, _ in frames
+        ]
+        if stop:
+            lines.append({"type": "stop", "schemaVersion": 1})
+        output_stream, error_stream = io.StringIO(), io.StringIO()
+        first, second = endpoint.patches()
+        with first, second:
+            status = run_face_landmarker_helper_session(
+                _ABS_MODEL_PATH,
+                _ABS_LIBRARY_PATH,
+                _control_bytes(*lines),
+                output_stream,
+                error_stream,
+                module_importer=_make_importer(),
+                native_fnv_loader=loader,
+            )
+        if not frames:
+            endpoint.close_if_still_open()
+        return status, output_stream.getvalue(), error_stream.getvalue()
+
+    def test_both_stages_invoke_session_checksum_for_every_accepted_frame(self) -> None:
+        loader = _RecordingNativeLoader()
+        payload_a = bytes(range(12))
+        payload_b = b"\x00" * 6 + bytes(range(250, 256))
+        status, out, err = self._run_real_reader_session(
+            loader, [(7, 1000, payload_a), (9, 2000, payload_b)]
+        )
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STOPPED)
+        self.assertEqual(err, "")
+        self.assertEqual(loader.load_calls, [_ABS_LIBRARY_PATH])
+        # Exactly two independent invocations per frame: assembly, then RGB.
+        self.assertEqual(loader.checksum_calls, [payload_a, payload_a, payload_b, payload_b])
+        results = [json.loads(line) for line in _lines(out) if json.loads(line)["type"] == "result"]
+        self.assertEqual(
+            [result["frameAck"]["checksum"] for result in results],
+            [_reference_fnv1a32(payload_a), _reference_fnv1a32(payload_b)],
+        )
+
+    def test_frame_assembly_checksum_failure_produces_no_result(self) -> None:
+        loader = _RecordingNativeLoader(checksum_error_on_call=1)
+        status, out, err = self._run_real_reader_session(loader, [(7, 1000, bytes(range(12)))])
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.INPUT_FAILED)
+        self.assertEqual([json.loads(line)["type"] for line in _lines(out)], ["ready"])
+        self.assertEqual(err, "[helper] session: failed (code=input_failed)\n")
+        self.assertNotIn(_SECRET_EXCEPTION_TEXT, err)
+        self.assertEqual(len(loader.checksum_calls), 1)
+
+    def test_rgb_checksum_failure_produces_no_result(self) -> None:
+        loader = _RecordingNativeLoader(checksum_error_on_call=2)
+        status, out, err = self._run_real_reader_session(loader, [(7, 1000, bytes(range(12)))])
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.FRAME_CONVERSION_FAILED)
+        self.assertEqual([json.loads(line)["type"] for line in _lines(out)], ["ready"])
+        self.assertEqual(err, "[helper] session: failed (code=frame_conversion_failed)\n")
+        self.assertNotIn(_SECRET_EXCEPTION_TEXT, err)
+        self.assertEqual(len(loader.checksum_calls), 2)
+
+    def test_second_frame_rgb_failure_keeps_first_result_only(self) -> None:
+        loader = _RecordingNativeLoader(checksum_error_on_call=4)
+        status, out, _ = self._run_real_reader_session(
+            loader, [(7, 1000, bytes(range(12))), (9, 2000, bytes(range(12, 24)))]
+        )
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.FRAME_CONVERSION_FAILED)
+        types = [json.loads(line)["type"] for line in _lines(out)]
+        self.assertEqual(types, ["ready", "result"])
+
+    def test_inconsistent_checksum_between_stages_produces_no_result(self) -> None:
+        calls: list = []
+
+        def flaky_checksum(data: bytes) -> int:
+            calls.append(data)
+            value = _reference_fnv1a32(data)
+            return value if len(calls) == 1 else value ^ 1
+
+        status, out, _ = self._run_real_reader_session(
+            lambda path: flaky_checksum, [(7, 1000, bytes(range(12)))]
+        )
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.FRAME_CONVERSION_FAILED)
+        self.assertEqual([json.loads(line)["type"] for line in _lines(out)], ["ready"])
+        self.assertEqual(len(calls), 2)
+
+    def test_structurally_invalid_frame_never_invokes_checksum(self) -> None:
+        loader = _RecordingNativeLoader()
+        # Header correlates with requestId 8 while the request says 7.
+        endpoint = _PipeFrameEndpoint(_frame_packet_bytes(8, 1000, bytes(range(12))))
+        first, second = endpoint.patches()
+        output_stream = io.StringIO()
+        with first, second:
+            status = run_face_landmarker_helper_session(
+                _ABS_MODEL_PATH,
+                _ABS_LIBRARY_PATH,
+                _control_bytes({"type": "request", "schemaVersion": 1, "requestId": 7, "frameTimestampMs": 1000}),
+                output_stream,
+                io.StringIO(),
+                module_importer=_make_importer(),
+                native_fnv_loader=loader,
+            )
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.INPUT_FAILED)
+        self.assertEqual(loader.checksum_calls, [])
+
+    def test_clean_eof_and_stop_unchanged(self) -> None:
+        loader = _RecordingNativeLoader()
+        status, out, _ = self._run_real_reader_session(loader, [], stop=False)
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.EOF_STOPPED)
+        self.assertEqual([json.loads(line)["type"] for line in _lines(out)], ["ready", "stopped"])
+        status, out, _ = self._run_real_reader_session(_RecordingNativeLoader(), [], stop=True)
+        self.assertEqual(status, FaceLandmarkerHelperSessionStatus.STOPPED)
+        self.assertEqual(
+            [json.loads(line)["type"] for line in _lines(out)], ["ready", "stopping", "stopped"]
+        )
+        self.assertEqual(loader.checksum_calls, [])
 
 
 # =============================================================================
@@ -1096,7 +1535,7 @@ def _run_process_fixture(scenario: str) -> int:
     if scenario == "startup-failure":
         importer = _make_importer(numpy_error=RuntimeError("synthetic-startup-failure"))
         status = run_face_landmarker_helper_session(
-            model_path, None, output_stream, error_stream, module_importer=importer
+            model_path, _ABS_LIBRARY_PATH, None, output_stream, error_stream, module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
         )
     elif scenario in ("frame-stop", "clean-eof", "input-failure"):
         importer = _make_importer(
@@ -1112,7 +1551,7 @@ def _run_process_fixture(scenario: str) -> int:
         reader = _FakeReader(outcomes)
         with mock.patch.object(session, "HelperFrameInputReader", return_value=reader):
             status = run_face_landmarker_helper_session(
-                model_path, None, output_stream, error_stream, module_importer=importer
+                model_path, _ABS_LIBRARY_PATH, None, output_stream, error_stream, module_importer=importer, native_fnv_loader=_fake_native_fnv_loader
             )
     else:
         sys.stderr.write(f"unknown fixture scenario: {scenario}\n")

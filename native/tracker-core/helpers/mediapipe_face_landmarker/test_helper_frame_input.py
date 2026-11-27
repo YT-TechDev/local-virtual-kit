@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import inspect
 import io
 import json
 import sys
@@ -36,6 +37,37 @@ _INT64_MIN = -(1 << 63)
 _INT64_MAX = (1 << 63) - 1
 _UINT64_MAX = (1 << 64) - 1
 _UINT32_MAX = (1 << 32) - 1
+
+
+def _reference_fnv1a32(data: bytes) -> int:
+    """Test-only deterministic FNV-1a32 oracle (P2-C).
+
+    Production frame assembly no longer contains a checksum implementation:
+    the helper session injects the verified native callable. These tests
+    supply this pure-Python reference explicitly as the deterministic oracle.
+    """
+    hash_value = 2166136261
+    for byte in data:
+        hash_value ^= byte
+        hash_value = (hash_value * 16777619) & 0xFFFFFFFF
+    return hash_value
+
+
+class _CountingChecksum:
+    """Records every invocation; returns the oracle value or a fixed result."""
+
+    def __init__(self, *, result: object = None, error: BaseException | None = None):
+        self.calls: list = []
+        self._result = result
+        self._error = error
+
+    def __call__(self, data: bytes) -> object:
+        self.calls.append(data)
+        if self._error is not None:
+            raise self._error
+        if self._result is not None:
+            return self._result
+        return _reference_fnv1a32(data)
 _MAX_PAYLOAD_BYTES = 32 * 1024 * 1024
 _MAX_LINE_CONTENT_BYTES = 2048
 
@@ -738,27 +770,27 @@ class RepresentablePayloadBoundariesTest(unittest.TestCase):
 class FinalAssemblyValidCasesTest(unittest.TestCase):
     def test_109_valid_inputs_produce_validated_frame_input(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIs(type(result), ValidatedHelperFrameInput)
 
     def test_110_preserves_request_id(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertEqual(result.request_id, _ASSEMBLY_REQUEST_ID)
 
     def test_111_preserves_timestamp(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertEqual(result.frame_timestamp_ms, _ASSEMBLY_TIMESTAMP_MS)
 
     def test_112_preserves_dimensions(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertEqual(result.width, _ASSEMBLY_WIDTH)
@@ -766,35 +798,35 @@ class FinalAssemblyValidCasesTest(unittest.TestCase):
 
     def test_113_preserves_tight_row_stride(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertEqual(result.row_stride_bytes, _ASSEMBLY_STRIDE)
 
     def test_114_payload_bytes_equals_len_payload(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertEqual(result.payload_bytes, len(_ASSEMBLY_PAYLOAD))
 
     def test_115_bgr24_bytes_equals_supplied_payload(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertIs(result.bgr24_bytes, _ASSEMBLY_PAYLOAD)
 
     def test_116_checksum_is_exact_builtin_int(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertIs(type(result.checksum), int)
 
     def test_117_checksum_within_uint32(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         self.assertGreaterEqual(result.checksum, 0)
@@ -802,7 +834,7 @@ class FinalAssemblyValidCasesTest(unittest.TestCase):
 
     def test_118_output_is_frozen(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result is not None
         with self.assertRaises(FrozenInstanceError):
@@ -810,10 +842,10 @@ class FinalAssemblyValidCasesTest(unittest.TestCase):
 
     def test_119_repeated_calls_do_not_share_state(self) -> None:
         result_one = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), bytes(range(12))
+            _valid_assembly_request(), _valid_assembly_header(), bytes(range(12)), _reference_fnv1a32
         )
         result_two = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), bytes(range(12, 24))
+            _valid_assembly_request(), _valid_assembly_header(), bytes(range(12, 24)), _reference_fnv1a32
         )
         assert result_one is not None
         assert result_two is not None
@@ -830,13 +862,13 @@ class FinalAssemblyValidCasesTest(unittest.TestCase):
 class FinalAssemblyTypeSafetyTest(unittest.TestCase):
     def test_120_none_request_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            None, _valid_assembly_header(), _ASSEMBLY_PAYLOAD  # type: ignore[arg-type]
+            None, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32  # type: ignore[arg-type]
         )
         self.assertIsNone(result)
 
     def test_121_wrong_request_type_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            HelperStopRequest(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD  # type: ignore[arg-type]
+            HelperStopRequest(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32  # type: ignore[arg-type]
         )
         self.assertIsNone(result)
 
@@ -845,19 +877,19 @@ class FinalAssemblyTypeSafetyTest(unittest.TestCase):
             request_id=_ASSEMBLY_REQUEST_ID, frame_timestamp_ms=_ASSEMBLY_TIMESTAMP_MS
         )
         result = assemble_validated_helper_frame_input(
-            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_123_none_header_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), None, _ASSEMBLY_PAYLOAD  # type: ignore[arg-type]
+            _valid_assembly_request(), None, _ASSEMBLY_PAYLOAD, _reference_fnv1a32  # type: ignore[arg-type]
         )
         self.assertIsNone(result)
 
     def test_124_wrong_header_type_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_request(), _ASSEMBLY_PAYLOAD  # type: ignore[arg-type]
+            _valid_assembly_request(), _valid_assembly_request(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32  # type: ignore[arg-type]
         )
         self.assertIsNone(result)
 
@@ -871,19 +903,19 @@ class FinalAssemblyTypeSafetyTest(unittest.TestCase):
             payload_bytes=_ASSEMBLY_PAYLOAD_BYTES,
         )
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_126_none_payload_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), None  # type: ignore[arg-type]
+            _valid_assembly_request(), _valid_assembly_header(), None, _reference_fnv1a32  # type: ignore[arg-type]
         )
         self.assertIsNone(result)
 
     def test_127_bytearray_payload_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), bytearray(_ASSEMBLY_PAYLOAD)  # type: ignore[arg-type]
+            _valid_assembly_request(), _valid_assembly_header(), bytearray(_ASSEMBLY_PAYLOAD), _reference_fnv1a32  # type: ignore[arg-type]
         )
         self.assertIsNone(result)
 
@@ -892,6 +924,7 @@ class FinalAssemblyTypeSafetyTest(unittest.TestCase):
             _valid_assembly_request(),
             _valid_assembly_header(),
             memoryview(_ASSEMBLY_PAYLOAD),  # type: ignore[arg-type]
+            _reference_fnv1a32,
         )
         self.assertIsNone(result)
 
@@ -899,7 +932,7 @@ class FinalAssemblyTypeSafetyTest(unittest.TestCase):
         result = assemble_validated_helper_frame_input(
             _valid_assembly_request(),
             _valid_assembly_header(),
-            _BytesSubclass(_ASSEMBLY_PAYLOAD),
+            _BytesSubclass(_ASSEMBLY_PAYLOAD), _reference_fnv1a32,
         )
         self.assertIsNone(result)
 
@@ -913,7 +946,7 @@ class ManuallyConstructedInternalInconsistencyTest(unittest.TestCase):
     def test_130_request_bool_request_id_returns_none(self) -> None:
         request = HelperFrameRequest(request_id=True, frame_timestamp_ms=1000)  # type: ignore[arg-type]
         result = assemble_validated_helper_frame_input(
-            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
@@ -923,63 +956,63 @@ class ManuallyConstructedInternalInconsistencyTest(unittest.TestCase):
             frame_timestamp_ms=_ASSEMBLY_TIMESTAMP_MS,
         )
         result = assemble_validated_helper_frame_input(
-            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_132_request_id_zero_returns_none(self) -> None:
         request = HelperFrameRequest(request_id=0, frame_timestamp_ms=1000)
         result = assemble_validated_helper_frame_input(
-            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_133_request_id_above_signed_max_returns_none(self) -> None:
         request = HelperFrameRequest(request_id=_INT64_MAX + 1, frame_timestamp_ms=1000)
         result = assemble_validated_helper_frame_input(
-            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_134_request_invalid_timestamp_type_returns_none(self) -> None:
         request = HelperFrameRequest(request_id=_ASSEMBLY_REQUEST_ID, frame_timestamp_ms="1000")  # type: ignore[arg-type]
         result = assemble_validated_helper_frame_input(
-            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            request, _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_135_header_bool_field_returns_none(self) -> None:
         header = _valid_assembly_header(sequence=True)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_136_header_int_subclass_field_returns_none(self) -> None:
         header = _valid_assembly_header(sequence=_IntSubclass(_ASSEMBLY_REQUEST_ID))
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_137_header_invalid_dimensions_returns_none(self) -> None:
         header = _valid_assembly_header(width=0)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_138_header_stride_mismatch_returns_none(self) -> None:
         header = _valid_assembly_header(row_stride_bytes=7)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_139_header_length_mismatch_returns_none(self) -> None:
         header = _valid_assembly_header(payload_bytes=13)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
@@ -995,21 +1028,21 @@ class ManuallyConstructedInternalInconsistencyTest(unittest.TestCase):
             payload_bytes=33569280,
         )
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, b""
+            _valid_assembly_request(), header, b"", _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_141_header_sequence_above_uint64_returns_none(self) -> None:
         header = _valid_assembly_header(sequence=_UINT64_MAX + 1)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_142_header_timestamp_outside_signed_range_returns_none(self) -> None:
         header = _valid_assembly_header(frame_timestamp_ms=_INT64_MAX + 1)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
@@ -1023,54 +1056,54 @@ class CorrelationAndPayloadLengthTest(unittest.TestCase):
     def test_143_mismatched_sequence_returns_none(self) -> None:
         header = _valid_assembly_header(sequence=_ASSEMBLY_REQUEST_ID + 1)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_144_mismatched_timestamp_returns_none(self) -> None:
         header = _valid_assembly_header(frame_timestamp_ms=_ASSEMBLY_TIMESTAMP_MS + 1)
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_145_truncated_payload_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD[:-1]
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD[:-1], _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_146_overlong_payload_returns_none(self) -> None:
         result = assemble_validated_helper_frame_input(
-            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD + b"\x00"
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD + b"\x00", _reference_fnv1a32
         )
         self.assertIsNone(result)
 
     def test_147_correlation_failure_before_checksum(self) -> None:
         header = _valid_assembly_header(sequence=_ASSEMBLY_REQUEST_ID + 1)
-        with mock.patch("helper_frame_input._fnv1a32") as mocked_fnv:
-            result = assemble_validated_helper_frame_input(
-                _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
-            )
+        checksum = _CountingChecksum()
+        result = assemble_validated_helper_frame_input(
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, checksum
+        )
         self.assertIsNone(result)
-        mocked_fnv.assert_not_called()
+        self.assertEqual(checksum.calls, [])
 
     def test_148_length_failure_before_checksum(self) -> None:
-        with mock.patch("helper_frame_input._fnv1a32") as mocked_fnv:
-            result = assemble_validated_helper_frame_input(
-                _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD[:-1]
-            )
+        checksum = _CountingChecksum()
+        result = assemble_validated_helper_frame_input(
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD[:-1], checksum
+        )
         self.assertIsNone(result)
-        mocked_fnv.assert_not_called()
+        self.assertEqual(checksum.calls, [])
 
     def test_149_invalid_header_before_checksum(self) -> None:
         header = _valid_assembly_header(row_stride_bytes=7)
-        with mock.patch("helper_frame_input._fnv1a32") as mocked_fnv:
-            result = assemble_validated_helper_frame_input(
-                _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD
-            )
+        checksum = _CountingChecksum()
+        result = assemble_validated_helper_frame_input(
+            _valid_assembly_request(), header, _ASSEMBLY_PAYLOAD, checksum
+        )
         self.assertIsNone(result)
-        mocked_fnv.assert_not_called()
+        self.assertEqual(checksum.calls, [])
 
 
 # =============================================================================
@@ -1079,16 +1112,18 @@ class CorrelationAndPayloadLengthTest(unittest.TestCase):
 
 
 class Fnv1a32Test(unittest.TestCase):
+    # P2-C: these now pin the test-only reference oracle to the known C++
+    # values, so every oracle-backed test below stays meaningful.
     def test_150_empty_bytes_returns_offset_basis(self) -> None:
-        self.assertEqual(helper_frame_input._fnv1a32(b""), 2166136261)
+        self.assertEqual(_reference_fnv1a32(b""), 2166136261)
 
     def test_151_known_marker_matches_cpp_checksum(self) -> None:
         marker = b"LVKF-frame-packet-smoke"
-        self.assertEqual(helper_frame_input._fnv1a32(marker), 1576141941)
+        self.assertEqual(_reference_fnv1a32(marker), 1576141941)
 
     def test_152_different_payload_differs(self) -> None:
-        first = helper_frame_input._fnv1a32(b"LVKF-frame-packet-smoke")
-        second = helper_frame_input._fnv1a32(b"LVKF-frame-packet-smokeX")
+        first = _reference_fnv1a32(b"LVKF-frame-packet-smoke")
+        second = _reference_fnv1a32(b"LVKF-frame-packet-smokeX")
         self.assertNotEqual(first, second)
 
     def test_153_checksum_covers_payload_only_not_header(self) -> None:
@@ -1098,10 +1133,10 @@ class Fnv1a32Test(unittest.TestCase):
         header_b = _valid_assembly_header(sequence=9, frame_timestamp_ms=500)
 
         result_a = assemble_validated_helper_frame_input(
-            request_a, header_a, _ASSEMBLY_PAYLOAD
+            request_a, header_a, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         result_b = assemble_validated_helper_frame_input(
-            request_b, header_b, _ASSEMBLY_PAYLOAD
+            request_b, header_b, _ASSEMBLY_PAYLOAD, _reference_fnv1a32
         )
         assert result_a is not None
         assert result_b is not None
@@ -1146,7 +1181,7 @@ class NoIoExceptionPolicyTest(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             assemble_validated_helper_frame_input(
-                _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+                _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, _reference_fnv1a32
             )
         self.assertEqual(out.getvalue(), "")
         self.assertEqual(err.getvalue(), "")
@@ -1154,7 +1189,7 @@ class NoIoExceptionPolicyTest(unittest.TestCase):
     def test_159_invalid_final_assembly_emits_no_output(self) -> None:
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            assemble_validated_helper_frame_input(None, None, None)  # type: ignore[arg-type]
+            assemble_validated_helper_frame_input(None, None, None, _reference_fnv1a32)  # type: ignore[arg-type]
         self.assertEqual(out.getvalue(), "")
         self.assertEqual(err.getvalue(), "")
 
@@ -1164,11 +1199,11 @@ class NoIoExceptionPolicyTest(unittest.TestCase):
                 parse_helper_control_line(_valid_request_line())
 
     def test_161_base_exception_from_checksum_helper_not_swallowed(self) -> None:
-        with mock.patch("helper_frame_input._fnv1a32", side_effect=KeyboardInterrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                assemble_validated_helper_frame_input(
-                    _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
-                )
+        checksum = _CountingChecksum(error=KeyboardInterrupt())
+        with self.assertRaises(KeyboardInterrupt):
+            assemble_validated_helper_frame_input(
+                _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, checksum
+            )
 
     def test_162_production_functions_do_not_mutate_input(self) -> None:
         request = _valid_assembly_request()
@@ -1178,11 +1213,139 @@ class NoIoExceptionPolicyTest(unittest.TestCase):
         before_header = dataclasses.astuple(header)
         before_payload = bytes(payload)
 
-        assemble_validated_helper_frame_input(request, header, payload)
+        assemble_validated_helper_frame_input(request, header, payload, _reference_fnv1a32)
 
         self.assertEqual(dataclasses.astuple(request), before_request)
         self.assertEqual(dataclasses.astuple(header), before_header)
         self.assertEqual(payload, before_payload)
+
+
+# =============================================================================
+# P2-C: explicit, required checksum dependency
+# =============================================================================
+
+
+class ExplicitChecksumDependencyTest(unittest.TestCase):
+    def test_checksum_is_a_required_parameter(self) -> None:
+        with self.assertRaises(TypeError):
+            assemble_validated_helper_frame_input(  # type: ignore[call-arg]
+                _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD
+            )
+
+    def test_non_callable_checksum_returns_none(self) -> None:
+        for value in (None, 0, b"", "fnv", object()):
+            with self.subTest(value=type(value).__name__):
+                self.assertIsNone(
+                    assemble_validated_helper_frame_input(
+                        _valid_assembly_request(),
+                        _valid_assembly_header(),
+                        _ASSEMBLY_PAYLOAD,
+                        value,  # type: ignore[arg-type]
+                    )
+                )
+
+    def test_checksum_invoked_exactly_once_on_the_payload_object(self) -> None:
+        checksum = _CountingChecksum()
+        result = assemble_validated_helper_frame_input(
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, checksum
+        )
+        assert result is not None
+        self.assertEqual(len(checksum.calls), 1)
+        self.assertIs(checksum.calls[0], _ASSEMBLY_PAYLOAD)
+        self.assertEqual(result.checksum, _reference_fnv1a32(_ASSEMBLY_PAYLOAD))
+
+    def test_stored_checksum_is_the_callable_result(self) -> None:
+        checksum = _CountingChecksum(result=123456789)
+        result = assemble_validated_helper_frame_input(
+            _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, checksum
+        )
+        assert result is not None
+        self.assertEqual(result.checksum, 123456789)
+
+    def test_non_int_or_out_of_range_checksum_result_returns_none(self) -> None:
+        for value in (True, 1.0, "1", b"\x01", -1, _UINT32_MAX + 1):
+            with self.subTest(value=repr(value)):
+                checksum = _CountingChecksum(result=value)
+                self.assertIsNone(
+                    assemble_validated_helper_frame_input(
+                        _valid_assembly_request(),
+                        _valid_assembly_header(),
+                        _ASSEMBLY_PAYLOAD,
+                        checksum,
+                    )
+                )
+                self.assertEqual(len(checksum.calls), 1)
+
+    def test_zero_and_uint32_max_checksum_results_accepted(self) -> None:
+        for value in (0, _UINT32_MAX):
+            with self.subTest(value=value):
+                result = assemble_validated_helper_frame_input(
+                    _valid_assembly_request(),
+                    _valid_assembly_header(),
+                    _ASSEMBLY_PAYLOAD,
+                    lambda data, value=value: value,
+                )
+                assert result is not None
+                self.assertEqual(result.checksum, value)
+
+    def test_checksum_exception_propagates_and_never_succeeds(self) -> None:
+        error = RuntimeError("synthetic native checksum failure")
+        checksum = _CountingChecksum(error=error)
+        with self.assertRaises(RuntimeError) as raised:
+            assemble_validated_helper_frame_input(
+                _valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD, checksum
+            )
+        self.assertIs(raised.exception, error)
+
+    def test_every_structural_rejection_happens_before_checksum(self) -> None:
+        cases = [
+            (None, _valid_assembly_header(), _ASSEMBLY_PAYLOAD),
+            (_valid_assembly_request(), None, _ASSEMBLY_PAYLOAD),
+            (_valid_assembly_request(), _valid_assembly_header(), bytearray(_ASSEMBLY_PAYLOAD)),
+            (_valid_assembly_request(), _valid_assembly_header(width=0), _ASSEMBLY_PAYLOAD),
+            (_valid_assembly_request(), _valid_assembly_header(height=0), _ASSEMBLY_PAYLOAD),
+            (_valid_assembly_request(), _valid_assembly_header(row_stride_bytes=7), _ASSEMBLY_PAYLOAD),
+            (_valid_assembly_request(), _valid_assembly_header(payload_bytes=13), _ASSEMBLY_PAYLOAD),
+            (
+                _valid_assembly_request(),
+                _valid_assembly_header(sequence=_ASSEMBLY_REQUEST_ID + 1),
+                _ASSEMBLY_PAYLOAD,
+            ),
+            (
+                _valid_assembly_request(),
+                _valid_assembly_header(frame_timestamp_ms=_ASSEMBLY_TIMESTAMP_MS + 1),
+                _ASSEMBLY_PAYLOAD,
+            ),
+            (_valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD[:-1]),
+            (_valid_assembly_request(), _valid_assembly_header(), _ASSEMBLY_PAYLOAD + b"\x00"),
+        ]
+        for index, (request, header, payload) in enumerate(cases):
+            with self.subTest(case=index):
+                checksum = _CountingChecksum()
+                self.assertIsNone(
+                    assemble_validated_helper_frame_input(
+                        request, header, payload, checksum  # type: ignore[arg-type]
+                    )
+                )
+                self.assertEqual(checksum.calls, [])
+
+    def test_embedded_nul_payload_checksummed_exactly(self) -> None:
+        payload = b"\x00" * 6 + b"\x00\x01\x00\xff\x00\x00"
+        checksum = _CountingChecksum()
+        result = assemble_validated_helper_frame_input(
+            _valid_assembly_request(), _valid_assembly_header(), payload, checksum
+        )
+        assert result is not None
+        self.assertIs(checksum.calls[0], payload)
+        self.assertEqual(result.checksum, _reference_fnv1a32(payload))
+
+    def test_production_module_has_no_checksum_implementation(self) -> None:
+        self.assertFalse(hasattr(helper_frame_input, "_fnv1a32"))
+        self.assertFalse(hasattr(helper_frame_input, "_FNV_OFFSET_BASIS"))
+        self.assertFalse(hasattr(helper_frame_input, "_FNV_PRIME"))
+        source = inspect.getsource(helper_frame_input)
+        for forbidden in ("ctypes", "import os", "open(", "helper_native_fnv", "16777619"):
+            self.assertNotIn(forbidden, source)
 
 
 # =============================================================================
@@ -1231,7 +1394,7 @@ def _consume_cpp_frame_input_fixture(argv: list) -> int:
     if header.width != _FIXTURE_WIDTH or header.height != _FIXTURE_HEIGHT:
         return 1
 
-    result = assemble_validated_helper_frame_input(request, header, payload_bytes)
+    result = assemble_validated_helper_frame_input(request, header, payload_bytes, _reference_fnv1a32)
     if result is None:
         return 1
 
@@ -1266,7 +1429,7 @@ def _valid_cli_fixture_argv() -> list:
     )
     payload_bytes = bytes(_FIXTURE_PAYLOAD_BYTES)
     packet_hex = (header_bytes + payload_bytes).hex()
-    checksum_decimal = str(helper_frame_input._fnv1a32(payload_bytes))
+    checksum_decimal = str(_reference_fnv1a32(payload_bytes))
     return [request_line, packet_hex, checksum_decimal]
 
 
