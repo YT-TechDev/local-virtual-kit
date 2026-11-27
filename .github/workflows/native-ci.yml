@@ -40,6 +40,10 @@ jobs:
           if readelf -d "$lib" | grep NEEDED | grep -qi opencv; then echo "unexpected OpenCV dependency"; exit 1; fi
           if readelf -d native/tracker-core/build/lvk-tracker-core | grep -q 'lvk-fnv1a32'; then echo "lvk-tracker-core must not link lvk-fnv1a32"; exit 1; fi
           echo "lvk-fnv1a32 export/linkage inspection passed"
+      # P2-B: standalone Python ctypes loader against the freshly built
+      # shared library. The absolute library path is passed explicitly; the
+      # tests fail (never skip) if the artifact is missing or unloadable.
+      - run: python3 -B native/tracker-core/helpers/mediapipe_face_landmarker/test_helper_native_fnv.py --native-library "$GITHUB_WORKSPACE/native/tracker-core/build/liblvk-fnv1a32.so"
       # v0.13.0 (#589): bounded helper result-timeout recovery smoke. The
       # OpenCV-linked recovery smoke drives the real FrameHelperTrackingBackend
       # owner path, which is only compiled with OpenCV enabled. The baseline
